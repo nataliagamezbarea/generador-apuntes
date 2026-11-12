@@ -1,0 +1,156 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  background: #101522;
+  color: #eef2ff;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+main {
+  width: min(100%, 42rem);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 1px solid #29334a;
+  border-radius: 1.25rem;
+  background: #171f30;
+  box-shadow: 0 1.5rem 5rem #05081280;
+}
+
+.icono {
+  font-size: 2rem;
+}
+
+.icono i {
+  color: #a5f0cc;
+}
+
+h1 {
+  margin: 0.6rem 0;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+#mensaje {
+  color: #c5cde0;
+  line-height: 1.6;
+}
+
+.ruta-apuntes {
+  padding: 0.75rem;
+  border: 1px solid #29334a;
+  border-radius: 0.6rem;
+  color: #c5cde0;
+  background: #101522;
+  overflow-wrap: anywhere;
+}
+
+.acciones-apuntes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+button {
+  padding: 0.75rem 1rem;
+  border: 1px solid #46536b;
+  border-radius: 0.6rem;
+  background: #243547;
+  color: #eef2ff;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+button:first-child {
+  background: transparent;
+}
+
+#progreso {
+  display: block;
+  width: 100%;
+  height: 0.7rem;
+  margin: 1.5rem 0 0.6rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 1rem;
+  background: #2a344b;
+  color: #7778ff;
+  accent-color: #7778ff;
+}
+
+#progreso::-webkit-progress-bar {
+  border-radius: 1rem;
+  background: #2a344b;
+}
+
+#progreso::-webkit-progress-value {
+  border-radius: 1rem;
+  background: linear-gradient(90deg, #7778ff, #52d3bd);
+  transition: width 0.5s ease;
+}
+
+#progreso::-moz-progress-bar {
+  border-radius: 1rem;
+  background: linear-gradient(90deg, #7778ff, #52d3bd);
+}
+
+#porcentaje {
+  color: #99a6c3;
+  font-size: 0.9rem;
+}
+
+#registros {
+  max-height: 10rem;
+  overflow: auto;
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: #0c111c;
+  color: #9cabc9;
+  font:
+    0.75rem/1.5 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#detalles-tecnicos {
+  margin-top: 1rem;
+  color: #99a6c3;
+  font-size: 0.85rem;
+}
+
+#detalles-tecnicos summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.error {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border: 1px solid #9c4353;
+  border-radius: 0.75rem;
+  background: #411e2b;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+a {
+  color: #89d8ff;
+}
+
+.oculto {
+  display: none !important;
+}

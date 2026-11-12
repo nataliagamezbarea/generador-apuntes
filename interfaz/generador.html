@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10172a" />
+    <title>Generador de apuntes · IA local</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+    />
+    <link rel="stylesheet" href="/css/estilos.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Generador de apuntes">
+          <span class="brand-mark" aria-hidden="true"
+            ><i class="fa-solid fa-book-open"></i
+          ></span>
+          <span
+            >Cuaderno<span class="brand-light">IA</span
+            ><small>APUNTES PRIVADOS · LOCAL</small></span
+          >
+        </a>
+        <a class="page-link" href="/mejorar"
+          >Revisar mis apuntes
+          <i class="fa-solid fa-arrow-right" aria-hidden="true"></i
+        ></a>
+        <div id="estado-modelo" class="model-status">
+          <span class="status-dot"></span><span>Comprobando IA local…</span>
+        </div>
+      </header>
+
+      <section class="intro">
+        <p class="eyebrow">TU MATERIAL, TUS APUNTES</p>
+        <h1>
+          Estudia con un plan,<br /><span>no con un montón de archivos.</span>
+        </h1>
+        <p class="intro-copy">
+          Combina PDF, código y recursos web. La IA los analiza, compara con tus
+          temas anteriores y prepara apuntes originales para revisar y compilar
+          en LaTeX.
+        </p>
+      </section>
+
+      <form id="formulario-generacion">
+        <section class="panel">
+          <div class="section-heading">
+            <span class="step">01</span>
+            <div>
+              <h2>Organiza el tema</h2>
+              <p>Elige una asignatura o crea una nueva.</p>
+            </div>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="selector-asignatura">ASIGNATURA</label>
+              <select id="selector-asignatura" aria-label="Asignatura"></select>
+              <input
+                id="asignatura-nueva"
+                type="text"
+                maxlength="80"
+                placeholder="Nombre de la nueva asignatura"
+                hidden
+              />
+              <button id="crear-asignatura" class="secondary-button" type="button" hidden>
+                Crear carpeta de asignatura
+              </button>
+              <p id="estado-asignatura" class="hint" role="status" aria-live="polite" hidden></p>
+            </div>
+            <label class="field">
+              <span>TEMA · OPCIONAL</span>
+              <select id="selector-tema" aria-label="Tema"></select>
+              <input
+                id="tema-nuevo"
+                type="text"
+                maxlength="160"
+                placeholder="Nombre o pista del tema"
+                hidden
+              />
+              <p class="hint">Puedes dejar que la IA lo detecte según el material. Si eliges crear uno, el número se asigna automáticamente.</p>
+            </label>
+            <label class="field"
+              >              <span>APARTADO · OPCIONAL</span>
+              <select
+                id="selector-apartado"
+                aria-label="Apartado"
+              ></select>
+              <input
+                id="apartado-nuevo"
+                type="text"
+                maxlength="160"
+                placeholder="Nombre o pista del apartado"
+                hidden
+              />
+              <p class="hint">Si lo dejas en automático, la IA lo deduce y crea el apartado en el tema correspondiente.</p>
+            </label>
+          </div>
+          <label class="replace-existing-option">
+            <input id="sustituir-existentes" type="checkbox" />
+            <span>
+              <strong>Sustituir apuntes generados si ya existen</strong>
+              <small>Después de generar, te pediré confirmación antes de reemplazarlos. Los archivos fuente nunca se modifican.</small>
+            </span>
+          </label>
+          <label class="replace-existing-option">
+            <input id="material-contiene-codigo" type="checkbox" checked />
+            <span>
+              <strong>El material contiene código</strong>
+              <small>Separa y analiza los archivos de código por lenguaje para incluir ejemplos reales y sintaxis en los apuntes.</small>
+            </span>
+          </label>
+          <div
+            id="ultima-generacion"
+            class="latest-generation"
+            hidden
+            aria-live="polite"
+          ></div>
+          <div
+            id="trabajos-pendientes"
+            class="staged-jobs"
+            hidden
+            aria-live="polite"
+          ></div>
+          <label class="field prompt-field"
+            ><span>¿QUÉ QUIERES CONSEGUIR?</span>
+            <textarea
+              id="instruccion-estudiante"
+              rows="3"
+              maxlength="4000"
+              placeholder="Ej.: Explica los objetivos de examen, conecta el código con la teoría y añade ejemplos paso a paso. Si lo dejas vacío, la IA crea apuntes completos."
+            ></textarea>
+          </label>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <span class="step">02</span>
+            <div>
+              <h2>Añade tus fuentes</h2>
+              <p>
+                PDF, ZIP, código, texto, imágenes o una carpeta de proyecto.
+              </p>
+            </div>
+          </div>
+          <div class="upload-grid">
+            <label id="boton-elegir-archivos" class="upload-card">
+              <span class="upload-icon" aria-hidden="true">
+                <i class="fa-solid fa-file-arrow-up"></i>
+              </span>
+              <strong>Archivos sueltos</strong>
+              <span>Selecciona o arrastra PDF, ZIP o código</span>
+              <span class="upload-action">Elegir archivos</span>
+              <span class="upload-file-control">Usa el botón del selector:</span>
+              <input
+                id="selector-archivos"
+                type="file"
+                multiple
+                accept=".pdf,.zip,.py,.java,.js,.ts,.tsx,.jsx,.html,.htm,.css,.scss,.php,.sql,.json,.ipynb,.xml,.sh,.c,.h,.cpp,.cs,.rb,.go,.rs,.kt,.kts,.swift,.dart,.vue,.svelte,.yml,.yaml,.toml,.ini,.gradle,.dockerfile,.tex,.md,.txt,.rst,.csv,.png,.jpg,.jpeg,.webp,.tif,.tiff,.bmp"
+                aria-label="Elegir archivos PDF, ZIP o código"
+              />
+            </label>
+            <label
+              id="boton-elegir-carpeta"
+              class="upload-card folder-card"
+            >
+              <span class="upload-icon" aria-hidden="true">
+                <i class="fa-solid fa-folder-tree"></i>
+              </span>
+              <strong>Carpeta de proyecto</strong>
+              <span>Incluye subcarpetas y código fuente</span>
+              <span class="upload-action">Elegir carpeta</span>
+              <span class="upload-file-control">Usa el botón del selector:</span>
+              <input
+                id="selector-carpeta"
+                type="file"
+                multiple
+                webkitdirectory
+                aria-label="Elegir carpeta de proyecto"
+              />
+            </label>
+          </div>
+          <label class="field pasted-source">
+            <span>O pega aquí texto de tus apuntes o material</span>
+            <textarea
+              id="texto-fuente"
+              name="source_text"
+              rows="6"
+              placeholder="Pega aquí el texto que quieres convertir en apuntes. Se analizará junto con los archivos seleccionados."
+            ></textarea>
+          </label>
+          <div id="archivos-seleccionados" class="selected-files">
+            <span>No has seleccionado archivos todavía.</span>
+          </div>
+          <p id="estado-selector" class="hint" aria-live="polite" hidden></p>
+          <p class="hint">
+            La carpeta se lee desde el navegador y sus archivos se envían a este
+            servidor local. El límite de subida se puede cambiar en .env.
+          </p>
+          <p class="hint">
+            Si incluyes un ZIP, primero se analizan los PDF para establecer los temas; después se agrupan los bloques de código coherentes en los apartados que correspondan. El progreso queda guardado y se puede reanudar.
+          </p>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <span class="step">03</span>
+            <div>
+              <h2>Amplía con fuentes web</h2>
+              <p>
+                Opcional. Busca en la web general (sin Wikipedia) los conceptos
+                de tus archivos y aporta resúmenes de varias fuentes con enlaces.
+              </p>
+            </div>
+          </div>
+          <label class="toggle-row"
+            ><input id="investigacion-web" type="checkbox" /><span
+              class="toggle"
+            ></span
+            ><span
+              ><strong>Investigar también en Internet</strong
+              ><small
+                >No tienes que indicar un tema de búsqueda: se obtiene del
+                contenido que subas. La IA usa resultados de distintas webs,
+                resume sus descripciones y añade enlaces para consultarlas.</small
+              ></span
+            ></label
+          >
+        </section>
+
+        <div class="submit-row">
+          <p>
+            La generación utilizará únicamente los archivos y el texto que
+            añadas ahora.
+          </p>
+          <button id="boton-generar" type="submit">
+            <span>Generar apuntes</span
+            ><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+          </button>
+        </div>
+      </form>
+
+      <section id="progreso" class="progress panel" hidden>
+        <div class="progress-heading">
+          <i id="icono-progreso" class="fa-solid fa-spinner fa-spin spinner" aria-hidden="true"></i>
+          <div>
+            <strong id="etiqueta-progreso" aria-live="polite">Preparando tu material</strong>
+            <p id="detalle-progreso" aria-live="polite">
+              Se mostrará cada etapa mientras se procesa tu material.
+            </p>
+          </div>
+        </div>
+        <progress id="barra-progreso" max="100" value="0" aria-label="Progreso de la generación"></progress>
+        <p id="tiempo-estimado" class="progress-eta">Calculando tiempo estimado…</p>
+        <ol id="lista-pasos-progreso" class="progress-steps" aria-label="Etapas de la generación"></ol>
+        <div class="progress-actions">
+          <button id="detener-generacion" class="secondary-button stop-button" type="button">
+            <i class="fa-solid fa-stop" aria-hidden="true"></i> Detener generación
+          </button>
+          <button id="reiniciar-generacion" class="secondary-button restart-button" type="button">
+            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reiniciar generación
+          </button>
+        </div>
+        <div id="consola-en-vivo" class="live-console">
+          <div class="live-console-header">
+            <span><i class="fa-solid fa-terminal" aria-hidden="true"></i> Registro detallado de la IA</span>
+            <div class="live-console-controls">
+              <button id="boton-pausar-consola" class="tiny-button" type="button" title="Pausar o reanudar el flujo de texto">
+                <i class="fa-solid fa-pause" aria-hidden="true"></i> <span>Parar registro</span>
+              </button>
+              <button id="boton-toggle-consola" class="tiny-button" type="button" title="Deshabilitar o habilitar el cuadro de registro">
+                <i class="fa-solid fa-ban" aria-hidden="true"></i> <span>Deshabilitar registro</span>
+              </button>
+              <span id="consola-estado" class="live-console-status">Activo</span>
+            </div>
+          </div>
+          <pre id="texto-consola" class="live-console-body">Conectando con la actividad de la IA…</pre>
+        </div>
+      </section>
+      <section
+        id="panel-error"
+        class="error-panel"
+        hidden
+        role="alert"
+      ></section>
+      <section
+        id="panel-resultados"
+        class="results"
+        hidden
+        aria-live="polite"
+      ></section>
+      <footer>
+        Hecho para estudiar mejor. Revisa las fuentes, los apuntes y su
+        adecuación a tu temario antes del examen.
+      </footer>
+    </main>
+    <script type="module" src="/js/interfaz.js?v=20261110_prompts"></script>
+  </body>
+</html>

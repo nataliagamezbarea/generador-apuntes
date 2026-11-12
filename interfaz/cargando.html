@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101522" />
+    <title>Iniciando el generador de apuntes</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+    />
+    <link rel="stylesheet" href="/css/cargando.css" />
+  </head>
+  <body>
+    <main>
+      <div class="icono" aria-hidden="true">
+        <i class="fa-solid fa-book-open"></i>
+      </div>
+      <h1>Generador de apuntes</h1>
+      <section id="seleccion-apuntes">
+        <p>Elige la carpeta raíz donde guardas tus apuntes privados.</p>
+        <p id="ruta-apuntes" class="ruta-apuntes" role="status"></p>
+        <div class="acciones-apuntes">
+          <button id="elegir-carpeta" type="button">Elegir otra carpeta…</button>
+          <button id="iniciar-generador" type="button" disabled>
+            Usar esta carpeta y continuar
+          </button>
+        </div>
+        <p id="error-carpetas" class="error oculto" role="alert"></p>
+      </section>
+      <section id="progreso-inicio" class="oculto">
+        <p id="mensaje" role="status" aria-live="polite">
+          Preparando el generador de apuntes…
+        </p>
+        <progress
+          id="progreso"
+          max="100"
+          value="0"
+          aria-label="Progreso de inicio"
+        ></progress>
+        <div id="porcentaje">0 %</div>
+        <details id="detalles-tecnicos" class="oculto">
+          <summary>Ver detalles técnicos</summary>
+          <pre id="registros"></pre>
+        </details>
+        <div id="error" class="error oculto" role="alert"></div>
+      </section>
+      <p id="enlace" class="oculto">
+        <a id="abrir" href="#">Abrir el generador</a>
+      </p>
+    </main>
+    <script type="module" src="/js/cargando.js"></script>
+  </body>
+</html>

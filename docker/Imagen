@@ -1,0 +1,23 @@
+FROM node:22-bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      g++ \
+      make \
+      python3 \
+      poppler-utils \
+      tesseract-ocr \
+      tesseract-ocr-spa \
+      tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY js ./js
+COPY css ./css
+COPY interfaz ./interfaz
+
+USER node
+EXPOSE 8000
+CMD ["node", "js/servidor.js"]

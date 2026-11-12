@@ -1,0 +1,11 @@
+.env
+node_modules/
+npm-debug.log*
+*.log
+informes-generacion/
+apuntes-privados/
+bibliotecas_latex/
+*.bak
+*.current
+*.modificado
+*.restaurado

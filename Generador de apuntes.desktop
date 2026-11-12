@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Generador de apuntes
+Comment=Inicia Docker, la IA local y abre el generador de apuntes
+Exec=/home/natalia/.nvm/versions/node/v26.13.0/bin/node /home/natalia/Escritorio/generador-apuntes/generador-apuntes/js/iniciar.js
+Path=/home/natalia/Escritorio/generador-apuntes/generador-apuntes
+Icon=accessories-text-editor
+Terminal=false
+Categories=Education;
