@@ -1331,6 +1331,26 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/\\begin\{quoting\}\s*([\s\S]*?)\s*\\end\{quoting\}/gi, (_match, body) => `\\alertas{${body.trim()}}`)
     .replace(/\\lstinline(?:\[[^\]]*\])?(?:\|([^|]*)\||\{([^}]*)\})/g, (_match, p1, p2) => `\\cmd{${p1 ?? p2 ?? ""}}`);
 
+  // Quitar metalenguaje vacío del resumen ("En este apartado se explica...").
+  resultado = resultado.replace(/\\resumen\{([^{}]*)\}/gs, (_match, cuerpo) => {
+    const limpio = String(cuerpo)
+      .replace(
+        /(?:^|\s)(?:En|Este|El presente)\s+(?:este\s+)?apartado\s+(?:se\s+)?(?:explica|explican|describe|describen|analiza|analizan|introduce|introducen|presenta|presentan|aborda|abordan)[^.]*\./gi,
+        " ",
+      )
+      .replace(
+        /(?:^|\s)A\s+continuación\s+(?:veremos|se\s+muestra|se\s+explica)[^.]*\./gi,
+        " ",
+      )
+      .replace(
+        /(?:^|\s)Además,?\s+se\s+(?:proporciona|incluye|presenta)[^.]*\./gi,
+        " ",
+      )
+      .replace(/\s+/g, " ")
+      .trim();
+    return limpio ? `\\resumen{${limpio}}` : "";
+  });
+
   // Asegurar que macros (definicion, nota, alertas, resumen) no envuelvan bloques verbatim
   resultado = resultado
     .replace(/(\\definicion(?:par)?\{[^{}]*\}\{[^{}]*?)(?=\\begin\{(?:codigo|consola)\})/gi, (m) => `${m.trimEnd()}\n}\n\n`)
@@ -1340,11 +1360,12 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(\\end\{(?:codigo|consola)\}\s*)\}/g, "$1")
     .replace(/\\resumen\{\s*\}/g, "");
 
-  // Limpiar barras de tubería espurias al final de líneas normales
-  resultado = resultado.replace(/([^|])\|\s*$/gm, "$1");
+  // Limpiar barras de tubería espurias al final de líneas normales.
+  // Nunca dentro de \lista{...}: ahí el pipe es el separador oficial de ítems.
 
   resultado = convertirTablasWec(resultado);
   resultado = convertirListasWec(resultado);
+  resultado = normalizarListasWec(resultado);
   resultado = convertirCodigoWec(resultado);
 
   // \item sueltos fuera de un entorno de lista provocan
@@ -1461,13 +1482,8 @@ export function aplicarEstilosLatex(value, subject = "") {
     return tablaMatch.replace(/^([^\n&%]*&[^\n%]*?)(?<!\\\\)\s*$/gm, "$1 \\\\");
   });
 
-  // Limpiar reglas de tabla (midrule) huérfanas dentro de listas y viñetas
-  resultado = resultado.replace(/\\lista\{([\s\S]*?)\}/g, (_match, body) => {
-    const cuerpoLimpio = body
-      .replace(/\\(?:midrule|toprule|bottomrule)\b/g, "")
-      .replace(/(?:^|\n|\s)\*([a-zA-ZÁÉÍÓÚáéíóú0-9_ -]+:\*\*)/g, "\n  **$1");
-    return `\\lista{${cuerpoLimpio}}`;
-  });
+  // Limpiar reglas de tabla (midrule) huérfanas dentro de listas y viñetas.
+  // El saneamiento con llaves equilibradas se hace en normalizarListasWec.
 
   // Proteger guiones bajos no escapados en texto normal para evitar que LaTeX entre en math mode
   const partesVerbatim = [];
@@ -1639,6 +1655,133 @@ export function corregirCatalanAEspanol(texto = "") {
     .replace(/\b2n\s+DAW\b/gi, "")
     .replace(/\[CONTEXTO\s+GENERAL[^\]]*\]/gi, "")
     .replace(/\[CONTENIDO\s+COMPLETO[^\]]*\]/gi, "");
+}
+
+/**
+ * Recorre las macros \lista{...} respetando llaves anidadas (por ejemplo
+ * \cmd{<head>} o \textbf{...}) y garantiza que los ítems estén separados por |.
+ * El separador oficial de \lista en WEC es la barra vertical; si la IA la omite,
+ * todos los ítems se funden en uno.
+ */
+function normalizarListasWec(value) {
+  // Los bloques de código pueden contener \lista como texto literal: no se tocan.
+  const bloques = [];
+  const protegido = value.replace(
+    /(\\begin\{(?:codigo|consola)\}[\s\S]*?\\end\{(?:codigo|consola)\})/g,
+    (_match, bloque) => {
+      const marca = `@@@LISTA_CODIGO_${bloques.length}@@@`;
+      bloques.push(bloque);
+      return marca;
+    },
+  );
+  const normalizado = normalizarListasPlano(protegido);
+  return normalizado.replace(
+    /@@@LISTA_CODIGO_(\d+)@@@/g,
+    (_match, indice) => bloques[Number(indice)],
+  );
+}
+
+function normalizarListasPlano(value) {
+  let salida = "";
+  let posicion = 0;
+  while (posicion < value.length) {
+    const inicio = value.indexOf("\\lista{", posicion);
+    if (inicio === -1) {
+      salida += value.slice(posicion);
+      break;
+    }
+    salida += value.slice(posicion, inicio);
+    const apertura = inicio + "\\lista".length;
+    let fin = apertura;
+    let profundidad = 0;
+    for (; fin < value.length; fin++) {
+      const caracter = value[fin];
+      if (caracter === "\\") {
+        // Saltar \{ y \} para no contarlos como llaves reales.
+        fin++;
+        continue;
+      }
+      if (caracter === "{") profundidad++;
+      else if (caracter === "}") {
+        profundidad--;
+        if (profundidad === 0) break;
+      }
+    }
+    if (fin >= value.length) {
+      salida += value.slice(inicio);
+      break;
+    }
+    const cuerpo = value.slice(apertura + 1, fin);
+    salida += `\\lista{${normalizarCuerpoLista(cuerpo)}}`;
+    posicion = fin + 1;
+  }
+  return salida;
+}
+
+function dividirPorPipe(cuerpo) {
+  const partes = [];
+  let actual = "";
+  let profundidad = 0;
+  for (let i = 0; i < cuerpo.length; i++) {
+    const caracter = cuerpo[i];
+    if (caracter === "\\") {
+      actual += caracter;
+      if (i + 1 < cuerpo.length) actual += cuerpo[++i];
+      continue;
+    }
+    if (caracter === "{") profundidad++;
+    else if (caracter === "}") profundidad--;
+    if (caracter === "|" && profundidad === 0) {
+      partes.push(actual);
+      actual = "";
+      continue;
+    }
+    actual += caracter;
+  }
+  partes.push(actual);
+  return partes;
+}
+
+const INICIO_ITEM = /^(?:\*\*[^*\n]+\*\*|\\textbf\{|[-*]\s+|\d+[.)]\s+)/;
+
+function normalizarCuerpoLista(cuerpoOriginal) {
+  const cuerpo = cuerpoOriginal
+    .replace(/\\(?:midrule|toprule|bottomrule)\b/g, "")
+    .replace(/(?:^|\n|\s)\*([a-zA-ZÁÉÍÓÚáéíóú0-9_ -]+:\*\*)/g, "\n  **$1");
+
+  const items = [];
+  for (const segmento of dividirPorPipe(cuerpo)) {
+    const limpio = segmento.trim();
+    if (!limpio) continue;
+    const lineas = limpio
+      .split(/\r?\n/)
+      .map((linea) => linea.trim())
+      .filter(Boolean);
+    const lineasQueInicianItem = lineas.filter((linea) => INICIO_ITEM.test(linea));
+    if (lineas.length > 1 && lineasQueInicianItem.length > 1) {
+      let actual = "";
+      for (const linea of lineas) {
+        if (INICIO_ITEM.test(linea) && actual) {
+          items.push(actual);
+          actual = linea.replace(/^[-*]\s+/, "");
+        } else {
+          const trozo = linea.replace(/^[-*]\s+/, "");
+          actual = actual ? `${actual} ${trozo}` : trozo;
+        }
+      }
+      if (actual) items.push(actual);
+      continue;
+    }
+    const partes = limpio.split(/(?<=[.;:])\s+(?=\*\*[^*\n]+\*\*)/);
+    if (partes.length > 1) {
+      items.push(...partes.map((parte) => parte.trim()).filter(Boolean));
+    } else {
+      items.push(limpio.replace(/\s+/g, " "));
+    }
+  }
+
+  if (items.length <= 1) return cuerpoOriginal;
+  return `\n  ${items.join("|\n  ")}\n`;
 }
 
 function convertirListasWec(value) {

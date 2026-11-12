@@ -387,6 +387,20 @@ test("cierra un \\cmd que la IA dejó abierto antes de una negrita", () => {
   assert.match(latex, /\\cmd\{<\/head>\}:\*\*/);
 });
 
+test("separa los ítems de \\lista aunque la IA omita las barras y conserva las llaves anidadas", () => {
+  const latex = aplicarEstilosLatex(
+    String.raw`\lista{
+  **Entre \cmd{<head>} y \cmd{</head>}:** primer ítem.
+  **Entre \cmd{<body>} y \cmd{</body>}:** segundo ítem.
+}`,
+  );
+  assert.match(
+    latex,
+    /\\cmd\{<head>\}[\s\S]*?\|\n\s+\*\*Entre \\cmd\{<body>\}/,
+  );
+  assert.match(latex, /\\cmd\{<\/body>\}:\*\* segundo ítem\.\s*\n\}/);
+});
+
 test("adapta las secciones eliminando la asignatura repetida y convirtiendo listas y código al estilo WEC", () => {
   const latex = aplicarEstilosLatex(
     String.raw`\secciongrande{Condicionales en Programación}\seccion{Cómo funcionan en Programación}
