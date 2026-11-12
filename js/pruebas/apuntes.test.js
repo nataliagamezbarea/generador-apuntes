@@ -1779,6 +1779,12 @@ test("el nombre del tema nunca queda dentro de \\resumen ni como \\secciongrande
   assert.match(limpio, /\\resumen\{La web moderna conecta cliente y servidor\.\}/);
   assert.doesNotMatch(limpio, /\\resumen\{[^}]*Tema 1/);
   assert.doesNotMatch(limpio, /\\secciongrande\{[^}]*Arquitecturas y herramientas/);
+  const anidado = sanearTitulosTema(
+    String.raw`\secciongrande{\secciongrande{Arquitecturas y herramientas}}`,
+    "Los motores de JavaScript",
+    "Arquitecturas y herramientas",
+  );
+  assert.equal(anidado, "\\secciongrande{Los motores de JavaScript}");
 });
 
 test("elimina párrafos idénticos repetidos sin tocar los bloques de código", () => {

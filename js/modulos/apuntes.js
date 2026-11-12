@@ -979,6 +979,12 @@ export function sanearTitulosTema(value, tituloApartado = "", tituloTema = "") {
     return texto ? `\\resumen{${texto}}` : "";
   });
 
+  // El modelo a veces anida la misma macro: \secciongrande{\secciongrande{X}}.
+  latex = latex.replace(
+    /\\secciongrande\{\s*\\secciongrande\{([^{}]*)\}\s*\}/g,
+    "\\secciongrande{$1}",
+  );
+
   // El nombre del tema nunca debe ocupar el \secciongrande del apartado.
   const tituloLimpio = String(tituloApartado ?? "").trim();
   const normalizar = (texto) =>
@@ -2149,7 +2155,7 @@ async function asegurarDocumentoTema(themeDir, subject, theme, title) {
       styleInput,
       "\\begin{document}",
       "\\paletaAzul",
-      `\\titulo{${escaparLatex(subject.toUpperCase())} · TEMA ${theme}}{${escaparLatex(title)}}`,
+      `\\titulo{TEMA ${theme}}{${escaparLatex(title)}}`,
       "\\usarfondo",
       "\\renewcommand{\\contentsname}{Índice}",
       "\\setcounter{tocdepth}{2}",
@@ -2199,7 +2205,12 @@ async function asegurarDocumentoTema(themeDir, subject, theme, title) {
           "{\\color{black}\\tableofcontents}",
           "\\setcounter{tocdepth}{2}\n{\\color{black}\\tableofcontents}",
         );
-    const bodyLines = bodyConIndice.split("\n");
+    // El nombre de la carpeta del tema no debe aparecer en el PDF.
+    const bodySinCarpeta = bodyConIndice.replace(
+      /\\titulo\{[^{}]*·\s*TEMA\s*\d+\}\{([^{}]*)\}/,
+      `\\titulo{TEMA ${theme}}{$1}`,
+    );
+    const bodyLines = bodySinCarpeta.split("\n");
     const clearPageIndex = bodyLines.findIndex((line) =>
       line.includes("\\clearpage"),
     );

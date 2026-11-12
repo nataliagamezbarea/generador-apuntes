@@ -447,8 +447,9 @@ NUMERACIÓN Y TÍTULOS: conserva los números explícitos. Si el número de tema
 
 POSICIÓN DEL NOMBRE DEL TEMA Y ANTI-REPETICIÓN (OBLIGATORIO):
 - El nombre del tema ("titulo_tema") va SOLO en el campo "titulo_tema". El nombre del apartado va en "titulo_subtema" y en "archivos[].titulo".
+- El nombre del tema YA se muestra en el título del documento: PROHIBIDO repetirlo como \\\\secciongrande{...} o como entrada del índice. El \\\\secciongrande es SIEMPRE el título del apartado concreto.
 - PROHIBIDO escribir el nombre del tema o rótulos como «Tema 1: ...» o «Tema 2.1: ...» dentro de \\\\resumen{...}.
-- PROHIBIDO usar el nombre del tema como \\\\secciongrande{...}: el \\\\secciongrande es SIEMPRE el título del apartado concreto.
+- NUNCA incluyas el nombre de la carpeta, la asignatura o el curso como título visible del documento.
 - Cada \\\\resumen, \\\\subtituloA y \\\\subtituloB debe aparecer UNA sola vez. PROHIBIDO repetir listados, párrafos o secciones ya explicadas.
 
 TRADUCCIÓN OBLIGATORIA Y TOTAL AL ESPAÑOL ESTÁNDAR:
