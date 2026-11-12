@@ -387,6 +387,25 @@ test("cierra un \\cmd que la IA dejó abierto antes de una negrita", () => {
   assert.match(latex, /\\cmd\{<\/head>\}:\*\*/);
 });
 
+test("elimina los subtítulos de relleno que no aportan información", () => {
+  const latex = aplicarEstilosLatex(
+    String.raw`\secciongrande{Modelos de ejecución}
+\subtituloA{Elementos principales}
+\lista{
+  **Servidor:** equipo disponible.|
+  **Cliente:** navegador del usuario.
+}
+\subtituloA{Componentes clave}
+Texto de componentes.
+\subtituloA{Arquitectura del motor}
+Texto real.`,
+  );
+  assert.doesNotMatch(latex, /\\subtituloA\{Elementos principales\}/);
+  assert.doesNotMatch(latex, /\\subtituloA\{Componentes clave\}/);
+  assert.match(latex, /\\subtituloA\{Arquitectura del motor\}/);
+  assert.match(latex, /\*\*Servidor:\*\* equipo disponible\.\|\n\s+\*\*Cliente:/);
+});
+
 test("separa los ítems de \\lista aunque la IA omita las barras y conserva las llaves anidadas", () => {
   const latex = aplicarEstilosLatex(
     String.raw`\lista{

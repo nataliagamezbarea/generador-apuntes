@@ -1066,6 +1066,19 @@ export function limpiarLatex(value) {  let latex = String(value ?? "").trim();
   return latex;
 }
 
+function esSubtituloGenerico(titulo) {
+  const normalizado = String(titulo ?? "")
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!normalizado) return true;
+  return /^(?:(?:elementos?|componentes?|aspectos?|puntos?|ideas?|conceptos?|caracteristicas?|factores?)(?: y (?:elementos?|componentes?|aspectos?))?)(?: principales| clave| basicos?| fundamentales| esenciales| generales)?(?: de cada apartado)?$/.test(
+    normalizado,
+  );
+}
+
 function quitarAsignaturaDelTitulo(value, subject) {
   let val = value;
   if (typeof val === "object" && val !== null) {
@@ -1438,6 +1451,15 @@ export function aplicarEstilosLatex(value, subject = "") {
         return `\\${m}{${clean}}`;
       },
     );
+
+  // La IA inventa subtítulos de relleno que no aportan nada ("Elementos
+  // principales", "Componentes principales"...). Se eliminan y el contenido
+  // pasa a colgar directamente del encabezado anterior.
+  resultado = resultado.replace(
+    /\\subtitulo([AB])\{\s*([^{}]*?)\s*\}/g,
+    (match, _nivel, titulo) => (esSubtituloGenerico(titulo) ? "" : match),
+  );
+  resultado = resultado.replace(/\n{3,}/g, "\n\n");
 
   // Separar ítems pegados dentro de \lista{...} si no contienen |
   resultado = resultado.replace(/\\lista\{([^{}]+)\}/g, (match, cuerpo) => {
