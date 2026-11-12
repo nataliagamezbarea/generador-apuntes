@@ -28,7 +28,7 @@ Redacta ABSOLUTAMENTE TODO en español estándar de España. Esto aplica de form
 - "titulo_tema" (ejemplo: "Arquitecturas y herramientas", NUNCA "Arquitectures i Eines")
 - "titulo_subtema" (ejemplos: "Mecanismos de ejecución de código en un navegador web", "Capacidades y limitaciones de ejecución", "Herramientas de programación sobre clientes web", "Lenguajes de programación en entorno cliente", "Modelos de ejecución del código")
 - "archivos[].titulo" (el título formal del apartado en español estándar)
-- "archivos[].nombre" (slug corto de 1 a 3 palabras clave conceptuales en español estándar, ej: "servidor", "modelos-ejecucion", "entorno-cliente", "navegador-web", "capacidades-limitaciones", "herramientas-cliente"; NUNCA slugs con términos en catalán como "model", "entorn", "eines", "clients", "execucio", "fitxers")
+- "archivos[].nombre" (slug corto de 1 a 3 palabras clave conceptuales en español estándar, ej: "servidor", "modelos-ejecucion-codigo", "tecnologias-entornos-cliente", "navegador-web", "capacidades-limitaciones", "herramientas-cliente"; NUNCA slugs en inglés como "models-execution", "client-server" ni términos en catalán como "model", "entorn", "eines", "clients", "execucio", "fitxers")
 - "latex" (todo el contenido LaTeX: \secciongrande, \resumen, \definicion, \subtituloA, \lista, \nota, texto y tablas).
 
 
@@ -149,7 +149,7 @@ Devuelve en archivos al menos un apartado útil con título, conceptos y LaTeX d
 - ESTÁ TERMINANTEMENTE PROHIBIDO fragmentar un apartado con sufijos como 'fragmento-p1', 'fragmento-p2'. Cada apartado se desarrolla íntegro en un único archivo.
 
 13. NOMBRES DE ARCHIVO CORTOS Y CONCEPTUALES EN ESPAÑOL ESTÁNDAR:
-En la propiedad "nombre" de cada archivo, debes poner OBLIGATORIAMENTE un nombre de archivo corto, directo y conceptual en ESPAÑOL ESTÁNDAR (slug de 1 a 3 palabras clave del concepto concreto explicado en ese archivo, en minúsculas y sin acentos ni espacios; por ejemplo, si trata del servidor: "servidor", si trata de la arquitectura: "arquitectura", si trata de bases de datos: "bases-datos", si trata de modelos de ejecución: "modelos-ejecucion", si trata de entorno cliente: "entorno-cliente", si trata de herramientas: "herramientas-cliente", deduciendo las palabras clave de la materia explicada).
+En la propiedad "nombre" de cada archivo, debes poner OBLIGATORIAMENTE un nombre de archivo corto, directo y conceptual en ESPAÑOL ESTÁNDAR (slug de 1 a 3 palabras clave del concepto concreto explicado en ese archivo, en minúsculas y sin acentos ni espacios; por ejemplo, si trata del servidor: "servidor", si trata de la arquitectura: "arquitectura", si trata de bases de datos: "bases-datos", si trata de modelos de ejecución: "modelos-ejecucion-codigo", si trata de tecnologías para el cliente: "tecnologias-entornos-cliente", si trata de herramientas: "herramientas-cliente", deduciendo las palabras clave de la materia explicada). PROHIBIDO usar slugs en inglés como "models-execution".
 ESTÁ TERMINANTEMENTE PROHIBIDO USAR PALABRAS EN CATALÁN EN LOS SLUGS (NUNCA uses "model", "entorn", "eines", "clients", "execucio", "fitxers", "desenvolupament", etc.; deben ser siempre en español estándar: "modelo", "entorno", "herramientas", "clientes", "ejecucion", "archivos", "desarrollo").
 NUNCA pongas oraciones largas en "nombre", nunca sufijos técnicos como "fragmento" ni lo dejes vacío.
 

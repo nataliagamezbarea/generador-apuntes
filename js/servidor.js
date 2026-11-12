@@ -1090,12 +1090,12 @@ aplicacion.post(
         if (!archivo.titulo || esTituloDePlantilla(archivo.titulo)) {
           archivo.titulo = resultado.titulo_subtema || tituloApartadoEfectivo;
         }
-        if (
-          !archivo.nombre ||
-          /^(?:apartado(?:-\d+)*|slug-(?:concepto|descriptivo)|seccion(?:-\d+)*)$/i.test(archivo.nombre) ||
-          /fragmento/i.test(archivo.nombre)
-        ) {
-          archivo.nombre = deducirSlugConceptual(archivo.nombre, archivo.titulo);
+        // Un slug inglés ("models-execution") no identifica el contenido:
+        // en ese caso se deduce del título ya traducido del apartado.
+        if (necesitaSlugDelTitulo(archivo.nombre)) {
+          archivo.nombre =
+            deducirSlugConceptual("", archivo.titulo) ||
+            crearNombreArchivo(archivo.nombre);
         } else {
           archivo.nombre = crearNombreArchivo(archivo.nombre);
         }
@@ -1105,7 +1105,12 @@ aplicacion.post(
             controlador.signal,
           );
           if (trad.titulo) archivo.titulo = trad.titulo;
-          if (trad.nombre) archivo.nombre = crearNombreArchivo(trad.nombre);
+          if (trad.nombre) {
+            const nombreTraducido = crearNombreArchivo(trad.nombre);
+            archivo.nombre = necesitaSlugDelTitulo(nombreTraducido)
+              ? deducirSlugConceptual("", archivo.titulo) || nombreTraducido
+              : nombreTraducido;
+          }
         } catch (errTrad) {
           console.warn(`Verificación del título omitida: ${errTrad.message}`);
         }
@@ -1497,6 +1502,26 @@ servidorHttp.timeout = 0;
 servidorHttp.keepAliveTimeout = 0;
 servidorHttp.headersTimeout = 0;
 servidorHttp.requestTimeout = 0;
+
+const PALABRAS_SLUG_INGLES =
+  /\b(?:models?|execution|client|server|tools?|code|browser|scripts?|programming|integration|security|editor|search|engine|rendering|interface|network|communication|language|environment|files?)\b/i;
+
+/**
+ * Devuelve true cuando el slug no identifica el contenido en español y debe
+ * deducirse del título: está vacío, es genérico, es un fragmento o contiene
+ * términos ingleses como "models-execution".
+ */
+function necesitaSlugDelTitulo(nombre) {
+  const limpio = String(nombre || "").trim();
+  return (
+    !limpio ||
+    /^(?:apartado(?:-\d+)*|slug-(?:concepto|descriptivo)|seccion(?:-\d+)*)$/i.test(
+      limpio,
+    ) ||
+    /fragmento/i.test(limpio) ||
+    PALABRAS_SLUG_INGLES.test(limpio)
+  );
+}
 
 async function reanudarTrabajosEtapasAlArrancar() {
   const trabajos = await listarTrabajosEtapas();
@@ -2097,16 +2122,10 @@ async function generarUnidadEtapasConDivision(
         .replace(/^-/, "")
         .replaceAll("-", "_");
       for (const archivo of resultados.flatMap((item) => item.resultado.archivos)) {
-        let base = "";
-        if (
-          !archivo.nombre ||
-          /^(?:apartado(?:-\d+)*|slug-(?:concepto|descriptivo)|seccion(?:-\d+)*)$/i.test(archivo.nombre) ||
-          /fragmento/i.test(archivo.nombre)
-        ) {
-          base = deducirSlugConceptual(archivo.nombre, archivo.titulo);
-        } else {
-          base = crearNombreArchivo(archivo.nombre);
-        }
+        const base = necesitaSlugDelTitulo(archivo.nombre)
+          ? deducirSlugConceptual("", archivo.titulo) ||
+            crearNombreArchivo(archivo.nombre)
+          : crearNombreArchivo(archivo.nombre);
         archivo.nombre = sufijo ? `${base}-fragmento-${sufijo}` : base;
       }
     }
@@ -2310,12 +2329,12 @@ async function generarUnidadEtapas({
         if (!archivo.titulo || esTituloDePlantilla(archivo.titulo)) {
           archivo.titulo = resultado.titulo_subtema || tituloApartadoEfectivo;
         }
-        if (
-          !archivo.nombre ||
-          /^(?:apartado(?:-\d+)*|slug-(?:concepto|descriptivo)|seccion(?:-\d+)*)$/i.test(archivo.nombre) ||
-          /fragmento/i.test(archivo.nombre)
-        ) {
-          archivo.nombre = deducirSlugConceptual(archivo.nombre, archivo.titulo);
+        // Un slug inglés ("models-execution") no identifica el contenido:
+        // en ese caso se deduce del título ya traducido del apartado.
+        if (necesitaSlugDelTitulo(archivo.nombre)) {
+          archivo.nombre =
+            deducirSlugConceptual("", archivo.titulo) ||
+            crearNombreArchivo(archivo.nombre);
         } else {
           archivo.nombre = crearNombreArchivo(archivo.nombre);
         }
@@ -2325,7 +2344,12 @@ async function generarUnidadEtapas({
             controlador.signal,
           );
           if (trad.titulo) archivo.titulo = trad.titulo;
-          if (trad.nombre) archivo.nombre = crearNombreArchivo(trad.nombre);
+          if (trad.nombre) {
+            const nombreTraducido = crearNombreArchivo(trad.nombre);
+            archivo.nombre = necesitaSlugDelTitulo(nombreTraducido)
+              ? deducirSlugConceptual("", archivo.titulo) || nombreTraducido
+              : nombreTraducido;
+          }
         } catch (errTrad) {
           console.warn(`Verificación del título omitida: ${errTrad.message}`);
         }

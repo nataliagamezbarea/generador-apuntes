@@ -22,6 +22,7 @@ import {
   analizarApuntesExistentes,
   inspeccionarReemplazosGeneracion,
   crearNombreArchivo,
+  deducirSlugConceptual,
   crearCarpetaAsignatura,
   esTituloDePlantilla,
   sanearTitulosTema,
@@ -270,6 +271,14 @@ test("filtra dependencias Three.js vendorizadas sin excluir código del proyecto
 test("los nombres se limpian y se convierten en nombres de archivo", () => {
   assert.equal(componenteSeguro("  Acceso / Datos "), "Acceso - Datos");
   assert.equal(crearNombreArchivo("Árbol y programación"), "arbol-y-programacion");
+  assert.equal(
+    deducirSlugConceptual("", "Modelos de ejecución del código"),
+    "modelos-ejecucion-codigo",
+  );
+  assert.equal(
+    deducirSlugConceptual("", "Tecnologías para entornos cliente"),
+    "tecnologias-entornos-cliente",
+  );
   assert.throws(() => componenteSeguro("   "));
 });
 
