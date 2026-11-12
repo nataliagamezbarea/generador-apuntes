@@ -2126,7 +2126,7 @@ async function generarUnidadEtapasConDivision(
           ? deducirSlugConceptual("", archivo.titulo) ||
             crearNombreArchivo(archivo.nombre)
           : crearNombreArchivo(archivo.nombre);
-        archivo.nombre = sufijo ? `${base}-fragmento-${sufijo}` : base;
+        archivo.nombre = sufijo ? base : deducirSlugConceptual("", archivo.titulo) || crearNombreArchivo(archivo.nombre);
       }
     }
     return resultados;

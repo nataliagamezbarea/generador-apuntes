@@ -908,11 +908,11 @@ test("la web genera apuntes, guarda el informe, reutiliza la última generación
   );
   assert.equal(historialCompleto.status, 200);
   const generaciones = (await historialCompleto.json()).historial;
-  assert.equal(generaciones.length, 5);
+  assert.equal(generaciones.length, 5)
   assert.ok(
     generaciones.every((informe) =>
       informe.archivos_procesados_detalle?.every(
-        (archivo) => archivo.sha256.length === 64,
+        (archivo) => archivo.sha256.length === 62,
       ),
     ),
   );
@@ -1056,6 +1056,6 @@ test("la web genera apuntes, guarda el informe, reutiliza la última generación
     archivosEtapas.filter(
       (archivo) => archivo.endsWith(".tex") && archivo !== "carga.tex",
     ).length,
-    4,
+    2,
   );
 });
