@@ -313,7 +313,7 @@ test("solo elimina órdenes LaTeX peligrosas y mantiene macros de apuntes", () =
     },
     { subject: "Datos", theme: 1, subtheme: 1 },
   );
-  assert.match(result.archivos[0].latex, /\\seccion\{Base\}/);
+  assert.match(result.archivos[0].latex, /\\subtituloA\{Base\}/);
   assert.doesNotMatch(result.archivos[0].latex, /documentclass|write18/);
   assert.equal(result.cobertura[0].estado, "pendiente");
 });
@@ -345,17 +345,17 @@ test("elimina TikZ no validado y conserva su descripción para no romper la comp
     { subject: "Diseño", theme: 1, subtheme: 1 },
   ).archivos[0].latex;
   assert.match(latex, /Paleta de ejemplo/);
-  assert.match(latex, /\\seccion\{Contraste\}/);
+  assert.match(latex, /\\subtituloA\{Contraste\}/);
   assert.doesNotMatch(latex, /tikzpicture|\\begin\{figure\}/);
 });
 
-test("convierte los títulos LaTeX estándar a macros de sección de la biblioteca", () => {
+test("convierte los títulos LaTeX estándar a las macros WEC y \\seccion en subtítulo normal", () => {
   const latex = aplicarEstilosLatex(
     String.raw`\section{Idea central}\subsection{Funcionamiento}\subsubsection{Caso especial}`,
   );
   assert.equal(
     latex,
-    String.raw`\secciongrande{Idea central}\seccion{Funcionamiento}\subtituloA{Caso especial}`,
+    String.raw`\secciongrande{Idea central}\subtituloA{Funcionamiento}\subtituloA{Caso especial}`,
   );
 });
 
@@ -385,6 +385,20 @@ test("cierra un \\cmd que la IA dejó abierto antes de una negrita", () => {
     String.raw`- **Entre \cmd{</head>:** Este es el encabezado.`,
   );
   assert.match(latex, /\\cmd\{<\/head>\}:\*\*/);
+});
+
+test("convierte \\seccion en un subtítulo normal sin barras ni entrada de índice", () => {
+  const latex = aplicarEstilosLatex(
+    String.raw`\secciongrande{Modelos de ejecución}
+\seccion{El modelo cliente-servidor}
+Texto del modelo.
+\seccion[Bloque]{Componentes del sistema}
+Texto de componentes.`,
+  );
+  assert.match(latex, /\\secciongrande\{Modelos de ejecución\}/);
+  assert.match(latex, /\\subtituloA\{El modelo cliente-servidor\}/);
+  assert.match(latex, /\\subtituloA\{Componentes del sistema\}/);
+  assert.doesNotMatch(latex, /\\seccion(?!grande)\{/);
 });
 
 test("elimina los subtítulos de relleno que no aportan información", () => {
@@ -431,7 +445,7 @@ test("adapta las secciones eliminando la asignatura repetida y convirtiendo list
     "Programación",
   );
   assert.match(latex, /\\secciongrande\{Condicionales\}/);
-  assert.match(latex, /\\seccion\{Cómo funcionan\}/);
+  assert.match(latex, /\\subtituloA\{Cómo funcionan\}/);
   assert.match(latex, /\\lista\{\s*Primer elemento\|\s*Segundo elemento\s*\}/);
   assert.match(latex, /\\begin\{codigo\}\[javascript\]/);
   const resultado = normalizarResultadoIA(

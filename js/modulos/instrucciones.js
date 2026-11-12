@@ -43,6 +43,7 @@ Redacta ABSOLUTAMENTE TODO en español estándar de España. Esto aplica de form
   - No dejes líneas en blanco dentro de \\resumen{...}, \\nota{...}{...}, \\subtituloA{...}, \\subtituloB{...} ni dentro de un ítem de \\lista{...}.
   - NUNCA escribas la palabra 'titulo' como texto literal; usa \\subtituloA o \\subtituloB.
   - PROHIBIDO inventar subtítulos genéricos o de relleno («Elementos principales», «Componentes principales», «Aspectos clave», «Idea clave de cada apartado», «Puntos clave», «Conceptos principales»...). Un subtítulo debe nombrar el concepto real del material. Si un bloque no tiene título propio, NO le pongas subtítulo: escribe el contenido directamente bajo el encabezado anterior.
+  - PROHIBIDO usar \\seccion{...} para subtítulos internos: \\seccion dibuja barras de color horizontales y añade una entrada al índice. Para cualquier subtítulo interno usa SIEMPRE \\subtituloA{...} (o \\subtituloB{...} para detalles). \\secciongrande queda reservado únicamente al título del apartado.
 
 - POSICIÓN DEL NOMBRE DEL TEMA Y DE LOS TÍTULOS:
   - El nombre del tema (titulo_tema) va SOLO en los campos JSON "titulo_tema", "titulo_subtema" y "archivos[].titulo".
@@ -76,7 +77,7 @@ Cada concepto del material debe explicarse en detalle:
     Cuando el material presente 2, 3 o 4 dimensiones, pilares, campos del diseño o aspectos paralelos (por ejemplo: los cuatro campos del diseño web: Visual, Tecnología, Distribución, Propósito; o los tres pilares de una arquitectura; o Frontend y Backend):
     USA OBLIGATORIAMENTE \rectangulos{ {Título 1}{Descripción 1} {Título 2}{Descripción 2} ... } en lugar de una simple lista de viñetas. Esto genera tarjetas rectangulares alineadas y coloreadas que enriquecen visualmente los apuntes y facilitan la memorización para el estudio.
     Ejemplo exacto WEC:
-    \seccion{Los cuatro campos del diseño web}
+    \subtituloA{Los cuatro campos del diseño web}
     \rectangulos{
       {Visual}{Cómo se comunica y se atrae al visitante. Si le gusta lo que ve, es más probable que vuelva.}
       {Tecnología}{Con qué se construye el sitio. De ahí depende si es estático o dinámico y qué bases de datos usa.}
@@ -199,7 +200,7 @@ const ejemploLatexBiblioteca = String.raw`Ejemplo visual idéntico a los apuntes
   **Conectividad de red:** protocolos de comunicación (HTTP, HTTPS, TCP/IP) que transportan las solicitudes y las respuestas entre ambos extremos.
 }
 
-\seccion{Los cuatro campos del diseño web}
+\subtituloA{Los cuatro campos del diseño web}
 
 \rectangulos{
   {Visual}{Cómo se comunica y se atrae al visitante. Si le gusta lo que ve, es más probable que vuelva.}
@@ -213,7 +214,7 @@ const ejemploLatexBiblioteca = String.raw`Ejemplo visual idéntico a los apuntes
 \definicionpar{Término}{Definición técnica completa de la opción A, cómo funciona y cuándo conviene usarla.}
 {Opción B}{Definición técnica completa de la opción B, cómo funciona y cuándo conviene usarla.}
 
-\seccion{Arquitectura de referencia del navegador (8 componentes)}
+\subtituloA{Arquitectura de referencia del navegador (8 componentes)}
 
 \tabla[L{4.2cm}L{12cm}]{
 \tablacab{Componente} & \tablacab{Función técnica principal} \\
@@ -523,10 +524,10 @@ INSTRUCCIONES CRÍTICAS DE REDACCIÓN DOCENTE Y ESTRUCTURA:
 0. JERARQUÍA REAL DE LAS DIAPOSITIVAS (OBLIGATORIO):
    - No confundas el encabezado numerado del apartado (por ejemplo, 1.3) con el título de cada diapositiva. Dentro de un mismo apartado puede haber varios títulos de diapositiva y subtítulos internos.
    - Identifica TODOS los títulos internos que aparecen en el material (por ejemplo, «Arquitectura de referencia (1/2)», «Arquitectura de referencia (2/2)», «Los motores de JavaScript»). Represéntalos en el LaTeX con \\subtituloA{...}; cuando un título dependa de otro, usa \\subtituloB{...}.
-   - Conserva la jerarquía: título de apartado = \\secciongrande; bloques temáticos o títulos de diapositiva = \\subtituloA o \\seccion según la biblioteca; detalles subordinados = \\subtituloB. No conviertas todos los títulos en viñetas ni los elimines al agrupar componentes.
-   - Mapea la jerarquía como en los apuntes WEC: \\secciongrande{...} para el título principal del archivo; \\seccion{...} solo para un bloque de segundo nivel que deba aparecer como subsección del índice; \\subtituloA{...} para cada título de diapositiva o subapartado interno; \\subtituloB{...} para el detalle subordinado de ese subapartado.
+   - Conserva la jerarquía: título de apartado = \\secciongrande; bloques temáticos o títulos de diapositiva = \\subtituloA; detalles subordinados = \\subtituloB. No conviertas todos los títulos en viñetas ni los elimines al agrupar componentes.
+   - Mapea la jerarquía como en los apuntes WEC: \\secciongrande{...} para el título principal del archivo; \\subtituloA{...} para cada título de diapositiva, bloque temático o subapartado interno; \\subtituloB{...} para el detalle subordinado. NUNCA uses \\seccion{...} en el contenido generado: dibuja barras y contamina el índice.
    - No sustituyas los títulos reales de diapositiva por encabezados genéricos como «Conceptos principales» si la fuente ya trae un título concreto. Puedes añadir un subtítulo agrupador, pero conserva también cada título original.
-   - El índice general del tema se construye con \\tableofcontents: registra \\secciongrande como sección y \\seccion como subsección. Los niveles \\subtituloA y \\subtituloB quedan dentro del desarrollo y no deben convertirse en entradas de índice, igual que en el WEC de referencia.
+   - El índice general del tema se construye con \\tableofcontents: registra \\secciongrande como sección. Los niveles \\subtituloA y \\subtituloB quedan dentro del desarrollo y no deben convertirse en entradas de índice, igual que en el WEC de referencia.
    - Utiliza las macros de la biblioteca WEC, no sustitutos Markdown ni comandos estándar \\section/\\subsection. La paleta alterna desde las macros oficiales; no fijes colores manualmente.
    - Un subtítulo no es un componente. «Interfaz de usuario», «Motor de renderizado», etc. pueden agruparse como elementos de una lista bajo el título real del bloque (nunca bajo un rótulo de relleno como «Componentes principales»); en cambio, «Arquitectura de referencia» o «Motores de JavaScript» son bloques temáticos independientes y deben conservar su propio encabezado.
    - Antes de redactar, construye internamente un inventario ordenado de títulos de diapositiva, conceptos, listas, ejemplos, diagramas y preguntas. Al terminar, comprueba uno por uno que todos están desarrollados en el archivo final. No des por cubierto un concepto por mencionarlo en una frase.
@@ -621,7 +622,7 @@ export async function cargarReferenciaBiblioteca(raiz, solicitar = fetch) {
   );
   return String.raw`Se han leído ${fuentes.length} archivos fuente .tex. Las fuentes tipográficas binarias no son instrucciones ni macros.
 GUÍA DE USO DE LAS MACROS PRINCIPALES (REFERENCIA WEC Y DAW TEMA 1):
-- Estructura: \secciongrande{Título} abre el apartado o tema principal y avanza el color de la paleta. \seccion{Título} crea una sección temática con la barra de color horizontal característica de WEC y DAW. Para subniveles menores dentro de una sección, usa \subtitulo{Título} o \subtituloA{Título}.
+- Estructura: \secciongrande{Título} abre el apartado o tema principal y avanza el color de la paleta. Para cualquier subtítulo interno usa \subtituloA{Título} (o \subtituloB para detalles): es un subtítulo normal, sin barras y sin entrada en el índice. PROHIBIDO usar \seccion{Título} en el contenido generado porque dibuja una barra de color horizontal y añade una subsección al índice.
 - Resumen: \resumen{Texto} coloca una caja pastel destacada con la idea central bajo el título de la sección grande.
 - Definiciones: \definicion{Término}{Definición} crea una tarjeta destacada con pestaña; \definicionpar{Término}{Definición} es la tarjeta para encadenar definiciones paralelas de opciones, conceptos o tecnologías. Usa \cmd{...} para términos, comandos o código en línea.
 - Pilares y rectángulos: \rectangulos{ {Título 1}{Texto 1} {Título 2}{Texto 2} ... } para 2, 3 o 4 conceptos paralelos; \rectangulosdoble{Concepto A}{\lista{...}}{Concepto B}{\lista{...}} para comparar dos conceptos opuestos.
@@ -1193,7 +1194,7 @@ Redacta explicaciones didácticas y ejemplos propios. No copies fragmentos exten
 Devuelve únicamente JSON válido con este formato:
 {"target_path":"ruta/relativa/al/apartado.tex","explicacion":"Explica de manera sencilla la selección, el término o la duda.","reemplazo_latex":"Fragmento LaTeX mejorado para sustituir exactamente la selección; cadena vacía si no conviene reemplazar.","anadido_latex":"Fragmento LaTeX complementario para insertar si el usuario lo prefiere."}
 Si no hay selección, elige target_path comparando la pregunta con el índice de apuntes proporcionado. No inventes rutas.
-Usa solo macros habituales de los apuntes: \seccion{...}, \resumen{...}, \definicion{...}{...}, \definicionpar{...}{...}, \lista{...|...|}, \pasos{...|...|}, \nota{...}{...}, \cmd{...}, \begin{codigo}...\end{codigo}. No incluyas preámbulo ni documentclass.`;
+Usa solo macros habituales de los apuntes: \secciongrande{...}, \subtituloA{...}, \subtituloB{...}, \resumen{...}, \definicion{...}{...}, \definicionpar{...}{...}, \lista{...|...|}, \pasos{...|...|}, \nota{...}{...}, \cmd{...}, \begin{codigo}...\end{codigo}. Prohibido \seccion{...}. No incluyas preámbulo ni documentclass.`;
 
 export const sistemaReescrituraDidactica = String.raw`Eres un profesor universitario experto de informática. Tu misión es reescribir y perfeccionar el contenido LaTeX de unos apuntes de clase para que alcancen la máxima calidad pedagógica (calificación 10 de examen).
 

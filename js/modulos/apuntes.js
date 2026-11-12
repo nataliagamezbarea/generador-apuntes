@@ -1425,7 +1425,7 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(
       /\\subsection\*?(?:\[[^\]]*\])?\{([^{}]*)\}/g,
       (_match, title) =>
-        `\\seccion{${quitarAsignaturaDelTitulo(title, subject)}}`,
+        `\\subtituloA{${quitarAsignaturaDelTitulo(title, subject)}}`,
     )
     .replace(
       /\\subsubsection\*?(?:\[[^\]]*\])?\{([^{}]*)\}/g,
@@ -1451,6 +1451,14 @@ export function aplicarEstilosLatex(value, subject = "") {
         return `\\${m}{${clean}}`;
       },
     );
+
+  // \seccion dibuja barras de color y añade una subsección al índice. Los
+  // subtítulos internos del contenido generado deben ser normales.
+  resultado = resultado.replace(
+    /\\seccion(?!grande)(?:\[[^\]]*\])?\{([^{}]*)\}/g,
+    (_match, titulo) =>
+      `\\subtituloA{${quitarAsignaturaDelTitulo(titulo, subject).trim()}}`,
+  );
 
   // La IA inventa subtítulos de relleno que no aportan nada ("Elementos
   // principales", "Componentes principales"...). Se eliminan y el contenido
