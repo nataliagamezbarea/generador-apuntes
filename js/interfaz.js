@@ -89,6 +89,7 @@ function inicializarModelos() {
     modeloIASeleccionado = selectorModeloIA.value;
     localStorage.setItem("generador.modeloIA", modeloIASeleccionado);
     actualizarEstadoModeloIA();
+    comprobarEstadoModelo(modeloIASeleccionado);
   });
 
   selectorModeloCodigo.addEventListener("change", () => {
@@ -949,7 +950,7 @@ function actualizarOpcionesTema() {
   selectorTema.replaceChildren();
   const opcionAutomatica = document.createElement("option");
   opcionAutomatica.value = "__auto__";
-  opcionAutomatica.textContent = "Detectar tema según el material";
+  opcionAutomatica.textContent = "Detectar automáticamente";
   selectorTema.append(opcionAutomatica);
   for (const tema of temas) {
     const opcion = document.createElement("option");
@@ -993,8 +994,8 @@ function actualizarCamposTema() {
   const opcionAutomatica = document.createElement("option");
   opcionAutomatica.value = "__auto__";
   opcionAutomatica.textContent = esAutomatico
-    ? "Detectar tema y apartado según el material"
-    : "Detectar o crear apartado según el material";
+    ? "Automático (según material)"
+    : "Detectar automáticamente";
   selectorApartado.append(opcionAutomatica);
   if (!esAutomatico)
     for (const apartado of apartados) {
@@ -1236,7 +1237,7 @@ function actualizarResumenFuentes() {
   }
   if (!tieneFuentes) {
     archivosSeleccionados.textContent =
-      "Añade archivos, elige una carpeta o pega texto aquí.";
+      "Añade archivos o pega texto aquí.";
     return;
   }
 }
@@ -1963,21 +1964,32 @@ async function detenerGeneracion() {
   }
 }
 
-async function comprobarEstadoModelo() {
+async function comprobarEstadoModelo(modeloAComprobar = null) {
   try {
-    const respuesta = await fetch("/api/health");
+    const modelo = modeloAComprobar || selectorModeloIA?.value || localStorage.getItem("generador.modeloIA") || "qwen2.5:14b";
+    const respuesta = await fetch(`/api/health?model=${encodeURIComponent(modelo)}`);
     const estadoSalud = await respuesta.json();
-    estadoModelo.classList.toggle(
-      "ready",
-      estadoSalud.connected && estadoSalud.modelAvailable,
-    );
-    estadoModelo.classList.toggle("failed", !estadoSalud.connected);
-    estadoModelo.querySelector("span:last-child").textContent =
-      estadoSalud.modelAvailable
-        ? `IA local lista · ${estadoSalud.model}`
-        : estadoSalud.connected
-          ? `Preparando el modelo local ${estadoSalud.model}…`
-          : "IA local sin conexión";
+
+    const estaConectado = Boolean(estadoSalud.connected);
+    const estaDisponible = Boolean(estadoSalud.modelAvailable);
+
+    estadoModelo.classList.toggle("ready", estaConectado && estaDisponible);
+    estadoModelo.classList.toggle("failed", !estaConectado);
+
+    if (!estaConectado) {
+      estadoModelo.querySelector("span:last-child").textContent = "IA local sin conexión";
+    } else if (estaDisponible) {
+      estadoModelo.querySelector("span:last-child").textContent = `IA local lista · ${modelo}`;
+    } else {
+      estadoModelo.querySelector("span:last-child").textContent = `Modelo ${modelo} (se descargará al iniciar)`;
+    }
+
+    if (estadoModeloSeleccionado) {
+      estadoModeloSeleccionado.textContent = estaDisponible
+        ? `Modelo IA: ${modelo} (listo)`
+        : `Modelo IA: ${modelo} (se descargará al iniciar)`;
+      estadoModeloSeleccionado.style.color = estaDisponible ? "#c3e88d" : "#ffce54";
+    }
   } catch {
     estadoModelo.classList.add("failed");
     estadoModelo.querySelector("span:last-child").textContent =
@@ -2222,8 +2234,10 @@ const procesarSeleccionCarpeta = (evento) => {
     mostrarArchivos(archivos);
   }
 };
-selectorCarpeta.onchange = procesarSeleccionCarpeta;
-selectorCarpeta.oninput = procesarSeleccionCarpeta;
+if (selectorCarpeta) {
+  selectorCarpeta.onchange = procesarSeleccionCarpeta;
+  selectorCarpeta.oninput = procesarSeleccionCarpeta;
+}
 zonaArchivos.addEventListener("dragover", (evento) => {
   if (!evento.dataTransfer?.types.includes("Files")) return;
   evento.preventDefault();
@@ -2264,7 +2278,7 @@ formulario.addEventListener("submit", async (evento) => {
   panelResultados.hidden = true;
   if (!archivosElegidos.length && !textoFuente.value.trim()) {
     panelError.textContent =
-      "Selecciona archivos, elige una carpeta o pega el texto que quieres convertir en apuntes.";
+      "Selecciona archivos o pega el texto que quieres convertir en apuntes.";
     panelError.hidden = false;
     return;
   }

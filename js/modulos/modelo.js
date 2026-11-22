@@ -40,19 +40,31 @@ const agenteOllama = new Agent({
   bodyTimeout: config.timeoutMs,
 });
 
-export async function comprobarModelo() {
-  const response = await fetch(`${config.ollamaUrl}/api/tags`, {
-    signal: AbortSignal.timeout(4000),
-  });
-  if (!response.ok) return { connected: false, modelAvailable: false };
-  const models =
-    (await response.json()).models?.map((item) => item.name ?? "") ?? [];
-  return {
-    connected: true,
-    modelAvailable: models.some(
-      (name) => name === config.model || name.startsWith(`${config.model}:`),
-    ),
-  };
+export async function comprobarModelo(modeloObjetivo = config.model) {
+  try {
+    const response = await fetch(`${config.ollamaUrl}/api/tags`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) return { connected: false, modelAvailable: false, models: [] };
+    const rawModels = (await response.json()).models ?? [];
+    const models = rawModels.map((item) => item.name ?? "").filter(Boolean);
+    const target = modeloObjetivo || config.model;
+    const modelAvailable = models.some(
+      (name) =>
+        name === target ||
+        name.startsWith(`${target}:`) ||
+        target.startsWith(`${name}:`) ||
+        name.replace(/:latest$/, "") === target.replace(/:latest$/, "")
+    );
+    return {
+      connected: true,
+      modelAvailable,
+      model: target,
+      models,
+    };
+  } catch {
+    return { connected: false, modelAvailable: false, models: [] };
+  }
 }
 
 export async function consultarModeloIA(
@@ -107,6 +119,23 @@ export async function consultarModeloIA(
       if (response.status === 400 && /multimodal/i.test(detalle) && images.length > 0) {
         console.warn(`El modelo ${modeloEfectivo} no admite imágenes multimodales; reintentando sin imágenes...`);
         return await consultarModeloIA(system, user, [], signal, modeloPersonalizado);
+      }
+      if (response.status === 404 || /not found/i.test(detalle) || /try pulling/i.test(detalle)) {
+        console.log(`Modelo ${modeloEfectivo} no encontrado localmente. Descargando automáticamente desde Ollama...`);
+        try {
+          const pullRes = await fetch(`${config.ollamaUrl}/api/pull`, {
+            dispatcher: agenteOllama,
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ name: modeloEfectivo, stream: false }),
+          });
+          if (pullRes.ok) {
+            console.log(`Modelo ${modeloEfectivo} descargado con éxito. Reintentando consulta...`);
+            return await consultar(formatoJson, temperatura);
+          }
+        } catch (ePull) {
+          console.error(`Error al descargar ${modeloEfectivo}:`, ePull);
+        }
       }
       if (/exceeds the available context size/i.test(detalle)) {
         const solicitud = detalle.match(/request\s+\(([\d,]+)\s+tokens\)/i)?.[1];

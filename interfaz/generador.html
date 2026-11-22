@@ -68,12 +68,12 @@
                 hidden
               />
               <button id="crear-asignatura" class="secondary-button" type="button" hidden>
-                Crear carpeta de asignatura
+                Crear asignatura
               </button>
               <p id="estado-asignatura" class="hint" role="status" aria-live="polite" hidden></p>
             </div>
-            <label class="field">
-              <span>TEMA · OPCIONAL</span>
+            <div class="field">
+              <label for="selector-tema">TEMA · OPCIONAL</label>
               <select id="selector-tema" aria-label="Tema"></select>
               <input
                 id="tema-nuevo"
@@ -82,10 +82,10 @@
                 placeholder="Nombre o pista del tema"
                 hidden
               />
-              <p class="hint">Puedes dejar que la IA lo detecte según el material. Si eliges crear uno, el número se asigna automáticamente.</p>
-            </label>
-            <label class="field"
-              >              <span>APARTADO · OPCIONAL</span>
+              <p class="hint">Detecta el tema según el material o elige uno existente.</p>
+            </div>
+            <div class="field">
+              <label for="selector-apartado">APARTADO · OPCIONAL</label>
               <select
                 id="selector-apartado"
                 aria-label="Apartado"
@@ -97,8 +97,8 @@
                 placeholder="Nombre o pista del apartado"
                 hidden
               />
-              <p class="hint">Si lo dejas en automático, la IA lo deduce y crea el apartado en el tema correspondiente.</p>
-            </label>
+              <p class="hint">Detecta o crea el apartado automáticamente en el tema.</p>
+            </div>
           </div>
           <label class="replace-existing-option">
             <input id="sustituir-existentes" type="checkbox" />
@@ -145,7 +145,7 @@
               <p>Selecciona los modelos que se usarán para la generación.</p>
             </div>
           </div>
-          <div class="field-grid">
+          <div class="field-grid two-cols">
             <div class="field">
               <label for="selector-modelo-ia">MODELO IA (texto/teoría)</label>
               <select id="selector-modelo-ia" name="model" aria-label="Modelo IA"></select>
@@ -165,7 +165,7 @@
             <div>
               <h2>Añade tus fuentes</h2>
               <p>
-                PDF, ZIP, código, texto, imágenes o una carpeta de proyecto.
+                PDF, ZIP, código, texto o imágenes.
               </p>
             </div>
           </div>
@@ -174,8 +174,8 @@
               <span class="upload-icon" aria-hidden="true">
                 <i class="fa-solid fa-file-arrow-up"></i>
               </span>
-              <strong>Archivos sueltos</strong>
-              <span>Arrastra aquí PDF, ZIP o código, o pulsa el selector:</span>
+              <strong>Archivos de estudio o material</strong>
+              <span>Arrastra aquí PDF, ZIP, código o imágenes, o pulsa para seleccionar</span>
               <input
                 id="selector-archivos"
                 type="file"
@@ -183,24 +183,6 @@
                 aria-label="Elegir archivos PDF, ZIP o código"
               />
               <span id="indicador-archivos-sueltos" style="font-size: 11px; color: #a5f0cc; font-weight: 600;"></span>
-            </div>
-            <div
-              id="boton-elegir-carpeta"
-              class="upload-card folder-card"
-            >
-              <span class="upload-icon" aria-hidden="true">
-                <i class="fa-solid fa-folder-tree"></i>
-              </span>
-              <strong>Carpeta de proyecto</strong>
-              <span>Arrastra aquí la carpeta, o pulsa el selector:</span>
-              <input
-                id="selector-carpeta"
-                type="file"
-                multiple
-                webkitdirectory
-                aria-label="Elegir carpeta de proyecto"
-              />
-              <span id="indicador-carpeta" style="font-size: 11px; color: #a5f0cc; font-weight: 600;"></span>
             </div>
           </div>
           <div id="estado-selector" role="status" aria-live="polite" hidden style="margin-top: 10px; margin-bottom: 10px; padding: 10px 14px; background: rgba(34, 197, 94, 0.12); border: 1px solid #22c55e; border-radius: 8px; color: #4ade80; font-size: 13px; font-weight: 600;"></div>
@@ -217,8 +199,7 @@
             ></textarea>
           </label>
           <p class="hint">
-            La carpeta se lee desde el navegador y sus archivos se envían a este
-            servidor local. El límite de subida se puede cambiar en .env.
+            Los archivos se leen desde el navegador y se envían a este servidor local. El límite de subida se puede cambiar en .env.
           </p>
           <p class="hint">
             Si incluyes un ZIP, primero se analizan los PDF para establecer los temas; después se agrupan los bloques de código coherentes en los apartados que correspondan. El progreso queda guardado y se puede reanudar.

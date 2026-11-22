@@ -152,17 +152,18 @@ aplicacion.post("/api/reiniciar-servidor", async (_request, respuesta) => {
   }, 200);
 });
 
-aplicacion.get("/api/health", async (_request, respuesta) => {
+aplicacion.get("/api/health", async (request, respuesta) => {
+  const modeloSolicitado = request.query.model || config.model;
   let model = { connected: false, modelAvailable: false };
   let error;
   try {
-    model = await comprobarModelo();
+    model = await comprobarModelo(modeloSolicitado);
   } catch (issue) {
     error = issue.message;
   }
   respuesta.json({
     provider: "ollama local",
-    model: config.model,
+    model: modeloSolicitado,
     ...model,
     ...(error ? { error } : {}),
   });
