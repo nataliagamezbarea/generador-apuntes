@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { config } from "./configuracion.js";
 import {
   seguimientosGeneracion,
@@ -52,6 +53,7 @@ import {
   limpiarLatex,
   guardarApunte,
   guardarGeneracion,
+  listarHistorialGeneraciones,
   aplicarEstilosLatex,
   detectarCatalan,
   esTituloDePlantilla,

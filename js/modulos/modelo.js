@@ -76,44 +76,69 @@ export async function comprobarModelo(modeloObjetivo = config.model) {
   }
 }
 
-async function consultarNvidia({ system, user, signal, formatoJson = true }) {
+async function consultarNvidia({ system, user, signal, formatoJson = true, modelo = null }) {
   if (!config.nvidiaApiKey) {
     throw new Error("No hay conexión con Ollama y no se ha configurado NVIDIA_API_KEY.");
   }
   const url = `${config.nvidiaBaseUrl}/chat/completions`;
-  const body = {
-    model: config.nvidiaModel || "nvidia/nemotron-3.5-lightning-30b-a3b",
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    temperature: 0.2,
-    max_tokens: config.maxTokens > 0 ? config.maxTokens : 4096,
-  };
-  if (formatoJson) {
-    body.response_format = { type: "json_object" };
+  const modelosAIntentar = Array.from(
+    new Set([
+      modelo,
+      config.nvidiaModel,
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "mistralai/mistral-large-4-1t-a52b",
+      "z-ai/glm-5.3-flash",
+    ])
+  ).filter(Boolean);
+
+  let lastError = null;
+  for (const mod of modelosAIntentar) {
+    const body = {
+      model: mod,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature: 0.2,
+      max_tokens: config.maxTokens > 0 ? config.maxTokens : 8192,
+    };
+    if (formatoJson) {
+      body.response_format = { type: "json_object" };
+    }
+    const timeoutLimit = AbortSignal.timeout(config.timeoutMs);
+    const signalPeticion = signal ? AbortSignal.any([signal, timeoutLimit]) : timeoutLimit;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${config.nvidiaApiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: signalPeticion,
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        lastError = new Error(`NVIDIA NIM (${mod}) respondió ${res.status}: ${errText.slice(0, 500)}`);
+        if (res.status === 404 || res.status === 410) {
+          console.warn(`⚠️ Modelo ${mod} no disponible en NVIDIA NIM (${res.status}), probando alternativo...`);
+          continue;
+        }
+        throw lastError;
+      }
+      const json = await res.json();
+      const content = (json.choices?.[0]?.message?.content || json.choices?.[0]?.message?.reasoning_content || "").trim();
+      return {
+        message: { content },
+        done_reason: json.choices?.[0]?.finish_reason === "length" ? "length" : "stop",
+      };
+    } catch (e) {
+      lastError = e;
+      if (modelosAIntentar.indexOf(mod) < modelosAIntentar.length - 1) continue;
+      throw e;
+    }
   }
-  const timeoutLimit = AbortSignal.timeout(config.timeoutMs);
-  const signalPeticion = signal ? AbortSignal.any([signal, timeoutLimit]) : timeoutLimit;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.nvidiaApiKey}`,
-    },
-    body: JSON.stringify(body),
-    signal: signalPeticion,
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`NVIDIA NIM respondió ${res.status}: ${errText.slice(0, 500)}`);
-  }
-  const json = await res.json();
-  const content = json.choices?.[0]?.message?.content ?? "";
-  return {
-    message: { content },
-    done_reason: json.choices?.[0]?.finish_reason === "length" ? "length" : "stop",
-  };
+  throw lastError || new Error("No se pudo obtener respuesta de NVIDIA NIM.");
 }
 
 export async function consultarModeloIA(
@@ -209,8 +234,18 @@ export async function consultarModeloIA(
   };
 
   let data;
-  if (config.proveedorIA === "nvidia" && config.nvidiaApiKey) {
-    data = await consultarNvidia({ system, user, signal, formatoJson: true });
+  const esModeloNvidia =
+    Boolean(modeloEfectivo && (
+      modeloEfectivo.startsWith("nvidia/") ||
+      modeloEfectivo.startsWith("mistralai/") ||
+      modeloEfectivo.startsWith("z-ai/") ||
+      modeloEfectivo.startsWith("google/") ||
+      modeloEfectivo.startsWith("meta/") ||
+      modeloEfectivo.startsWith("moonshotai/")
+    ));
+
+  if ((config.proveedorIA === "nvidia" || esModeloNvidia) && config.nvidiaApiKey) {
+    data = await consultarNvidia({ system, user, signal, formatoJson: true, modelo: modeloEfectivo });
     return analizarJson(data.message.content, data.done_reason);
   }
 
@@ -219,7 +254,7 @@ export async function consultarModeloIA(
   } catch (errOllama) {
     if (config.nvidiaApiKey) {
       console.warn("Ollama falló o no está disponible; cambiando a NVIDIA NIM:", errOllama.message);
-      data = await consultarNvidia({ system, user, signal, formatoJson: true });
+      data = await consultarNvidia({ system, user, signal, formatoJson: true, modelo: modeloEfectivo });
       return analizarJson(data.message.content, data.done_reason);
     }
     throw errOllama;

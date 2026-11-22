@@ -10,7 +10,11 @@ import {
   detectarCatalan,
   crearNombreArchivo,
 } from "../js/modulos/apuntes/utilidades-nombres.js";
-import { sistemaApuntes } from "../js/modulos/instrucciones.js";
+import {
+  sistemaApuntes,
+  detectarApartadosEnTexto,
+  dividirTextoPorApartados,
+} from "../js/modulos/instrucciones.js";
 import { normalizarResultadoIA } from "../js/modulos/apuntes/normalizacion-ia.js";
 import {
   guardarGeneracion,
@@ -54,6 +58,96 @@ async function traducirTextoLargoSiEsCatalan(texto) {
     }
   }
   return traducidos.join("\n");
+}
+
+async function consultarIAApartado({
+  asignatura,
+  tema,
+  tituloTema,
+  subtema,
+  subtemaTitulo,
+  instrucciones,
+  textoFuente,
+  apiKey,
+  modeloConfigurado,
+}) {
+  const prompt = `Asignatura: "${asignatura}"
+Tema ${tema}: "${tituloTema}"
+Subtema / Apartado ${tema}.${subtema}: "${subtemaTitulo}"
+
+Instrucciones del alumno:
+${instrucciones || "Elabora unos apuntes universitarios completos, rigurosos y pedagógicos para este apartado, con explicaciones paso a paso, ejemplos de código y notas de examen."}
+
+Material fuente del apartado:
+${textoFuente || "Elabora el temario oficial para este apartado."}
+
+FORMATO DE SALIDA OBLIGATORIO:
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con este formato:
+{
+  "tema_existente": 0,
+  "titulo_tema": "${tituloTema}",
+  "titulo_subtema": "${subtemaTitulo}",
+  "conceptos_clave": ["Concepto 1", "Concepto 2"],
+  "archivos": [
+    {
+      "subtema": "${subtema}",
+      "nombre": "1.slug-del-apartado",
+      "titulo": "${subtemaTitulo}",
+      "latex": "\\secciongrande{${subtemaTitulo}}\\n\\n\\resumen{Síntesis sustancial de la teoría en 3 a 5 líneas sin frases vacías ni metalenguaje.}\\n\\n\\definicion{Concepto Técnico}{Definición técnica formal.}\\n\\n\\subtituloA{Detalle conceptual}\\n\\n\\lista{\\n  **Elemento 1:** Explicación técnica detallada.\\n  **Elemento 2:** Explicación técnica detallada.\\n}\\n\\n\\nota{Para el examen}{Pregunta de autoevaluación con respuesta razonada.}"
+    }
+  ]
+}
+
+REGLAS CRÍTICAS:
+1. Todo el contenido DEBE estar 100% en ESPAÑOL ESTÁNDAR. Prohibido incluir palabras en catalán.
+2. Usa las macros oficiales de la biblioteca WEC (\\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}).
+3. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
+
+  const modelosAIntentar = Array.from(
+    new Set([
+      modeloConfigurado,
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "mistralai/mistral-large-4-1t-a52b",
+      "z-ai/glm-5.3-flash",
+    ])
+  ).filter(Boolean);
+
+  for (const mod of modelosAIntentar) {
+    try {
+      const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: mod,
+          messages: [
+            { role: "system", content: sistemaApuntes },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 8192,
+        }),
+      });
+
+      if (!resp.ok) continue;
+
+      const data = await resp.json();
+      const rawContent = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || "";
+      const matchJ = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      const strJson = matchJ ? matchJ[1].trim() : rawContent.trim();
+      const parsed = JSON.parse(strJson);
+      return normalizarResultadoIA(parsed, {
+        subject: asignatura,
+        theme: String(tema),
+        subtheme: String(subtema),
+        themeTitle: tituloTema,
+        subthemeTitle: subtemaTitulo,
+      });
+    } catch (_) {}
+  }
+  return null;
 }
 
 async function main() {
@@ -154,7 +248,56 @@ async function main() {
     throw new Error(
       "Falta la clave NVIDIA_API_KEY en configuracion_privada de Supabase. No se puede generar con IA."
     );
-  } else {
+  } else if (!resultadoIA) {
+    const apartadosDetectados = detectarApartadosEnTexto(textoFuente);
+    if (apartadosDetectados.length >= 2) {
+      console.log(`Detectados ${apartadosDetectados.length} apartados estructurados en el material:`);
+      for (const a of apartadosDetectados) {
+        console.log(`  - Apartado ${a.tema}.${a.subtema}: ${a.titulo}`);
+      }
+      const bloques = dividirTextoPorApartados(textoFuente, [], apartadosDetectados);
+      const todosLosArchivos = [];
+
+      for (let i = 0; i < bloques.length; i++) {
+        const blq = bloques[i];
+        const apInfo = apartadosDetectados[i] || { subtema: i + 1, titulo: `Apartado ${i + 1}` };
+        const subtemaId = String(apInfo.subtema || i + 1);
+        const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
+
+        console.log(`\n🤖 Redactando con IA Apartado ${tema}.${subtemaId}: "${subtemaTitulo}"...`);
+        const resApartado = await consultarIAApartado({
+          asignatura,
+          tema,
+          tituloTema: titulo,
+          subtema: subtemaId,
+          subtemaTitulo,
+          instrucciones,
+          textoFuente: blq.texto,
+          apiKey,
+          modeloConfigurado,
+        });
+
+        if (resApartado?.archivos?.length) {
+          for (const arch of resApartado.archivos) {
+            arch.subtema = subtemaId;
+            todosLosArchivos.push(arch);
+            console.log(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
+          }
+        }
+      }
+
+      if (todosLosArchivos.length > 0) {
+        resultadoIA = {
+          titulo_tema: titulo,
+          titulo_subtema: titulo,
+          archivos: todosLosArchivos,
+        };
+        console.log(`✓ Total de archivos modulares generados por apartados: ${todosLosArchivos.length}`);
+      }
+    }
+  }
+
+  if (!resultadoIA && apiKey) {
     console.log("Conectando con NVIDIA NIM API para generación estructurada...");
 
     const promptUsuario = `Asignatura: "${asignatura}"
