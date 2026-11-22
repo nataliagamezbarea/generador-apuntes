@@ -1,0 +1,88 @@
+name: Generar Apuntes con IA y LaTeX
+
+on:
+  workflow_dispatch:
+    inputs:
+      asignatura:
+        description: "Nombre de la asignatura (ej: WEC, SOR)"
+        required: true
+        default: "WEC"
+      tema:
+        description: "Número de tema (ej: 1, 2)"
+        required: true
+        default: "1"
+      titulo:
+        description: "Título del tema"
+        required: false
+        default: ""
+      subtema:
+        description: "Número de apartado o subtema"
+        required: false
+        default: "0"
+      instrucciones:
+        description: "Instrucciones adicionales para la IA"
+        required: false
+        default: ""
+      texto_fuente:
+        description: "Texto o resumen fuente para generar"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependencias
+        run: npm ci || npm install
+
+      - name: Instalar compilador LaTeX
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-lang-spanish latexmk
+
+      - name: Ejecutar generación de apuntes
+        env:
+          PROVEEDOR_IA: "nvidia"
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          NVIDIA_MODELO: ${{ vars.NVIDIA_MODELO || 'meta/llama-3.1-8b-instruct' }}
+          ASIGNATURA: ${{ inputs.asignatura }}
+          TEMA: ${{ inputs.tema }}
+          TITULO: ${{ inputs.titulo }}
+          SUBTEMA: ${{ inputs.subtema }}
+          INSTRUCCIONES: ${{ inputs.instrucciones }}
+          TEXTO_FUENTE: ${{ inputs.texto_fuente }}
+        run: |
+          node scripts/generar-desde-ci.js
+
+      - name: Guardar y subir apuntes a GitHub
+        run: |
+          git config --global user.name "Generador Apuntes Bot"
+          git config --global user.email "bot@generador-apuntes.local"
+          git add apuntes-generados/ || true
+          if git diff --staged --quiet; then
+            echo "Sin cambios nuevos para commitear."
+          else
+            git commit -m "docs: apuntes generados para ${{ inputs.asignatura }} - Tema ${{ inputs.tema }}"
+            git push origin main
+          fi
+
+      - name: Subir PDF como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: apuntes-${{ inputs.asignatura }}-tema-${{ inputs.tema }}
+          path: |
+            apuntes-generados/**/*.pdf
+            apuntes-generados/**/*.tex
+          if-no-files-found: warn

@@ -2480,7 +2480,7 @@ formulario.addEventListener("submit", async (evento) => {
     panelError.hidden = false;
     return;
   }
-  if (!estadoModelo.classList.contains("ready")) {
+  if (!esEntornoEstatico && !estadoModelo.classList.contains("ready")) {
     panelError.textContent =
       "La IA local no está lista. Comprueba Ollama y la descarga del modelo con el acceso directo del escritorio.";
     panelError.hidden = false;
@@ -2503,6 +2503,19 @@ formulario.addEventListener("submit", async (evento) => {
       panelError.hidden = false;
       return;
     }
+  }
+
+  // Si estamos en GitHub Pages (modo estático), ejecutar mediante GitHub Actions en la nube
+  if (esEntornoEstatico) {
+    await ejecutarGeneracionGitHubActions({
+      asignatura,
+      tema: String(numeroTemaSeleccionado() || 1),
+      titulo: tituloTemaSeleccionado() || `Tema ${numeroTemaSeleccionado() || 1}`,
+      subtema: String(numeroApartadoSeleccionado() || 0),
+      instrucciones: document.querySelector("#instruccion-estudiante")?.value || "",
+      textoFuente: textoFuente.value || "",
+    });
+    return;
   }
 
   const datos = new FormData();
@@ -2967,3 +2980,133 @@ cerrarModalEnviados?.addEventListener("click", () => {
 modalEnviados?.addEventListener("click", (e) => {
   if (e.target === modalEnviados) modalEnviados.hidden = true;
 });
+
+// ============================================================
+// GENERACIÓN EN LA NUBE VÍA GITHUB ACTIONS (MODO GITHUB PAGES)
+// ============================================================
+async function ejecutarGeneracionGitHubActions({
+  asignatura,
+  tema,
+  titulo,
+  subtema,
+  instrucciones,
+  textoFuente,
+}) {
+  progreso.hidden = false;
+  botonGenerar.disabled = true;
+
+  mostrarProgresoGeneracion(
+    {
+      fase: "subida",
+      mensaje: "Conectando con GitHub Actions en la nube…",
+      detalle: "Preparando la orden de generación desatendida con NVIDIA NIM y compilación LaTeX.",
+    },
+    false,
+  );
+
+  // Obtener el token de GitHub desde Supabase o localStorage
+  let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
+  const repo = localStorage.getItem("gh_repo") || "nataliagamezbarea/generador-apuntes";
+
+  if (!token && window.SupabaseAuth?.getClient) {
+    try {
+      const c = window.SupabaseAuth.getClient();
+      if (c) {
+        const { data } = await c.schema("grados-informaticos").from("configuracion_privada").select("clave, valor");
+        if (Array.isArray(data)) {
+          const rowToken = data.find((r) => r.clave === "gh_token" || r.clave === "gh_token_general");
+          if (rowToken?.valor) {
+            token = rowToken.valor;
+            localStorage.setItem("cache_gh_token", token);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Si aún no hay token, solicitarlo al usuario con un prompt amigable
+  if (!token) {
+    token = window.prompt(
+      "Para generar apuntes desde GitHub Pages sin servidor local, introduce tu GitHub Personal Access Token (con permiso 'workflow'):",
+    );
+    if (token) {
+      token = token.trim();
+      localStorage.setItem("cache_gh_token", token);
+    } else {
+      botonGenerar.disabled = false;
+      progreso.hidden = false;
+      panelError.textContent = "Se requiere un token de GitHub para activar la generación en la nube.";
+      panelError.hidden = false;
+      return;
+    }
+  }
+
+  try {
+    mostrarProgresoGeneracion(
+      {
+        fase: "redaccion",
+        mensaje: `Disparando GitHub Actions para ${asignatura} - Tema ${tema}`,
+        detalle: "Enviando workflow_dispatch a la nube de GitHub…",
+      },
+      false,
+    );
+
+    const repoDestino = repo.includes("/") ? repo : `nataliagamezbarea/${repo}`;
+    const urlDispatch = `https://api.github.com/repos/${repoDestino}/actions/workflows/generar-apuntes.yml/dispatches`;
+
+    const res = await fetch(urlDispatch, {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ref: "main",
+        inputs: {
+          asignatura,
+          tema,
+          titulo,
+          subtema,
+          instrucciones,
+          texto_fuente: textoFuente.slice(0, 60000), // límite seguro de payload
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
+    }
+
+    mostrarProgresoGeneracion(
+      {
+        fase: "compilacion",
+        mensaje: "¡Generación iniciada con éxito en GitHub Actions!",
+        detalle: `El trabajo se está ejecutando en la nube de GitHub con la IA de NVIDIA y LaTeX. Puedes seguir el progreso en vivo o descargar el PDF resultante cuando finalice.`,
+      },
+      false,
+    );
+
+    panelResultados.hidden = false;
+    panelResultados.innerHTML = `
+      <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
+        <div style="font-size:36px; margin-bottom:8px;">🚀</div>
+        <h3 style="margin:0 0 8px; font-size:18px;">Trabajo en curso en la nube</h3>
+        <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
+          Se está generando el documento LaTeX y compilando el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
+        </p>
+        <a href="https://github.com/${repoDestino}/actions" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#2563eb; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px;">
+          <i class="fa-brands fa-github"></i>
+          <span>Ver ejecución en tiempo real en GitHub Actions</span>
+        </a>
+      </div>
+    `;
+    panelResultados.scrollIntoView({ behavior: "smooth" });
+  } catch (error) {
+    panelError.textContent = `Error al activar GitHub Actions: ${error.message}`;
+    panelError.hidden = false;
+  } finally {
+    botonGenerar.disabled = false;
+  }
+}
