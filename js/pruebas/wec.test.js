@@ -112,6 +112,36 @@ test('aplicarEstilosLatex corrige extbf a \\textbf sin alterar comandos válidos
   assert.doesNotMatch(output, /(?<![\\a-zA-Z])extbf\{/);
 });
 
+test('aplicarEstilosLatex une cajas de nota consecutivas y elimina titulos duplicados', () => {
+  const input = `\\nota{Para el examen}{
+Para el examen
+¿Dónde se implementan los diferentes programas para realizar solicitudes al servidor? a) Servidor b) Cliente c) Red extbfRespuesta: La opción correcta es la b) cliente. Los scripts y aplicaciones que realizan las peticiones web están en el navegador del usuario, no en el servidor ni en los protocolos de red.
+}
+
+\\nota{Para el examen}{
+Para el examen
+¿Es responsabilidad del navegador alojar una página web para responder a solicitudes? a) Verdadero b) Falso extbfRespuesta: La opción correcta es la b) falso. El servidor aloja y responde las páginas, mientras que el navegador se encarga de solicitar y presentar el contenido.
+}`;
+
+  const output = aplicarEstilosLatex(input, "TEST");
+
+  // Debe haber exactamente una sola caja \nota{Para el examen}
+  const countNotas = (output.match(/\\nota\{Para el examen\}/g) || []).length;
+  assert.equal(countNotas, 1, "Debe unificar las dos notas consecutivas en una sola");
+
+  // No debe contener 'Para el examen' redundante en el cuerpo
+  assert.doesNotMatch(output, /\{Para el examen\}\{[\s\S]*?(?:\\n|\n)\s*Para el examen/);
+
+  // Debe tener \textbf{Respuesta:} correctamente formateado
+  assert.match(output, /\\textbf\{Respuesta:\}/);
+  assert.doesNotMatch(output, /(?<![\\a-zA-Z])extbf/);
+
+  // Las dos preguntas deben estar separadas dentro de la misma caja
+  assert.match(output, /¿Dónde se implementan/);
+  assert.match(output, /¿Es responsabilidad del navegador/);
+  assert.match(output, /\\hrulefill/);
+});
+
 test('detectarApartadosEnTexto detecta encabezados numerados del PDF Tema 1', () => {
   const samplePdf = `
 DESENVOLUPAMENT WEB EN ENTORN CLIENT
@@ -131,3 +161,4 @@ INTRODUCCIÓ: L'origen i l'abast de la web
   assert.equal(apartados[1].subtema, 2);
   assert.equal(apartados[6].subtema, 7);
 });
+

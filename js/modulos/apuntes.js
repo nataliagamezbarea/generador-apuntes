@@ -1478,6 +1478,105 @@ export function convertirMarkdownALatexWec(contenido = "") {
   return texto.replace(/\n{3,}/g, "\n\n").trim();
 }
 
+/**
+ * Limpia el cuerpo de las notas, elimina encabezados repetidos internamente,
+ * formatea opciones de examen y unifica cajas \nota consecutivas con el mismo título.
+ */
+function normalizarNotas(texto) {
+  let pos = 0;
+  let resultado = "";
+  const listaNotas = [];
+
+  while (pos < texto.length) {
+    const idx = texto.indexOf("\\nota{", pos);
+    if (idx === -1) {
+      resultado += texto.slice(pos);
+      break;
+    }
+    resultado += texto.slice(pos, idx);
+    const cur = idx + 5; // '{' de arg1
+
+    let prof1 = 0;
+    let end1 = cur;
+    for (; end1 < texto.length; end1++) {
+      const ch = texto[end1];
+      if (ch === "\\") { end1++; continue; }
+      if (ch === "{") prof1++;
+      else if (ch === "}") {
+        prof1--;
+        if (prof1 === 0) break;
+      }
+    }
+    if (end1 >= texto.length) {
+      resultado += texto.slice(idx);
+      break;
+    }
+    const titulo = texto.slice(cur + 1, end1);
+
+    let start2 = end1 + 1;
+    while (start2 < texto.length && /\s/.test(texto[start2])) start2++;
+    if (start2 >= texto.length || texto[start2] !== "{") {
+      resultado += texto.slice(idx, start2);
+      pos = start2;
+      continue;
+    }
+
+    let prof2 = 0;
+    let end2 = start2;
+    for (; end2 < texto.length; end2++) {
+      const ch = texto[end2];
+      if (ch === "\\") { end2++; continue; }
+      if (ch === "{") prof2++;
+      else if (ch === "}") {
+        prof2--;
+        if (prof2 === 0) break;
+      }
+    }
+    if (end2 >= texto.length) {
+      resultado += texto.slice(idx);
+      break;
+    }
+    let cuerpo = texto.slice(start2 + 1, end2);
+
+    cuerpo = cuerpo
+      .trim()
+      .replace(/^\s*(?:\*\*)?(?:Para el examen|Examen|Ojo para el examen|Comprovem l'apr[eè]s|Posa'?t a prova)[:\s-]*(?:\*\*)?\s*/i, "")
+      .replace(/([^\n])\s+([a-d]\)\s+)/gi, "$1\n$2")
+      .replace(/(?:\s*)(?:\\textbf\{\s*Respuesta[^}]*\}|(?:extbf|(?<!\\)\b)Respuesta(?:\s+correcta)?)\s*[:—-]*/gi, () => "\n\n\\textbf{Respuesta:} ")
+      .replace(/(?:\\textbf\{\s*Respuesta:\s*\}\s*)+/g, "\\textbf{Respuesta:} ")
+      .trim();
+
+    if (listaNotas.length > 0) {
+      const ultima = listaNotas[listaNotas.length - 1];
+      const entreMedias = resultado.slice(ultima.finResultado);
+      if (/^\s*$/.test(entreMedias) && ultima.titulo.trim().toLowerCase() === titulo.trim().toLowerCase()) {
+        resultado = resultado.slice(0, ultima.inicioResultado);
+        const cuerpoFusionado = `${ultima.cuerpo}\n\n\\vspace{2.5mm}\\hrulefill\\vspace{2.5mm}\n\n${cuerpo}`;
+        const notaStr = `\\nota{${ultima.titulo}}{\n${cuerpoFusionado}\n}`;
+        ultima.cuerpo = cuerpoFusionado;
+        ultima.inicioResultado = resultado.length;
+        resultado += notaStr;
+        ultima.finResultado = resultado.length;
+        pos = end2 + 1;
+        continue;
+      }
+    }
+
+    const inicioRes = resultado.length;
+    const notaStr = `\\nota{${titulo}}{\n${cuerpo}\n}`;
+    resultado += notaStr;
+    listaNotas.push({
+      titulo,
+      cuerpo,
+      inicioResultado: inicioRes,
+      finResultado: resultado.length
+    });
+    pos = end2 + 1;
+  }
+
+  return resultado;
+}
+
 export function aplicarEstilosLatex(value, subject = "") {
   // Se limpia siempre el documento completo (preámbulo, \begin{document},
   // \end{document}, \input de la biblioteca...) porque la IA a veces devuelve
@@ -1512,6 +1611,7 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(?:^|\s)egin\{/g, (m) => m.replace("egin{", "\\begin{"))
     .replace(/(?:^|\s)end\{/g, (m) => m.replace("end{", "\\end{"))
     .replace(/(?:[\x00-\x1f\s]|\b|\\)extbf\s*\{+/g, " \\textbf{")
+    .replace(/(?:[\x00-\x1f\s]|\b|\\)extbf\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+:)/g, " \\textbf{$1}")
     .replace(/(?:[\x00-\x1f\s]|\b|\\)extcolor\s*\{+/g, " \\textcolor{")
     .replace(/\\(textbf|textit|cmd|nota|definicion)\s*\{{2,}/g, "\\$1{")
     .replace(/(?:[\x00-\x1f\s]|\b)eginconsola/g, "\\begin{consola}")
@@ -1573,9 +1673,10 @@ export function aplicarEstilosLatex(value, subject = "") {
   // Corregir negritas sin abrir antes de dos puntos (ej: "Servidor:**" -> "**Servidor:**")
   resultado = resultado.replace(/(^|[\n|])\s*([A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][^:\n|]{1,60}):\*\*/g, "$1**$2:**");
 
-  // Eliminar párrafos vacíos (\par) dentro de macros cuyos argumentos usan \negrita no-long
+  // Limpieza, formato y unificación de notas (\nota)
+  resultado = normalizarNotas(resultado);
+
   resultado = resultado
-    .replace(/\\nota\{([^{}]*)\}\{([^{}]*)\}/gs, (_m, tit, cont) => `\\nota{${tit}}{${cont.replace(/\n\s*\n+/g, "\n")}}`)
     .replace(/\\definicion\{([^{}]*)\}\{([^{}]*)\}/gs, (_m, tit, cont) => `\\definicion{${tit}}{${cont.replace(/\n\s*\n+/g, "\n")}}`)
     .replace(/\\resumen\{([^{}]*)\}/gs, (_m, cont) => `\\resumen{${cont.replace(/\n\s*\n+/g, "\n")}}`);
 
@@ -2817,20 +2918,42 @@ async function asegurarEstilosGenerador(themeDir) {
 \AddToHook{cmd/titulo/after}{\iniciarPaletaSecciones\actualizarColoresCodigo}
 \AddToHook{cmd/secciongrande/after}{\actualizarColoresCodigo}
 
-% --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF ---
-% Se envuelven \secciongrande (sección) y \seccion (subsección) usando
-% \RenewDocumentCommand para mantener compatibilidad total con los hooks
-% de LaTeX y con hyperref sin romper la sintaxis ni duplicar entradas en el índice.
+% --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF Y CONTROL ANTI-HUÉRFANAS ---
+% Se envuelven \secciongrande, \seccion, \subtituloA y \subtituloB usando
+% \RenewDocumentCommand para mantener compatibilidad total con hyperref,
+% evitar que queden solos al final de página (\Needspace) y garantizar
+% que el contenido empiece en la misma página que el título (\nopagebreak).
 \makeatletter
 \let\orig@secciongrande\secciongrande
 \RenewDocumentCommand{\secciongrande}{o m}{%
+  \par\Needspace{8\baselineskip}%
   \phantomsection
   \IfValueTF{#1}{\orig@secciongrande[#1]{#2}}{\orig@secciongrande[]{#2}}%
+  \nopagebreak\vspace{2mm}\nopagebreak
 }
 \let\orig@seccion\seccion
 \RenewDocumentCommand{\seccion}{o m}{%
+  \par\Needspace{6\baselineskip}%
   \phantomsection
   \IfValueTF{#1}{\orig@seccion[#1]{#2}}{\orig@seccion[]{#2}}%
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\RenewDocumentCommand{\subtituloA}{m}{%
+  \par\Needspace{6\baselineskip}%
+  \vspace{4mm}%
+  \noindent
+  \edef\subtituloreal{\subtitulocolor}%
+  \raisebox{0.6ex}{\tikz\fill[\subtituloreal] (0,0) circle (2.2pt);}%
+  \hspace{3mm}{\headingfontxb\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\RenewDocumentCommand{\subtituloB}{m}{%
+  \par\Needspace{5\baselineskip}%
+  \vspace{4mm}%
+  \noindent
+  \edef\subtituloreal{\subtitulocolor}%
+  {\headingfont\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
+  \nopagebreak\vspace{2mm}\nopagebreak
 }
 \makeatother
 
