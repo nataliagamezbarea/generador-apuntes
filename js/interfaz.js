@@ -3014,61 +3014,18 @@ async function ejecutarGeneracionGitHubActions({
 
   // 1. Obtener el token de GitHub desde localStorage
   let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
-  // Descartar tokens que no sean Personal Access Tokens válidos
   if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
     token = "";
     localStorage.removeItem("cache_gh_token");
     localStorage.removeItem("gh_token");
   }
 
-  // 2. Si hay sesión iniciada en Supabase, leer gh_token y gh_repo de configuracion_privada (esquema grados-informaticos)
-  if (!token && window.SupabaseAuth?.getClient) {
-    try {
-      const c = window.SupabaseAuth.getClient();
-      if (c) {
-        const sRes = await c.auth.getSession();
-        const session = sRes?.data?.session;
-        const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
-        const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-
-        if (session?.access_token) {
-          try {
-            const u = `${supabaseUrl}/rest/v1/configuracion_privada?select=clave,valor&clave=in.(gh_token,gh_token_general,gh_repo,gh_repo_general)`;
-            const r = await fetch(u, {
-              headers: {
-                apikey: anonKey,
-                Authorization: `Bearer ${session.access_token}`,
-                Accept: "application/json",
-                "Accept-Profile": "grados-informaticos",
-              },
-            });
-            if (r.ok) {
-              const filas = await r.json();
-              if (Array.isArray(filas)) {
-                const rowToken = filas.find((x) => (x.clave === "gh_token" || x.clave === "gh_token_general") && (x.valor?.startsWith("ghp_") || x.valor?.startsWith("github_pat_")));
-                const rowRepo = filas.find((x) => x.clave === "gh_repo" || x.clave === "gh_repo_general");
-                if (rowToken?.valor) {
-                  token = rowToken.valor.trim();
-                  localStorage.setItem("cache_gh_token", token);
-                  console.log("✓ gh_token obtenido de grados-informaticos.configuracion_privada con sesión iniciada");
-                }
-                if (rowRepo?.valor) {
-                  localStorage.setItem("gh_repo", rowRepo.valor.trim());
-                }
-              }
-            }
-          } catch (_) {}
-        }
-      }
-    } catch (_) {}
-  }
-
-  // 3. Si aún no hay token, consultar en configuracion_publica como respaldo
+  // 2. Si no hay token en memoria local, obtenerlo automáticamente desde Supabase (tabla configuracion_publica)
   if (!token) {
     try {
       const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
       const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token,gh_repo)`, {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token)`, {
         headers: {
           apikey: anonKey,
           Authorization: `Bearer ${anonKey}`,
@@ -3079,32 +3036,52 @@ async function ejecutarGeneracionGitHubActions({
       if (resp.ok) {
         const filas = await resp.json();
         if (Array.isArray(filas)) {
+          // gh_token_general tiene prioridad (es el token con permisos de administración y workflow)
+          const rowGeneral = filas.find((r) => r.clave === "gh_token_general" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
           const rowToken = filas.find((r) => r.clave === "gh_token" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
-          const rowRepo = filas.find((r) => r.clave === "gh_repo");
-          if (rowToken?.valor) {
-            token = rowToken.valor.trim();
+          const elegido = rowGeneral || rowToken;
+          if (elegido?.valor) {
+            token = elegido.valor.trim();
             localStorage.setItem("cache_gh_token", token);
-            console.log("✓ gh_token obtenido de grados-informaticos.configuracion_publica");
-          }
-          if (rowRepo?.valor) {
-            localStorage.setItem("gh_repo", rowRepo.valor.trim());
+            console.log(`✓ Token (${elegido.clave}) obtenido automáticamente de Supabase (configuracion_publica)`);
           }
         }
       }
     } catch (_) {}
   }
 
-  const repo = localStorage.getItem("gh_repo") || "nataliagamezbarea/generador-apuntes";
+  // El repositorio donde se ejecuta el workflow de generar apuntes es SIEMPRE generador-apuntes
+  const repoDestino = "nataliagamezbarea/generador-apuntes";
 
   // 3. Si aún no hay token (o si fue borrado por no tener permisos), solicitarlo al usuario
   if (!token) {
     token = window.prompt(
-      "Para generar apuntes desde GitHub Pages en la nube, introduce tu Personal Access Token de GitHub (ghp_... o github_pat_...) con permiso 'workflow':",
+      "Introduce tu Personal Access Token de GitHub con permiso sobre 'generador-apuntes' (ghp_... o github_pat_...):",
       ""
     );
     if (token) {
       token = token.trim();
       localStorage.setItem("cache_gh_token", token);
+      // Guardar también en Supabase para que quede sincronizado permanentemente
+      try {
+        const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
+        const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+        fetch(`${supabaseUrl}/rest/v1/configuracion_publica`, {
+          method: "POST",
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+            "Accept-Profile": "grados-informaticos",
+            "Content-Profile": "grados-informaticos",
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates",
+          },
+          body: JSON.stringify([
+            { clave: "gh_token_general", valor: token },
+            { clave: "gh_token", valor: token },
+          ]),
+        }).catch(() => {});
+      } catch (_) {}
     } else {
       botonGenerar.disabled = false;
       progreso.hidden = false;
