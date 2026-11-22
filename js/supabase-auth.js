@@ -173,6 +173,7 @@ const SupabaseAuth = (() => {
     }
     currentUser = null;
     try { sessionStorage.clear(); } catch (_) {}
+    try { document.cookie = "sb_shared_session=; path=/; max-age=0"; } catch (_) {}
     try {
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const k = localStorage.key(i);
@@ -249,6 +250,25 @@ const SupabaseAuth = (() => {
       let { data: { session } } = await c.auth.getSession();
       const hasTokenInUrl = window.location.hash.includes("access_token") || window.location.search.includes("code=");
 
+      // Si no hay sesión en localStorage, intentar recuperar desde la cookie compartida entre puertos
+      if (!session && !hasTokenInUrl) {
+        try {
+          const m = document.cookie.match(/(?:^|; )sb_shared_session=([^;]*)/);
+          if (m) {
+            const parsed = JSON.parse(decodeURIComponent(m[1]));
+            if (parsed && parsed.access_token) {
+              const resCookie = await c.auth.setSession({
+                access_token: parsed.access_token,
+                refresh_token: parsed.refresh_token || ""
+              });
+              if (resCookie.data?.session) {
+                session = resCookie.data.session;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       if (!session && hasTokenInUrl) {
         if (window.location.hash.includes("access_token")) {
           try {
@@ -296,6 +316,14 @@ const SupabaseAuth = (() => {
         mostrarLoginGate(`Acceso denegado: tu usuario (${session.user.email || session.user.id}) no tiene rol admin en Supabase.`);
         return false;
       }
+
+      // Guardar cookie compartida entre puertos para que la otra app (3000) la lea automáticamente
+      try {
+        if (session?.access_token) {
+          const payload = { access_token: session.access_token, refresh_token: session.refresh_token };
+          document.cookie = `sb_shared_session=${encodeURIComponent(JSON.stringify(payload))}; path=/; max-age=604800; samesite=lax`;
+        }
+      } catch (_) {}
 
       currentUser = session.user;
       ocultarLoginGate();
