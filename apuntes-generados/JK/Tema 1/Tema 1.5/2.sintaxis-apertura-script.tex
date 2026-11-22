@@ -1,0 +1,19 @@
+\subtituloA{Sintaxis de apertura del script}
+
+\definicion{Atributo type}{El atributo \texttt{type="text/javascript"} en la etiqueta de apertura informa al navegador que el contenido del script está formateado como texto javascript, no como html.}
+
+\begin{codigo}
+ 
+\cmd{<script type="text/javascript">} 
+// Código javascript va aquí 
+\cmd{</script>}
+\bend{codigo}
+
+\nota{Para el examen}{
+¿Cuál es la diferencia práctica entre colocar un script en \texttt{<head>} versus en \texttt{<body>} en términos de disponibilidad de elementos del documento?
+
+\textbf{Respuesta:} En \texttt{<head>} el script se ejecuta antes de que el cuerpo de la página esté cargado, por lo que no puede manipular elementos del cuerpo; en \texttt{<body>} los elementos ya existen y son accesibles por el script.
+}}
+\end{codigo}
+
+
