@@ -64,7 +64,7 @@ export const config = {
     "http://localhost:3000"
   ).trim(),
   nvidiaApiKey: (process.env.NVIDIA_API_KEY ?? "").trim(),
-  nvidiaModel: (process.env.NVIDIA_MODELO ?? "mistralai/mistral-large-4-1t-a52b").trim(),
+  nvidiaModel: (process.env.NVIDIA_MODELO ?? "nvidia/nemotron-3.5-bolt-e4b").trim(),
   nvidiaBaseUrl: (process.env.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1").trim().replace(/\/+$/, ""),
   proveedorIA: (process.env.PROVEEDOR_IA ?? "auto").trim().toLowerCase(),
   supabaseUrl: (process.env.SUPABASE_URL ?? "").trim(),

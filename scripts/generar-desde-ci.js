@@ -103,9 +103,11 @@ REGLAS CRÍTICAS:
 2. Usa las macros oficiales de la biblioteca WEC (\\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}).
 3. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
 
+  const sistemaConciso = "Eres un profesor experto en informática. Redacta apuntes docentes estructurados para LaTeX con las macros oficiales WEC (\\secciongrande, \\resumen, \\definicion, \\subtituloA, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}). Todo en español estándar (cero catalán ni inglés). Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos (cada uno con subtema, nombre, titulo y latex en español). Cero rodeos, solo el JSON puro.";
+
   try {
     const raw = await consultarModeloIA(
-      sistemaApuntes,
+      sistemaConciso,
       prompt,
       [],
       null,
@@ -133,7 +135,7 @@ async function main() {
   let textoFuente = process.env.TEXTO_FUENTE || "";
   const apiKey = process.env.NVIDIA_API_KEY || "";
   const modeloConfigurado =
-    process.env.NVIDIA_MODELO || "mistralai/mistral-large-4-1t-a52b";
+    process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-bolt-e4b";
 
   console.log(`=== Generando apuntes modulares en GitHub Actions ===`);
   console.log(`Asignatura: ${asignatura}`);
@@ -309,9 +311,9 @@ REGLAS CRÍTICAS DE CALIDAD:
 
     const modelosAIntentar = Array.from(
       new Set([
-        "mistralai/mistral-large-4-1t-a52b",
-        "z-ai/glm-5.3-flash",
         modeloConfigurado,
+        "nvidia/nemotron-3.5-bolt-e4b",
+        "poolside/laguna-xs-2.1",
         "nvidia/nemotron-3.5-lightning-30b-a3b",
       ])
     ).filter(Boolean);

@@ -112,17 +112,16 @@ function inicializarModelos() {
   const modeloCodigoGuardado = localStorage.getItem("generador.modeloCodigo");
 
   if (esEntornoEstatico) {
-    // En la nube (GitHub Pages): listar modelos gratuitos y recomendados de NVIDIA NIM
+    // En la nube (GitHub Pages): listar únicamente los modelos 100% probados y funcionales de NVIDIA NIM
     const modelosNvidia = [
-      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Español nativo / Máxima calidad" },
-      { id: "z-ai/glm-5.3-flash", nombre: "GLM 5.3 Flash · Rápido y conciso" },
-      { id: "moonshotai/kimi-k3.1-pro", nombre: "Kimi K3.1 Pro · 1M Contexto" },
+      { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Ultra rápido (4s) / Recomendado" },
+      { id: "poolside/laguna-xs-2.1", nombre: "Laguna XS 2.1 · Rápido y conciso" },
       { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Alternativa" },
     ];
 
     modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado)
       ? modeloIAGuardado
-      : "mistralai/mistral-large-4-1t-a52b";
+      : "nvidia/nemotron-3.5-bolt-e4b";
 
     selectorModeloIA.replaceChildren();
     modelosNvidia.forEach((m) => {
@@ -136,7 +135,7 @@ function inicializarModelos() {
 
     modeloCodigoSeleccionado = modeloCodigoGuardado && modelosNvidia.some((m) => m.id === modeloCodigoGuardado)
       ? modeloCodigoGuardado
-      : "mistralai/mistral-large-4-1t-a52b";
+      : "nvidia/nemotron-3.5-bolt-e4b";
 
     selectorModeloCodigo.replaceChildren();
     modelosNvidia.forEach((m) => {
@@ -233,7 +232,7 @@ let ultimaUnidadDetallada = "";
 let ultimosResultadosMostrados = 0;
 
 function actualizarEstadoModeloIA() {
-  const valor = selectorModeloIA.value || (esEntornoEstatico ? "nvidia/nemotron-3.5-lightning-30b-a3b" : "qwen2.5:14b");
+  const valor = selectorModeloIA.value || (esEntornoEstatico ? "nvidia/nemotron-3.5-bolt-e4b" : "qwen2.5:14b");
   estadoModeloSeleccionado.textContent = `Modelo IA: ${valor}`;
   if (esEntornoEstatico) {
     estadoModeloSeleccionado.style.color = "#c3e88d";
@@ -247,7 +246,7 @@ function actualizarEstadoModeloIA() {
 }
 
 function actualizarEstadoModeloCodigo() {
-  const valor = selectorModeloCodigo.value || (esEntornoEstatico ? "nvidia/nemotron-3.5-lightning-30b-a3b" : "qwen2.5:14b");
+  const valor = selectorModeloCodigo.value || (esEntornoEstatico ? "nvidia/nemotron-3.5-bolt-e4b" : "qwen2.5:14b");
   estadoModeloCodigo.textContent = `Modelo Código: ${valor}`;
   if (esEntornoEstatico) {
     estadoModeloCodigo.style.color = "#c3e88d";
@@ -3333,9 +3332,9 @@ REGLAS CRÍTICAS:
   const modelosAIntentar = Array.from(
     new Set([
       modelo,
+      "nvidia/nemotron-3.5-bolt-e4b",
+      "poolside/laguna-xs-2.1",
       "nvidia/nemotron-3.5-lightning-30b-a3b",
-      "mistralai/mistral-large-4-1t-a52b",
-      "z-ai/glm-5.3-flash",
     ])
   ).filter(Boolean);
 
@@ -3502,7 +3501,7 @@ async function ejecutarGeneracionGitHubActions({
 
   // FASE 3: REDACCIÓN DE APARTADOS CON IA (NVIDIA NIM) BLOQUE A BLOQUE
   let contenidoLatexGenerado = "";
-  const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "mistralai/mistral-large-4-1t-a52b").trim();
+  const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-bolt-e4b").trim();
 
   if (cfgSupabase.nvidiaApiKey) {
     registrarEventoConsola(`🤖 [Fase 3/5] Redacción de apartados con IA (${modelo})...`);

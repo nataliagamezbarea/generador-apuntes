@@ -85,8 +85,8 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
     new Set([
       modelo,
       config.nvidiaModel,
-      "mistralai/mistral-large-4-1t-a52b",
-      "z-ai/glm-5.3-flash",
+      "nvidia/nemotron-3.5-bolt-e4b",
+      "poolside/laguna-xs-2.1",
       "nvidia/nemotron-3.5-lightning-30b-a3b",
     ])
   ).filter(Boolean);
