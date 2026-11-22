@@ -4,8 +4,15 @@
 // SUPABASE AUTHENTICATION & LOGIN GATE - GENERADOR DE APUNTES
 // ============================================================
 
-window.SUPABASE_URL = window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
-window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+// Prioridad: variable ya establecida > backend (/api/configuracion) > config-publica.js > localStorage
+window.SUPABASE_URL = window.SUPABASE_URL
+  || (window.APP_CONFIG && window.APP_CONFIG.supabaseUrl)
+  || (typeof localStorage !== "undefined" && localStorage.getItem("supabase_url"))
+  || "";
+window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY
+  || (window.APP_CONFIG && window.APP_CONFIG.supabaseAnonKey)
+  || (typeof localStorage !== "undefined" && localStorage.getItem("supabase_anon_key"))
+  || "";
 
 const SupabaseAuth = (() => {
   let client = null;
@@ -291,14 +298,25 @@ const SupabaseAuth = (() => {
   }
 
   async function init() {
-    try {
-      const res = await fetch("/api/configuracion");
-      if (res.ok) {
-        const cfg = await res.json();
-        if (cfg.supabaseUrl) window.SUPABASE_URL = cfg.supabaseUrl;
-        if (cfg.supabaseAnonKey) window.SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
-      }
-    } catch (_) {}
+    // Solo intentar /api/configuracion si no estamos en GitHub Pages / entorno estático
+    const esEstatico = typeof window !== "undefined" && (
+      window.location.protocol === "file:" ||
+      window.location.hostname.endsWith("github.io") ||
+      window.location.hostname.endsWith("pages.dev")
+    );
+    if (!esEstatico) {
+      try {
+        const res = await fetch("/api/configuracion");
+        if (res.ok) {
+          const texto = await res.text();
+          if (texto && !texto.trim().startsWith("<")) {
+            const cfg = JSON.parse(texto);
+            if (cfg.supabaseUrl) window.SUPABASE_URL = cfg.supabaseUrl;
+            if (cfg.supabaseAnonKey) window.SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
+          }
+        }
+      } catch (_) {}
+    }
 
     // Gate email login submit
     const gateForm = document.getElementById("gate-email-form");
