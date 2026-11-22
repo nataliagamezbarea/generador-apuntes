@@ -25,10 +25,9 @@ async function main() {
   }
 
   if (contenidoLatex) {
-    console.log("✓ Usando contenido LaTeX aprobado directamente desde el frontend.");
+    console.log("✓ Usando contenido LaTeX proporcionado directamente.");
   } else if (!apiKey) {
-    errorNvidia = "No se configuró NVIDIA_API_KEY en los Secrets del repositorio de GitHub (Settings > Secrets and variables > Actions > New repository secret con nombre NVIDIA_API_KEY).";
-    console.warn(`⚠️ AVISO: ${errorNvidia}`);
+    throw new Error("Falta el secreto NVIDIA_API_KEY en los Secrets del repositorio de GitHub. No se puede generar con IA.");
   } else {
     console.log("Conectando con NVIDIA NIM API...");
     const prompt = `Eres un profesor experto en informática y redactor de apuntes universitarios en LaTeX.

@@ -2999,43 +2999,6 @@ modalEnviados?.addEventListener("click", (e) => {
 // ============================================================
 // GENERACIÓN EN LA NUBE VÍA GITHUB ACTIONS (MODO GITHUB PAGES)
 // ============================================================
-function sincronizarNvidiaKeyUI() {
-  const guardada = (localStorage.getItem("preparar_tests_nvidia_key") || localStorage.getItem("nvidia_api_key") || "").trim();
-  const inputNvKey = document.querySelector("#input-nvidia-key");
-  const estadoNvKey = document.querySelector("#estado-nvidia-key");
-  if (inputNvKey) inputNvKey.value = guardada;
-  if (estadoNvKey) {
-    if (guardada) {
-      estadoNvKey.innerHTML = '<span style="color:#34d399; font-weight:600;"><i class="fa-solid fa-check"></i> Clave API de NVIDIA configurada</span>';
-    } else {
-      estadoNvKey.innerHTML = '<span style="color:#f87171; font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Sin clave API de NVIDIA: obligatoria para generar apuntes con IA</span>';
-    }
-  }
-}
-
-// Inicializar control de API Key de NVIDIA en la interfaz
-document.addEventListener("DOMContentLoaded", () => {
-  sincronizarNvidiaKeyUI();
-  const btnGuardarNvKey = document.querySelector("#btn-guardar-nvidia-key-panel");
-  if (btnGuardarNvKey) {
-    btnGuardarNvKey.addEventListener("click", () => {
-      const input = document.querySelector("#input-nvidia-key");
-      const val = (input?.value || "").trim();
-      if (val) {
-        localStorage.setItem("nvidia_api_key", val);
-        localStorage.setItem("preparar_tests_nvidia_key", val);
-      } else {
-        localStorage.removeItem("nvidia_api_key");
-        localStorage.removeItem("preparar_tests_nvidia_key");
-      }
-      sincronizarNvidiaKeyUI();
-      panelError.hidden = true;
-      registrarEventoConsola(val ? "✓ Clave API de NVIDIA guardada." : "Clave API de NVIDIA eliminada.");
-    });
-  }
-});
-setTimeout(sincronizarNvidiaKeyUI, 200);
-
 async function ejecutarGeneracionGitHubActions({
   asignatura,
   tema,
@@ -3044,168 +3007,9 @@ async function ejecutarGeneracionGitHubActions({
   instrucciones,
   textoFuente,
 }) {
-  // 1. REGLA ESTRICTA: SI FALTA LA API KEY DE NVIDIA, MOSTRAR AVISO Y NO DEJAR AVANZAR
-  const nvKey = (localStorage.getItem("preparar_tests_nvidia_key") || localStorage.getItem("nvidia_api_key") || "").trim();
-  if (!nvKey) {
-    botonGenerar.disabled = false;
-    progreso.hidden = true;
-    panelError.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:10px; text-align:left;">
-        <div style="font-weight:700; font-size:16px; color:#ef4444; display:flex; align-items:center; gap:8px;">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <span>Falta la clave API de NVIDIA (Obligatoria para la IA)</span>
-        </div>
-        <div style="color:#e2e8f0; font-size:14px; line-height:1.5;">
-          Para generar los apuntes con IA en GitHub Pages <strong>es obligatorio configurar la API Key de NVIDIA NIM (nvapi-...)</strong>. No se puede avanzar sin ella.
-        </div>
-        <div style="display:flex; gap:8px; margin-top:4px; flex-wrap:wrap;">
-          <input type="password" id="input-nvidia-error-inline" placeholder="Pega aquí tu clave: nvapi-..." style="flex:1; min-width:240px; padding:10px 14px; background:#0f172a; color:#fff; border:1px solid #ef4444; border-radius:6px; font-size:13px;" />
-          <button type="button" id="btn-guardar-nvidia-inline" style="background:#ef4444; color:#fff; padding:10px 20px; border:none; border-radius:6px; font-weight:700; cursor:pointer;">
-            Guardar y continuar
-          </button>
-        </div>
-        <small style="color:#94a3b8;">Consigue tu clave gratuita en <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.</small>
-      </div>
-    `;
-    panelError.hidden = false;
-    panelError.scrollIntoView({ behavior: "smooth" });
+  const repoDestino = "nataliagamezbarea/generador-apuntes";
 
-    document.querySelector("#btn-guardar-nvidia-inline")?.addEventListener("click", () => {
-      const v = (document.querySelector("#input-nvidia-error-inline")?.value || "").trim();
-      if (v) {
-        localStorage.setItem("nvidia_api_key", v);
-        localStorage.setItem("preparar_tests_nvidia_key", v);
-        panelError.hidden = true;
-        sincronizarNvidiaKeyUI();
-        botonGenerar.click();
-      }
-    });
-
-    registrarEventoConsola("⚠️ Generación bloqueada: falta la clave API de NVIDIA. No se puede avanzar.");
-    return; // NO DEJA AVANZAR
-  }
-
-  panelError.hidden = true;
-  progreso.hidden = false;
-  botonGenerar.disabled = true;
-
-  // Procesar archivos subidos si los hay
-  let contenidoArchivos = "";
-  if (Array.isArray(archivosElegidos) && archivosElegidos.length > 0) {
-    for (const f of archivosElegidos) {
-      if (f.name.endsWith(".txt") || f.name.endsWith(".md") || f.name.endsWith(".json") || f.name.endsWith(".js") || f.name.endsWith(".html")) {
-        try {
-          const t = await f.text();
-          contenidoArchivos += `\n--- Archivo: ${f.name} ---\n${t}\n`;
-        } catch (_) {}
-      } else {
-        contenidoArchivos += `\n[Archivo adjunto: ${f.name} (${Math.round(f.size / 1024)} KB)]\n`;
-      }
-    }
-  }
-
-  const textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
-
-  // PASO 1: Generar con la IA de NVIDIA en el navegador
-  registrarEventoConsola(`🤖 Conectando con NVIDIA NIM API (Llama 3.1) para redactar ${asignatura} - Tema ${tema}...`);
-  mostrarProgresoGeneracion(
-    {
-      fase: "ia",
-      mensaje: `La IA de NVIDIA está redactando los apuntes para ${asignatura}…`,
-      detalle: "Generando contenido estructurado en LaTeX con la API de NVIDIA NIM…",
-    },
-    false,
-  );
-
-  const prompt = `Eres un profesor experto en informática y redactor de apuntes universitarios en LaTeX.
-Genera unos apuntes completos, rigurosos y perfectamente estructurados en formato LaTeX para la asignatura "${asignatura}", Tema ${tema}: "${titulo}".
-
-Instrucciones:
-${instrucciones || "Apuntes detallados, con explicaciones claras, código y formato impecable."}
-
-Material de partida:
-${textoFinal || "Elabora el temario estándar oficial para esta asignatura y tema."}
-
-FORMATO DE SALIDA OBLIGATORIO:
-Devuelve un documento LaTeX completo y válido que compile directamente, empezando por \\documentclass[a4paper,11pt]{article} y terminando con \\end{document}.
-Usa los paquetes babel [spanish], inputenc [utf8], amsmath, hyperref, listings y geometry.
-No incluyas explicaciones antes o después; entrega solo el código LaTeX entre triples comillas invertidas.`;
-
-  let borradorLatex = "";
-  try {
-    const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${nvKey}`,
-      },
-      body: JSON.stringify({
-        model: "meta/llama-3.1-8b-instruct",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        max_tokens: 4096,
-      }),
-    });
-
-    if (!resp.ok) {
-      const errTxt = await resp.text();
-      botonGenerar.disabled = false;
-      progreso.hidden = true;
-      panelError.innerHTML = `
-        <div style="font-weight:700; font-size:15px; color:#ef4444;"><i class="fa-solid fa-circle-xmark"></i> Error de la API de NVIDIA (${resp.status})</div>
-        <div style="margin-top:6px; color:#e2e8f0; font-size:13px;">${errTxt.slice(0, 300)}</div>
-        <div style="margin-top:8px; font-size:13px; color:#cbd5e1;">Por favor, revisa o renueva tu clave en <a href="https://build.nvidia.com" target="_blank" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.</div>
-      `;
-      panelError.hidden = false;
-      panelError.scrollIntoView({ behavior: "smooth" });
-      registrarEventoConsola(`❌ Error de la API de NVIDIA (${resp.status}): no se puede avanzar.`);
-      return; // NO DEJA AVANZAR
-    }
-
-    const data = await resp.json();
-    const raw = data.choices?.[0]?.message?.content || "";
-    const m = raw.match(/```(?:latex|tex)?([\s\S]*?)```/i);
-    borradorLatex = m ? m[1].trim() : raw.trim();
-
-    if (!borradorLatex || !borradorLatex.includes("\\documentclass")) {
-      throw new Error("La IA no devolvió un documento LaTeX válido.");
-    }
-
-    registrarEventoConsola("✓ Contenido LaTeX generado con éxito por la IA.");
-  } catch (errNvidia) {
-    botonGenerar.disabled = false;
-    progreso.hidden = true;
-    panelError.textContent = `Error al conectar con la IA de NVIDIA: ${errNvidia.message}. No se puede avanzar.`;
-    panelError.hidden = false;
-    registrarEventoConsola(`❌ Falló la generación con IA: ${errNvidia.message}`);
-    return; // NO DEJA AVANZAR
-  }
-
-  // PASO 2: DIRECTO A COMPILACIÓN CON LATEX EN GITHUB ACTIONS (SIN ESPERAR VISTO BUENO MANUAL)
-  registrarEventoConsola(`🚀 Contenido generado con éxito. Compilando PDF en GitHub Actions con biblioteca de estilos...`);
-  await ejecutarCompilacionGitHubActions({
-    asignatura,
-    tema,
-    titulo,
-    subtema,
-    instrucciones,
-    contenidoLatex: borradorLatex,
-    textoFuente: textoFinal,
-  });
-}
-
-async function ejecutarCompilacionGitHubActions({
-  asignatura,
-  tema,
-  titulo,
-  subtema,
-  instrucciones,
-  contenidoLatex,
-  textoFuente,
-}) {
-  botonGenerar.disabled = true;
-
-  // 1. Obtener el token de GitHub desde localStorage
+  // 1. Obtener el token de GitHub desde localStorage o Supabase
   let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
   if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
     token = "";
@@ -3213,7 +3017,6 @@ async function ejecutarCompilacionGitHubActions({
     localStorage.removeItem("gh_token");
   }
 
-  // 2. Si no hay token en memoria local, obtenerlo automáticamente desde Supabase
   if (!token) {
     try {
       const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
@@ -3241,8 +3044,6 @@ async function ejecutarCompilacionGitHubActions({
     } catch (_) {}
   }
 
-  const repoDestino = "nataliagamezbarea/generador-apuntes";
-
   if (!token) {
     token = window.prompt("Introduce tu Personal Access Token de GitHub con permiso sobre 'generador-apuntes':", "");
     if (token) {
@@ -3254,13 +3055,76 @@ async function ejecutarCompilacionGitHubActions({
     }
   }
 
+  // 2. REGLA ESTRICTA: COMPROBAR SI EXISTE LA VARIABLE/SECRETO NVIDIA_API_KEY EN GITHUB
+  // Si falta en GitHub Secrets, MOSTRAR AVISO EN EL FRONTEND Y NO DEJAR AVANZAR.
   try {
-    registrarEventoConsola(`🚀 Contenido aprobado. Enviando a compilar con LaTeX a GitHub Actions...`);
+    const resSecret = await fetch(`https://api.github.com/repos/${repoDestino}/actions/secrets/NVIDIA_API_KEY`, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (resSecret.status === 404) {
+      botonGenerar.disabled = false;
+      progreso.hidden = true;
+      panelError.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:10px; text-align:left;">
+          <div style="font-weight:700; font-size:16px; color:#ef4444; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Falta el secreto NVIDIA_API_KEY en GitHub Actions</span>
+          </div>
+          <div style="color:#e2e8f0; font-size:14px; line-height:1.5;">
+            Para que la IA genere los apuntes en la nube es <strong>obligatorio configurar la clave en las variables o secretos de GitHub</strong>. No se puede avanzar sin ella.
+          </div>
+          <div style="margin-top:4px;">
+            <a href="https://github.com/${repoDestino}/settings/secrets/actions/new" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#ef4444; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:700; font-size:14px; box-shadow:0 4px 12px rgba(239,68,68,0.3);">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              <span>Añadir secreto NVIDIA_API_KEY en GitHub</span>
+            </a>
+          </div>
+          <small style="color:#94a3b8;">
+            Nombre del secreto: <code style="color:#fff; background:#1e293b; padding:2px 6px; border-radius:4px;">NVIDIA_API_KEY</code> &nbsp;|&nbsp; Valor: Tu clave de <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.
+          </small>
+        </div>
+      `;
+      panelError.hidden = false;
+      panelError.scrollIntoView({ behavior: "smooth" });
+      registrarEventoConsola("⚠️ Generación bloqueada: falta el secreto NVIDIA_API_KEY en GitHub. No se puede avanzar.");
+      return; // NO DEJA AVANZAR
+    }
+  } catch (errCheck) {
+    console.warn("No se pudo verificar el secreto directamente:", errCheck);
+  }
+
+  panelError.hidden = true;
+  progreso.hidden = false;
+  botonGenerar.disabled = true;
+
+  // Procesar archivos subidos si los hay
+  let contenidoArchivos = "";
+  if (Array.isArray(archivosElegidos) && archivosElegidos.length > 0) {
+    for (const f of archivosElegidos) {
+      if (f.name.endsWith(".txt") || f.name.endsWith(".md") || f.name.endsWith(".json") || f.name.endsWith(".js") || f.name.endsWith(".html")) {
+        try {
+          const t = await f.text();
+          contenidoArchivos += `\n--- Archivo: ${f.name} ---\n${t}\n`;
+        } catch (_) {}
+      } else {
+        contenidoArchivos += `\n[Archivo adjunto: ${f.name} (${Math.round(f.size / 1024)} KB)]\n`;
+      }
+    }
+  }
+
+  const textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
+
+  try {
+    registrarEventoConsola(`🚀 Secreto verificado. Disparando GitHub Actions para ${asignatura} - Tema ${tema}: ${titulo}...`);
     mostrarProgresoGeneracion(
       {
-        fase: "guardado",
-        mensaje: `Compilando LaTeX en GitHub Actions para ${asignatura} - Tema ${tema}`,
-        detalle: "Enviando documento aprobado al compilador LaTeX de la nube…",
+        fase: "subida",
+        mensaje: `Iniciando trabajo en la nube para ${asignatura} - Tema ${tema}`,
+        detalle: "Enviando workflow_dispatch a GitHub Actions…",
       },
       false,
     );
@@ -3282,8 +3146,7 @@ async function ejecutarCompilacionGitHubActions({
           titulo: String(titulo),
           subtema: String(subtema),
           instrucciones: String(instrucciones || ""),
-          texto_fuente: (textoFuente || "").slice(0, 60000),
-          contenido_latex: (contenidoLatex || "").slice(0, 60000),
+          texto_fuente: textoFinal.slice(0, 60000),
         },
       }),
     });
@@ -3293,14 +3156,25 @@ async function ejecutarCompilacionGitHubActions({
       throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
     }
 
-    registrarEventoConsola("✓ Documento recibido por GitHub Actions. LaTeX está compilando el PDF...");
+    registrarEventoConsola("✓ Orden recibida con éxito por GitHub Actions.");
+    registrarEventoConsola("Pipeline en curso: 1. IA redacta contenido con NVIDIA_API_KEY -> 2. Compilación de apuntes con LaTeX.");
 
+    mostrarProgresoGeneracion(
+      {
+        fase: "ia",
+        mensaje: "¡Generación iniciada en GitHub Actions!",
+        detalle: `Fase 1: La IA redacta con NVIDIA_API_KEY. Fase 2: LaTeX compila el PDF. Siguiendo estado en vivo…`,
+      },
+      false,
+    );
+
+    panelResultados.hidden = false;
     panelResultados.innerHTML = `
       <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
         <div style="font-size:36px; margin-bottom:8px;">🚀</div>
-        <h3 style="margin:0 0 8px; font-size:18px;">Compilando documento en la nube</h3>
+        <h3 style="margin:0 0 8px; font-size:18px;">Trabajo en curso en la nube</h3>
         <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
-          Se está compilando el PDF con LaTeX y biblioteca de estilos para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
+          Se está generando el documento LaTeX y compilando el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
         </p>
         <div style="display:inline-flex; align-items:center; gap:8px; margin-bottom:12px; color:#93c5fd; font-size:13px;">
           <i class="fa-solid fa-spinner fa-spin"></i>
@@ -3309,7 +3183,7 @@ async function ejecutarCompilacionGitHubActions({
         <br/>
         <a href="https://github.com/${repoDestino}/actions" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#2563eb; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px;">
           <i class="fa-brands fa-github"></i>
-          <span>Ver compilación en tiempo real en GitHub Actions</span>
+          <span>Ver ejecución en tiempo real en GitHub Actions</span>
         </a>
       </div>
     `;
@@ -3324,7 +3198,7 @@ async function ejecutarCompilacionGitHubActions({
       tiempoInicio: Date.now(),
     });
   } catch (error) {
-    panelError.textContent = `Error al compilar en GitHub Actions: ${error.message}`;
+    panelError.textContent = `Error al activar GitHub Actions: ${error.message}`;
     panelError.hidden = false;
     registrarEventoConsola(`❌ Error: ${error.message}`);
   } finally {
