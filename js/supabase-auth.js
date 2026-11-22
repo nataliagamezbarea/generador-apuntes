@@ -159,12 +159,16 @@ const SupabaseAuth = (() => {
     });
 
     modal.querySelector("#btn-cerrar-sesion")?.addEventListener("click", async () => {
-      await cerrarSesion();
       modal.style.display = "none";
+      await cerrarSesion();
     });
   }
 
   async function cerrarSesion() {
+    // Cerrar el modal popup de inmediato
+    const modal = document.querySelector("#auth-modal");
+    if (modal) modal.style.display = "none";
+
     const c = getClient();
     if (c) {
       try {
