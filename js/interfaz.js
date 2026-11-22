@@ -2997,6 +2997,76 @@ modalEnviados?.addEventListener("click", (e) => {
 });
 
 // ============================================================
+// OBTENER CONFIGURACIÓN CENTRALIZADA DE SUPABASE (PRIVADA Y PÚBLICA)
+// ============================================================
+async function obtenerConfiguracionSupabase() {
+  const config = {
+    ghToken: "",
+    ghRepo: "",
+    nvidiaApiKey: "",
+  };
+
+  const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
+  const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+
+  // 1. Intentar leer de configuracion_privada mediante el cliente autenticado de Supabase
+  try {
+    const sb = window.supabaseClient || (window.SupabaseAuth && typeof window.SupabaseAuth.getClient === "function" ? window.SupabaseAuth.getClient() : null);
+    if (sb) {
+      const { data, error } = await sb
+        .schema("grados-informaticos")
+        .from("configuracion_privada")
+        .select("clave, valor");
+      if (!error && Array.isArray(data)) {
+        for (const r of data) {
+          if ((r.clave === "gh_token_general" || r.clave === "gh_token") && !config.ghToken && r.valor) {
+            config.ghToken = r.valor.trim();
+          }
+          if ((r.clave === "gh_repo_general" || r.clave === "gh_repo") && !config.ghRepo && r.valor) {
+            config.ghRepo = r.valor.trim();
+          }
+          if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && r.valor) {
+            config.nvidiaApiKey = r.valor.trim();
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 2. Si falta alguna clave, consultar configuracion_publica como fallback
+  try {
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token,gh_repo,gh_repo_general,nvidia_api_key,NVIDIA_API_KEY)`,
+      {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          Accept: "application/json",
+          "Accept-Profile": "grados-informaticos",
+        },
+      }
+    );
+    if (resp.ok) {
+      const filas = await resp.json();
+      if (Array.isArray(filas)) {
+        for (const r of filas) {
+          if ((r.clave === "gh_token_general" || r.clave === "gh_token") && !config.ghToken && r.valor) {
+            config.ghToken = r.valor.trim();
+          }
+          if ((r.clave === "gh_repo_general" || r.clave === "gh_repo") && !config.ghRepo && r.valor) {
+            config.ghRepo = r.valor.trim();
+          }
+          if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && !config.nvidiaApiKey && r.valor) {
+            config.nvidiaApiKey = r.valor.trim();
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  return config;
+}
+
 // GENERACIÓN EN LA NUBE VÍA GITHUB ACTIONS (MODO GITHUB PAGES)
 // ============================================================
 async function ejecutarGeneracionGitHubActions({
@@ -3009,39 +3079,19 @@ async function ejecutarGeneracionGitHubActions({
 }) {
   const repoDestino = "nataliagamezbarea/generador-apuntes";
 
-  // 1. Obtener el token de GitHub desde localStorage o Supabase
-  let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
+  // 1. Obtener configuración de Supabase (configuracion_privada y publica)
+  const cfgSupabase = await obtenerConfiguracionSupabase();
+
+  let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || cfgSupabase.ghToken || "";
   if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
     token = "";
     localStorage.removeItem("cache_gh_token");
     localStorage.removeItem("gh_token");
   }
 
-  if (!token) {
-    try {
-      const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
-      const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token)`, {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-          Accept: "application/json",
-          "Accept-Profile": "grados-informaticos",
-        },
-      });
-      if (resp.ok) {
-        const filas = await resp.json();
-        if (Array.isArray(filas)) {
-          const rowGeneral = filas.find((r) => r.clave === "gh_token_general" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
-          const rowToken = filas.find((r) => r.clave === "gh_token" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
-          const elegido = rowGeneral || rowToken;
-          if (elegido?.valor) {
-            token = elegido.valor.trim();
-            localStorage.setItem("cache_gh_token", token);
-          }
-        }
-      }
-    } catch (_) {}
+  if (cfgSupabase.ghToken && !token) {
+    token = cfgSupabase.ghToken;
+    localStorage.setItem("cache_gh_token", token);
   }
 
   if (!token) {
@@ -3055,29 +3105,26 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
-  // 2. REGLA ESTRICTA: COMPROBAR SI EXISTE LA VARIABLE O SECRETO NVIDIA_API_KEY EN GITHUB
-  let tieneNvidiaKey = false;
-  try {
-    const [resSecrets, resVars] = await Promise.all([
-      fetch(`https://api.github.com/repos/${repoDestino}/actions/secrets`, {
-        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
-      }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      fetch(`https://api.github.com/repos/${repoDestino}/actions/variables`, {
-        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
-      }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    ]);
+  // 2. REGLA ESTRICTA: COMPROBAR SI EXISTE NVIDIA_API_KEY EN SUPABASE O GITHUB
+  let tieneNvidiaKey = Boolean(cfgSupabase.nvidiaApiKey);
 
-    const secretNombres = (resSecrets?.secrets || []).map((s) => s.name);
-    const varNombres = (resVars?.variables || []).map((v) => v.name);
-
-    if (secretNombres.includes("NVIDIA_API_KEY") || varNombres.includes("NVIDIA_API_KEY")) {
-      tieneNvidiaKey = true;
-    }
-  } catch (errCheck) {
-    console.warn("No se pudo listar secrets/variables:", errCheck);
+  if (!tieneNvidiaKey) {
+    // Si no está en Supabase, comprobar si el token de GitHub puede verificar el secreto en GitHub
+    try {
+      const resSecrets = await fetch(`https://api.github.com/repos/${repoDestino}/actions/secrets`, {
+        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
+      });
+      if (resSecrets.ok) {
+        const dataSecrets = await resSecrets.json();
+        const secretNombres = (dataSecrets?.secrets || []).map((s) => s.name);
+        if (secretNombres.includes("NVIDIA_API_KEY")) {
+          tieneNvidiaKey = true;
+        }
+      }
+    } catch (_) {}
   }
 
-  // SI FALTA LA CLAVE EN GITHUB, MOSTRAR ERROR CLARO Y NO DEJAR AVANZAR
+  // SI FALTA LA CLAVE EN SUPABASE Y EN GITHUB, BLOQUEAR EN EL FRONTEND
   if (!tieneNvidiaKey) {
     botonGenerar.disabled = false;
     progreso.hidden = true;
@@ -3088,13 +3135,13 @@ async function ejecutarGeneracionGitHubActions({
           <h3 style="margin:0; font-size:17px; color:#f87171;">Generación bloqueada: Falta NVIDIA_API_KEY</h3>
         </div>
         <p style="margin:0; color:#e2e8f0; font-size:14px; line-height:1.5;">
-          No se puede generar ningún apunte porque <strong>no está configurada la variable o secreto NVIDIA_API_KEY en GitHub</strong>. No se permite avanzar sin ella.
+          No se puede generar ningún apunte porque <strong>no está configurada la clave NVIDIA_API_KEY en configuracion_privada de Supabase ni en GitHub</strong>. No se permite avanzar sin ella.
         </p>
       </div>
     `;
     panelError.hidden = false;
     panelError.scrollIntoView({ behavior: "smooth" });
-    registrarEventoConsola("⛔ Generación bloqueada: falta el secreto NVIDIA_API_KEY en GitHub. No se puede avanzar.");
+    registrarEventoConsola("⛔ Generación bloqueada: falta NVIDIA_API_KEY en Supabase/GitHub. No se puede avanzar.");
     return; // NO DEJA AVANZAR
   }
 
@@ -3148,6 +3195,7 @@ async function ejecutarGeneracionGitHubActions({
           subtema: String(subtema),
           instrucciones: String(instrucciones || ""),
           texto_fuente: textoFinal.slice(0, 60000),
+          nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
         },
       }),
     });

@@ -27,6 +27,10 @@ on:
         description: "Texto o resumen fuente para generar"
         required: false
         default: ""
+      nvidia_api_key:
+        description: "Clave de NVIDIA NIM (leída de Supabase)"
+        required: false
+        default: ""
       contenido_latex:
         description: "Código LaTeX ya generado y aprobado desde el frontend"
         required: false
@@ -44,8 +48,8 @@ jobs:
 
       - name: Validar secreto o variable NVIDIA_API_KEY
         run: |
-          if [ -z "${{ secrets.NVIDIA_API_KEY }}" ] && [ -z "${{ vars.NVIDIA_API_KEY }}" ]; then
-            echo "::error title=Falta NVIDIA_API_KEY::No se configuró la variable o secreto NVIDIA_API_KEY en GitHub Actions."
+          if [ -z "${{ inputs.nvidia_api_key }}" ] && [ -z "${{ secrets.NVIDIA_API_KEY }}" ] && [ -z "${{ vars.NVIDIA_API_KEY }}" ]; then
+            echo "::error title=Falta NVIDIA_API_KEY::No se configuró la variable o secreto NVIDIA_API_KEY en Supabase ni en GitHub Actions."
             exit 1
           fi
 
@@ -66,7 +70,7 @@ jobs:
       - name: Ejecutar generación de apuntes
         env:
           PROVEEDOR_IA: "nvidia"
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          NVIDIA_API_KEY: ${{ inputs.nvidia_api_key || secrets.NVIDIA_API_KEY || vars.NVIDIA_API_KEY }}
           NVIDIA_MODELO: ${{ vars.NVIDIA_MODELO || 'meta/llama-3.1-8b-instruct' }}
           ASIGNATURA: ${{ inputs.asignatura }}
           TEMA: ${{ inputs.tema }}
