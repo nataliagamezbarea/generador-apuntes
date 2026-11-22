@@ -43,7 +43,7 @@ async function servirHtmlConConfig(rutaArchivo, respuesta) {
 
 aplicacion.get("/", (_request, respuesta) =>
   servirHtmlConConfig(
-    path.join(directorioActual, "..", "interfaz", "generador.html"),
+    path.join(directorioActual, "..", "index.html"),
     respuesta,
   ),
 );
