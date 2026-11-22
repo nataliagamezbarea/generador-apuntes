@@ -3021,12 +3021,54 @@ async function ejecutarGeneracionGitHubActions({
     localStorage.removeItem("gh_token");
   }
 
-  // 2. Si no hay token en memoria local, obtenerlo automáticamente desde Supabase (tabla configuracion_publica)
+  // 2. Si hay sesión iniciada en Supabase, leer gh_token y gh_repo de configuracion_privada (esquema grados-informaticos)
+  if (!token && window.SupabaseAuth?.getClient) {
+    try {
+      const c = window.SupabaseAuth.getClient();
+      if (c) {
+        const sRes = await c.auth.getSession();
+        const session = sRes?.data?.session;
+        const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
+        const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+
+        if (session?.access_token) {
+          try {
+            const u = `${supabaseUrl}/rest/v1/configuracion_privada?select=clave,valor&clave=in.(gh_token,gh_token_general,gh_repo,gh_repo_general)`;
+            const r = await fetch(u, {
+              headers: {
+                apikey: anonKey,
+                Authorization: `Bearer ${session.access_token}`,
+                Accept: "application/json",
+                "Accept-Profile": "grados-informaticos",
+              },
+            });
+            if (r.ok) {
+              const filas = await r.json();
+              if (Array.isArray(filas)) {
+                const rowToken = filas.find((x) => (x.clave === "gh_token" || x.clave === "gh_token_general") && (x.valor?.startsWith("ghp_") || x.valor?.startsWith("github_pat_")));
+                const rowRepo = filas.find((x) => x.clave === "gh_repo" || x.clave === "gh_repo_general");
+                if (rowToken?.valor) {
+                  token = rowToken.valor.trim();
+                  localStorage.setItem("cache_gh_token", token);
+                  console.log("✓ gh_token obtenido de grados-informaticos.configuracion_privada con sesión iniciada");
+                }
+                if (rowRepo?.valor) {
+                  localStorage.setItem("gh_repo", rowRepo.valor.trim());
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Si aún no hay token, consultar en configuracion_publica como respaldo
   if (!token) {
     try {
       const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
       const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor`, {
+      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token,gh_repo)`, {
         headers: {
           apikey: anonKey,
           Authorization: `Bearer ${anonKey}`,
@@ -3037,11 +3079,15 @@ async function ejecutarGeneracionGitHubActions({
       if (resp.ok) {
         const filas = await resp.json();
         if (Array.isArray(filas)) {
-          const row = filas.find((r) => r.clave === "gh_token" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
-          if (row?.valor) {
-            token = row.valor.trim();
+          const rowToken = filas.find((r) => r.clave === "gh_token" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
+          const rowRepo = filas.find((r) => r.clave === "gh_repo");
+          if (rowToken?.valor) {
+            token = rowToken.valor.trim();
             localStorage.setItem("cache_gh_token", token);
-            console.log("✓ Token de GitHub obtenido automáticamente de Supabase (configuracion_publica)");
+            console.log("✓ gh_token obtenido de grados-informaticos.configuracion_publica");
+          }
+          if (rowRepo?.valor) {
+            localStorage.setItem("gh_repo", rowRepo.valor.trim());
           }
         }
       }
