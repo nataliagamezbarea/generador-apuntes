@@ -3199,7 +3199,7 @@ async function ejecutarGeneracionGitHubActions({
   const cfgSupabase = await obtenerConfiguracionSupabase();
 
   let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || cfgSupabase.ghToken || "";
-  if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
+  if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_") && !token.startsWith("gho_")) {
     token = "";
     localStorage.removeItem("cache_gh_token");
     localStorage.removeItem("gh_token");
@@ -3284,8 +3284,40 @@ async function ejecutarGeneracionGitHubActions({
     });
 
     if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
+      if (res.status === 401) {
+        localStorage.removeItem("cache_gh_token");
+        localStorage.removeItem("gh_token");
+        const nuevoToken = window.prompt("El token de GitHub actual ha expirado o no es válido (401 Bad credentials).\nIntroduce tu token de GitHub activo:", "");
+        if (nuevoToken && nuevoToken.trim()) {
+          token = nuevoToken.trim();
+          localStorage.setItem("cache_gh_token", token);
+          res = await fetch(urlDispatch, {
+            method: "POST",
+            headers: {
+              Accept: "application/vnd.github+json",
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ref: "main",
+              inputs: {
+                asignatura,
+                tema: String(tema),
+                titulo: String(titulo),
+                subtema: String(subtema),
+                instrucciones: String(instrucciones || ""),
+                texto_fuente: textoFinal.slice(0, 60000),
+                nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
+                nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it").trim(),
+              },
+            }),
+          });
+        }
+      }
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions (comprueba los permisos del token de GitHub)`);
+      }
     }
 
     registrarEventoConsola("✓ Orden recibida con éxito por GitHub Actions.");
