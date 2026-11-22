@@ -26,6 +26,10 @@ aplicacion.use(
 );
 aplicacion.use("/css", express.static(path.join(directorioActual, "..", "css")));
 aplicacion.use("/js", express.static(directorioActual));
+aplicacion.use(
+  "/apuntes-generados",
+  express.static(path.join(directorioActual, "..", "apuntes-generados")),
+);
 
 async function servirHtmlConConfig(rutaArchivo, respuesta) {
   try {
