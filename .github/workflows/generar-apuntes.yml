@@ -42,6 +42,13 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
+      - name: Validar secreto o variable NVIDIA_API_KEY
+        run: |
+          if [ -z "${{ secrets.NVIDIA_API_KEY }}" ] && [ -z "${{ vars.NVIDIA_API_KEY }}" ]; then
+            echo "::error title=Falta NVIDIA_API_KEY::No se configuró la variable o secreto NVIDIA_API_KEY en GitHub Actions."
+            exit 1
+          fi
+
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:

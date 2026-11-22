@@ -3055,46 +3055,56 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
-  // 2. REGLA ESTRICTA: COMPROBAR SI EXISTE LA VARIABLE/SECRETO NVIDIA_API_KEY EN GITHUB
-  // Si falta en GitHub Secrets, MOSTRAR AVISO EN EL FRONTEND Y NO DEJAR AVANZAR.
+  // 2. REGLA ESTRICTA: COMPROBAR SI EXISTE LA VARIABLE O SECRETO NVIDIA_API_KEY EN GITHUB
+  let tieneNvidiaKey = false;
   try {
-    const resSecret = await fetch(`https://api.github.com/repos/${repoDestino}/actions/secrets/NVIDIA_API_KEY`, {
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const [resSecrets, resVars] = await Promise.all([
+      fetch(`https://api.github.com/repos/${repoDestino}/actions/secrets`, {
+        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
+      }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`https://api.github.com/repos/${repoDestino}/actions/variables`, {
+        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
+      }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
 
-    if (resSecret.status === 404) {
-      botonGenerar.disabled = false;
-      progreso.hidden = true;
-      panelError.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:10px; text-align:left;">
-          <div style="font-weight:700; font-size:16px; color:#ef4444; display:flex; align-items:center; gap:8px;">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-            <span>Falta el secreto NVIDIA_API_KEY en GitHub Actions</span>
-          </div>
-          <div style="color:#e2e8f0; font-size:14px; line-height:1.5;">
-            Para que la IA genere los apuntes en la nube es <strong>obligatorio configurar la clave en las variables o secretos de GitHub</strong>. No se puede avanzar sin ella.
-          </div>
-          <div style="margin-top:4px;">
-            <a href="https://github.com/${repoDestino}/settings/secrets/actions/new" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#ef4444; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:700; font-size:14px; box-shadow:0 4px 12px rgba(239,68,68,0.3);">
-              <i class="fa-solid fa-arrow-up-right-from-square"></i>
-              <span>Añadir secreto NVIDIA_API_KEY en GitHub</span>
-            </a>
-          </div>
-          <small style="color:#94a3b8;">
-            Nombre del secreto: <code style="color:#fff; background:#1e293b; padding:2px 6px; border-radius:4px;">NVIDIA_API_KEY</code> &nbsp;|&nbsp; Valor: Tu clave de <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.
-          </small>
-        </div>
-      `;
-      panelError.hidden = false;
-      panelError.scrollIntoView({ behavior: "smooth" });
-      registrarEventoConsola("⚠️ Generación bloqueada: falta el secreto NVIDIA_API_KEY en GitHub. No se puede avanzar.");
-      return; // NO DEJA AVANZAR
+    const secretNombres = (resSecrets?.secrets || []).map((s) => s.name);
+    const varNombres = (resVars?.variables || []).map((v) => v.name);
+
+    if (secretNombres.includes("NVIDIA_API_KEY") || varNombres.includes("NVIDIA_API_KEY")) {
+      tieneNvidiaKey = true;
     }
   } catch (errCheck) {
-    console.warn("No se pudo verificar el secreto directamente:", errCheck);
+    console.warn("No se pudo listar secrets/variables:", errCheck);
+  }
+
+  // SI FALTA LA CLAVE EN GITHUB, MOSTRAR ERROR CLARO Y NO DEJAR AVANZAR
+  if (!tieneNvidiaKey) {
+    botonGenerar.disabled = false;
+    progreso.hidden = true;
+    panelError.innerHTML = `
+      <div style="background:rgba(239,68,68,0.12); border:1px solid #ef4444; border-radius:12px; padding:20px; color:#fff; text-align:left;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <span style="font-size:24px;">⛔</span>
+          <h3 style="margin:0; font-size:17px; color:#f87171;">Generación bloqueada: Falta NVIDIA_API_KEY</h3>
+        </div>
+        <p style="margin:0 0 14px; color:#e2e8f0; font-size:14px; line-height:1.5;">
+          No se puede generar ningún apunte porque <strong>no has añadido la clave en las variables o secretos de GitHub</strong>. No se permite avanzar sin ella.
+        </p>
+        <div style="margin-bottom:12px;">
+          <a href="https://github.com/${repoDestino}/settings/secrets/actions/new" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#ef4444; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:700; font-size:14px; box-shadow:0 4px 12px rgba(239,68,68,0.35);">
+            <i class="fa-solid fa-plus"></i>
+            <span>Añadir secreto NVIDIA_API_KEY en GitHub</span>
+          </a>
+        </div>
+        <small style="color:#94a3b8; font-size:12px;">
+          Crea el secreto con <strong>Name:</strong> <code style="color:#fff; background:#1e293b; padding:2px 6px; border-radius:4px;">NVIDIA_API_KEY</code> y pega tu token gratuito de <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.
+        </small>
+      </div>
+    `;
+    panelError.hidden = false;
+    panelError.scrollIntoView({ behavior: "smooth" });
+    registrarEventoConsola("⛔ Generación bloqueada: no existe NVIDIA_API_KEY en GitHub Actions. No se puede avanzar.");
+    return; // NO DEJA AVANZAR
   }
 
   panelError.hidden = true;
