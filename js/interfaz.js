@@ -3239,15 +3239,10 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
-  if (!cfgSupabase.nvidiaApiKey) {
-    const keyManual = window.prompt(
-      "No se pudo sincronizar automáticamente la clave 'nvidia_api_key' de Supabase.\n\nIntroduce tu clave de NVIDIA NIM (nvapi-...) o pulsa Cancelar/Aceptar para usar el secreto configurado en GitHub Actions:",
-      ""
-    );
-    if (keyManual && keyManual.trim()) {
-      cfgSupabase.nvidiaApiKey = keyManual.trim();
-      localStorage.setItem("nvidia_api_key", cfgSupabase.nvidiaApiKey);
-    }
+  if (cfgSupabase.nvidiaApiKey) {
+    registrarEventoConsola("✓ Clave NVIDIA obtenida de Supabase.");
+  } else {
+    registrarEventoConsola("ℹ️ Conectando con GitHub Actions...");
   }
 
   panelError.hidden = true;
