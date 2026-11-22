@@ -24,14 +24,10 @@ const SupabaseAuth = (() => {
       try {
         client = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {
           auth: {
+            flowType: "pkce",
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
-            // flowType 'implicit': el token vuelve en la URL (#access_token=...) sin
-            // verificar PKCE state en localStorage — necesario porque Supabase puede
-            // redirigir a localhost:3000 (Site URL) siendo el origen localhost:8002,
-            // y localStorage NO se comparte entre puertos.
-            flowType: "implicit",
           },
         });
         window.supabaseClient = client;
@@ -464,12 +460,11 @@ const SupabaseAuth = (() => {
       }
     });
 
-    await autenticarConGate();
-
     const c = getClient();
     if (c) {
       c.auth.onAuthStateChange(async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
+        console.log("[Auth] Evento onAuthStateChange:", event, session ? session.user.email : "sin usuario");
+        if (session?.user) {
           await autenticarConGate();
         } else if (event === "SIGNED_OUT") {
           currentUser = null;
@@ -478,6 +473,8 @@ const SupabaseAuth = (() => {
         }
       });
     }
+
+    await autenticarConGate();
   }
 
   return {
