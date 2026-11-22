@@ -75,7 +75,18 @@ jobs:
       - name: Instalar compilador LaTeX
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-lang-spanish latexmk
+          sudo apt-get install -y -qq texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-xetex texlive-lang-spanish latexmk
+
+      - name: Preparar bibliotecas LaTeX
+        run: |
+          if [ ! -d "bibliotecas_latex/estilo" ]; then
+            echo "Descargando bibliotecas_latex oficiales..."
+            git clone --depth 1 https://github.com/nataliagamezbarea/apuntes-latex.git /tmp/apuntes-latex 2>/dev/null || true
+            if [ -d "/tmp/apuntes-latex/bibliotecas_latex" ]; then
+              cp -r /tmp/apuntes-latex/bibliotecas_latex ./
+              echo "✓ bibliotecas_latex listas en el workspace."
+            fi
+          fi
 
       - name: Ejecutar generación de apuntes
         env:
@@ -137,7 +148,7 @@ jobs:
             mkdir -p "apuntes/${{ inputs.asignatura }}"
 
             cp -r $GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}/* "apuntes_privados/${{ inputs.asignatura }}/" 2>/dev/null || true
-            cp -r $GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}/*.pdf "apuntes/${{ inputs.asignatura }}/" 2>/dev/null || true
+            find "$GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}" -type f -name "*.pdf" -exec cp {} "apuntes/${{ inputs.asignatura }}/" \;
 
             git config user.name "Generador Apuntes Bot"
             git config user.email "bot@generador-apuntes.local"

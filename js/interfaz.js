@@ -110,17 +110,16 @@ function inicializarModelos() {
   if (esEntornoEstatico) {
     // En la nube (GitHub Pages): listar modelos gratuitos y recomendados de NVIDIA NIM
     const modelosNvidia = [
-      { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) · Gratis / Recomendado" },
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Gratis / Recomendado" },
       { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large · Gratis / Máxima calidad" },
-      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Gratis / Oficial" },
-      { id: "google/gemma-3-4b-it", nombre: "Google Gemma 3 (4B) · Gratis / Rápido" },
-      { id: "z-ai/glm-5.3-flash", nombre: "GLM 5.3 Flash · Gratis / Ultra rápido" },
+      { id: "z-ai/glm-5.3-flash", nombre: "GLM 5.3 Flash · Gratis / Rápido" },
       { id: "moonshotai/kimi-k3.1-pro", nombre: "Kimi K3.1 Pro · Gratis / 1M Contexto" },
+      { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) · Alternativa" },
     ];
 
     modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado)
       ? modeloIAGuardado
-      : "google/gemma-3-12b-it";
+      : "nvidia/nemotron-3.5-lightning-30b-a3b";
 
     selectorModeloIA.replaceChildren();
     modelosNvidia.forEach((m) => {
@@ -134,7 +133,7 @@ function inicializarModelos() {
 
     modeloCodigoSeleccionado = modeloCodigoGuardado && modelosNvidia.some((m) => m.id === modeloCodigoGuardado)
       ? modeloCodigoGuardado
-      : "google/gemma-3-12b-it";
+      : "nvidia/nemotron-3.5-lightning-30b-a3b";
 
     selectorModeloCodigo.replaceChildren();
     modelosNvidia.forEach((m) => {
@@ -231,7 +230,7 @@ let ultimaUnidadDetallada = "";
 let ultimosResultadosMostrados = 0;
 
 function actualizarEstadoModeloIA() {
-  const valor = selectorModeloIA.value || (esEntornoEstatico ? "google/gemma-3-12b-it" : "qwen2.5:14b");
+  const valor = selectorModeloIA.value || (esEntornoEstatico ? "nvidia/nemotron-3.5-lightning-30b-a3b" : "qwen2.5:14b");
   estadoModeloSeleccionado.textContent = `Modelo IA: ${valor}`;
   if (esEntornoEstatico) {
     estadoModeloSeleccionado.style.color = "#c3e88d";
@@ -245,7 +244,7 @@ function actualizarEstadoModeloIA() {
 }
 
 function actualizarEstadoModeloCodigo() {
-  const valor = selectorModeloCodigo.value || (esEntornoEstatico ? "google/gemma-3-12b-it" : "qwen2.5:14b");
+  const valor = selectorModeloCodigo.value || (esEntornoEstatico ? "nvidia/nemotron-3.5-lightning-30b-a3b" : "qwen2.5:14b");
   estadoModeloCodigo.textContent = `Modelo Código: ${valor}`;
   if (esEntornoEstatico) {
     estadoModeloCodigo.style.color = "#c3e88d";
@@ -3187,6 +3186,67 @@ async function obtenerConfiguracionSupabase() {
   return config;
 }
 
+function detectarCatalanTexto(texto = "") {
+  if (!texto || typeof texto !== "string" || !texto.trim()) return false;
+  const patron = /(?:^|[^a-zà-ÿ])(?:client-servidor|client(?:\s+servidor)?|l['’](?:origen|abast|execuci[oó]|usuari|entorn)|d['’](?:execuci[oó]|un|una|aquest|aquesta)|eines|llenguatges|execuci[oó]|entorn|entorns|desenvolupament|cercador|fitxers?|dades|sol[·.]licituds?|aquest|aquesta|aquests|aquestes|tamb[eé]|aix[oò]|dels|deles|amb|sense|per[oò]|s[oó]n|mitjan[cç]ant|interf[ií]cie|renderitzat|comunicacions|navigador)(?![a-zà-ÿ])/iu;
+  return patron.test(texto);
+}
+
+async function traducirTextoGoogleBrowser(texto = "") {
+  if (!texto || typeof texto !== "string" || !texto.trim()) return texto;
+  const limpio = texto.trim();
+  const esCat = detectarCatalanTexto(limpio);
+  const fuentes = esCat ? ["ca", "auto"] : ["auto", "ca"];
+  for (const sl of fuentes) {
+    try {
+      const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" + sl + "&tl=es&dt=t&q=" + encodeURIComponent(limpio);
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const datos = await res.json();
+        const resultado = datos?.[0]?.map((s) => s[0]).join("");
+        if (resultado && resultado.trim()) {
+          return resultado.trim();
+        }
+      }
+    } catch (_) {}
+  }
+  return limpio;
+}
+
+async function traducirTextoLargoBrowser(texto = "") {
+  if (!texto || typeof texto !== "string" || !texto.trim()) return texto;
+  if (!detectarCatalanTexto(texto)) return texto;
+  const lineas = texto.split("\n");
+  const bloques = [];
+  let actual = [];
+  let len = 0;
+  for (const l of lineas) {
+    if (len + l.length > 1000) {
+      bloques.push(actual.join("\n"));
+      actual = [l];
+      len = l.length;
+    } else {
+      actual.push(l);
+      len += l.length + 1;
+    }
+  }
+  if (actual.length) bloques.push(actual.join("\n"));
+  const trads = [];
+  for (const b of bloques) {
+    if (detectarCatalanTexto(b)) {
+      try {
+        const t = await traducirTextoGoogleBrowser(b);
+        trads.push(t || b);
+      } catch (_) {
+        trads.push(b);
+      }
+    } else {
+      trads.push(b);
+    }
+  }
+  return trads.join("\n");
+}
+
 // GENERACIÓN EN LA NUBE VÍA GITHUB ACTIONS (MODO GITHUB PAGES)
 // ============================================================
 async function ejecutarGeneracionGitHubActions({
@@ -3250,14 +3310,154 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
-  const textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
+  let textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
 
+  // ETAPA 1: TRADUCCIÓN PREVIA (SI ESTÁ EN CATALÁN/VALENCIANO)
+  if (detectarCatalanTexto(titulo)) {
+    mostrarProgresoGeneracion(
+      {
+        fase: "traduccion",
+        mensaje: `Traduciendo título "${titulo}" al español...`,
+        detalle: "Detectado catalán en el temario…",
+      },
+      false,
+    );
+    registrarEventoConsola(`🌐 Traduciendo título "${titulo}" al español...`);
+    try {
+      const trad = await traducirTextoGoogleBrowser(titulo);
+      if (trad && trad.trim()) {
+        titulo = trad.trim();
+        registrarEventoConsola(`✓ Título traducido: "${titulo}"`);
+      }
+    } catch (_) {}
+  }
+
+  if (detectarCatalanTexto(instrucciones)) {
+    try {
+      const trad = await traducirTextoGoogleBrowser(instrucciones);
+      if (trad && trad.trim()) instrucciones = trad.trim();
+    } catch (_) {}
+  }
+
+  if (detectarCatalanTexto(textoFinal)) {
+    mostrarProgresoGeneracion(
+      {
+        fase: "traduccion",
+        mensaje: "Traduciendo material fuente al español...",
+        detalle: "Detectado contenido en catalán/valenciano en los textos…",
+      },
+      false,
+    );
+    registrarEventoConsola("🌐 Detectado contenido en catalán/valenciano. Traduciendo material al español...");
+    try {
+      textoFinal = await traducirTextoLargoBrowser(textoFinal);
+      registrarEventoConsola("✓ Material fuente traducido con éxito al español.");
+    } catch (_) {}
+  }
+
+  // ETAPA 2: INTERACTUAR CON LA IA BLOQUE A BLOQUE (COMO EN LOCAL)
+  let contenidoLatexGenerado = "";
+  const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-lightning-30b-a3b").trim();
+
+  if (cfgSupabase.nvidiaApiKey) {
+    mostrarProgresoGeneracion(
+      {
+        fase: "ia",
+        mensaje: "Interactuando con la IA: analizando temario y planificando apartados...",
+        detalle: `Conectando con NVIDIA NIM (${modelo})…`,
+      },
+      false,
+    );
+    registrarEventoConsola(`🤖 Conectando con NVIDIA NIM (${modelo}) para redactar apartados...`);
+
+    try {
+      const promptUsuario = `Asignatura: "${asignatura}"
+Tema ${tema}: "${titulo}"
+Subtema: ${subtema || "1"}
+
+Instrucciones:
+${instrucciones || "Elabora apuntes universitarios completos, rigurosos, divididos por apartados y subtemas, con código, definiciones y notas de examen."}
+
+Material fuente:
+${textoFinal || "Elabora el temario estándar oficial para esta asignatura y tema."}
+
+FORMATO DE SALIDA OBLIGATORIO:
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con:
+{
+  "tema_existente": 0,
+  "titulo_tema": "${titulo}",
+  "titulo_subtema": "Título formal del apartado en español",
+  "conceptos_clave": ["Concepto 1", "Concepto 2"],
+  "archivos": [
+    {
+      "subtema": "1",
+      "nombre": "1.slug-del-apartado",
+      "titulo": "Título formal del apartado en español",
+      "latex": "\\secciongrande{Título del apartado}\\n\\n\\resumen{Síntesis sustancial de 3 a 5 líneas.}\\n\\n\\definicion{Concepto}{Definición técnica formal.}\\n\\n\\subtituloA{Detalle conceptual}\\n\\n\\lista{\\n  **Elemento 1:** Explicación técnica.\\n  **Elemento 2:** Explicación técnica.\\n}\\n\\n\\nota{Para el examen}{Pregunta con respuesta razonada.}"
+    }
+  ]
+}
+Reglas: 100% en ESPAÑOL ESTÁNDAR. Divide en subtemas y archivos numerados (1.<slug>, 2.<slug>).`;
+
+      const respIA = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cfgSupabase.nvidiaApiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelo,
+          messages: [
+            {
+              role: "system",
+              content: "Eres un profesor experto en informática. Redacta apuntes estructurados para LaTeX. Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos (cada uno con subtema, nombre, titulo y latex en español).",
+            },
+            { role: "user", content: promptUsuario },
+          ],
+          temperature: 0.2,
+          max_tokens: 8192,
+        }),
+      });
+
+      if (respIA.ok) {
+        const datosIA = await respIA.json();
+        const rawContenido = datosIA.choices?.[0]?.message?.content || datosIA.choices?.[0]?.message?.reasoning_content || "";
+        const matchJ = rawContenido.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        const strJson = matchJ ? matchJ[1].trim() : rawContenido.trim();
+        const parsedIA = JSON.parse(strJson);
+
+        if (parsedIA && Array.isArray(parsedIA.archivos) && parsedIA.archivos.length > 0) {
+          registrarEventoConsola(`✓ IA generó ${parsedIA.archivos.length} bloques estructurados:`);
+          for (let i = 0; i < parsedIA.archivos.length; i++) {
+            const arch = parsedIA.archivos[i];
+            mostrarProgresoGeneracion(
+              {
+                fase: "redaccion",
+                mensaje: `Escribiendo bloque ${i + 1}/${parsedIA.archivos.length}: ${arch.titulo || arch.nombre}`,
+                detalle: `Archivo: ${arch.nombre || `bloque-${i + 1}`}.tex`,
+              },
+              false,
+            );
+            registrarEventoConsola(`📝 [Bloque ${i + 1}/${parsedIA.archivos.length}] ${arch.nombre || `archivo-${i + 1}`}.tex — ${arch.titulo || "Apartado"}`);
+            // Pequeña pausa visual como en local para ver el avance bloque a bloque
+            await new Promise((r) => setTimeout(r, 350));
+          }
+          contenidoLatexGenerado = JSON.stringify(parsedIA);
+        }
+      }
+    } catch (errIA) {
+      console.warn("Aviso en interacción directa con NVIDIA NIM:", errIA.message);
+      registrarEventoConsola(`ℹ️ Generación directa en navegador pasó el relevo a GitHub Actions: ${errIA.message}`);
+    }
+  }
+
+  // ETAPA 3: COMPILACIÓN Y SINCRONIZACIÓN EN GITHUB ACTIONS
   try {
-    registrarEventoConsola(`🚀 Secreto verificado. Disparando GitHub Actions para ${asignatura} - Tema ${tema}: ${titulo}...`);
+    registrarEventoConsola(`🚀 Secreto verificado. Disparando GitHub Actions para compilar LaTeX y sincronizar ${asignatura} - Tema ${tema}...`);
     mostrarProgresoGeneracion(
       {
         fase: "subida",
-        mensaje: `Iniciando trabajo en la nube para ${asignatura} - Tema ${tema}`,
+        mensaje: `Iniciando compilador en la nube para ${asignatura} - Tema ${tema}`,
         detalle: "Enviando workflow_dispatch a GitHub Actions…",
       },
       false,
@@ -3281,8 +3481,9 @@ async function ejecutarGeneracionGitHubActions({
           subtema: String(subtema),
           instrucciones: String(instrucciones || ""),
           texto_fuente: textoFinal.slice(0, 60000),
+          contenido_latex: contenidoLatexGenerado || "",
           nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
-          nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it").trim(),
+          nvidia_modelo: modelo,
           gh_token: token,
         },
       }),
@@ -3313,7 +3514,7 @@ async function ejecutarGeneracionGitHubActions({
                 instrucciones: String(instrucciones || ""),
                 texto_fuente: textoFinal.slice(0, 60000),
                 nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
-                nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it").trim(),
+                nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-lightning-30b-a3b").trim(),
                 gh_token: token,
               },
             }),

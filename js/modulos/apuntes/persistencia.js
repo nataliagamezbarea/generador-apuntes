@@ -559,6 +559,28 @@ export async function asegurarEstilosGenerador(themeDir) {
 \ifcsname consola\endcsname\else
 \newtcblisting{consola}{listing only,breakable,colback=consoleBackground,colframe=primary!22!white,boxrule=0pt,arc=3pt,left=6pt,right=6pt,top=4pt,bottom=4pt,listing options={basicstyle=\ttfamily\footnotesize\color{codeForeground},breaklines=true,columns=fullflexible,keepspaces=true,upquote=true}}
 \fi
+
+% --- Fallbacks para macros oficiales de la biblioteca en entornos mínimos ---
+\providecommand{\paletaAzul}{}
+\providecommand{\usarfondo}{}
+\providecommand{\titulo}[2]{\begin{center}{\LARGE\bfseries #1}\\[3mm]{\large\bfseries #2}\end{center}\vspace{4mm}}
+\providecommand{\coloractual}{blue}
+\providecommand{\primary}{blue}
+\providecommand{\headingfont}{\bfseries}
+\providecommand{\headingfontxb}{\bfseries}
+\providecommand{\resumen}[1]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Resumen:} #1}}\par\vspace{2mm}}
+\providecommand{\definicion}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
+\providecommand{\definicionpar}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
+\providecommand{\nota}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
+\providecommand{\alertas}[1]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Alerta:}\ #1}}\par\vspace{2mm}}
+\providecommand{\rectangulos}[1]{#1}
+\providecommand{\lista}[1]{\begin{itemize}#1\end{itemize}}
+\providecommand{\pasos}[1]{\begin{enumerate}#1\end{enumerate}}
+\providecommand{\tabla}[2][]{#2}
+\providecommand{\inputcarpeta}[1]{%
+  \immediate\write18{find "#1" -name "*.tex" 2>/dev/null | sort -V | sed 's/.*/\\input{&}/' > "/tmp/in-#1.tex"}%
+  \IfFileExists{/tmp/in-#1.tex}{\input{/tmp/in-#1.tex}}{}%
+}
 `;
 
   if (await existeArchivo(file)) {
@@ -597,7 +619,27 @@ export async function asegurarCargaLatex(directory) {
   \def\bibliotecasDir{\apuntesrutalib}%
   \input{\apuntesrutalib/cabecera}%
 }{%
-  \PackageError{apuntes}{No encuentro bibliotecas_latex}{Comprueba la ruta de la biblioteca de LaTeX configurada en el Generador.}%
+  \IfFileExists{../../../bibliotecas_latex/cabecera.tex}{%
+    \def\bibliotecasDir{../../../bibliotecas_latex}%
+    \input{../../../bibliotecas_latex/cabecera}%
+  }{%
+    \IfFileExists{../../bibliotecas_latex/cabecera.tex}{%
+      \def\bibliotecasDir{../../bibliotecas_latex}%
+      \input{../../bibliotecas_latex/cabecera}%
+    }{%
+      \IfFileExists{./bibliotecas_latex/cabecera.tex}{%
+        \def\bibliotecasDir{./bibliotecas_latex}%
+        \input{./bibliotecas_latex/cabecera}%
+      }{%
+        \IfFileExists{/data/bibliotecas_latex/cabecera.tex}{%
+          \def\bibliotecasDir{/data/bibliotecas_latex}%
+          \input{/data/bibliotecas_latex/cabecera}%
+        }{%
+          \typeout{Aviso: bibliotecas_latex no encontrada, usando macros autonomas}%
+        }%
+      }%
+    }%
+  }%
 }
 `;
     await writeFile(loadPath, content, "utf8");
