@@ -3012,7 +3012,7 @@ async function ejecutarGeneracionGitHubActions({
     false,
   );
 
-  // Obtener el token de GitHub directamente desde localStorage
+  // 1. Obtener el token de GitHub desde localStorage
   let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
   // Descartar tokens que no sean Personal Access Tokens válidos
   if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
@@ -3021,9 +3021,36 @@ async function ejecutarGeneracionGitHubActions({
     localStorage.removeItem("gh_token");
   }
 
+  // 2. Si no hay token en memoria local, obtenerlo automáticamente desde Supabase (tabla configuracion_publica)
+  if (!token) {
+    try {
+      const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
+      const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor`, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          Accept: "application/json",
+          "Accept-Profile": "grados-informaticos",
+        },
+      });
+      if (resp.ok) {
+        const filas = await resp.json();
+        if (Array.isArray(filas)) {
+          const row = filas.find((r) => r.clave === "gh_token" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
+          if (row?.valor) {
+            token = row.valor.trim();
+            localStorage.setItem("cache_gh_token", token);
+            console.log("✓ Token de GitHub obtenido automáticamente de Supabase (configuracion_publica)");
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   const repo = localStorage.getItem("gh_repo") || "nataliagamezbarea/generador-apuntes";
 
-  // Si no hay token guardado, solicitarlo al usuario directamente
+  // 3. Si aún no hay token (o si fue borrado por no tener permisos), solicitarlo al usuario
   if (!token) {
     token = window.prompt(
       "Para generar apuntes desde GitHub Pages en la nube, introduce tu Personal Access Token de GitHub (ghp_... o github_pat_...) con permiso 'workflow':",
