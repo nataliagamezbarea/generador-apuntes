@@ -1165,11 +1165,6 @@ async function cargarBorradorFuentes() {
     archivosElegidos = borrador.archivos;
     textoFuente.value = borrador.valores.texto ?? "";
     actualizarResumenFuentes();
-    if (archivosElegidos.length || textoFuente.value.trim()) {
-      mostrarEstadoSelector(
-        `Se restauró el borrador anterior: ${archivosElegidos.length} archivo(s) y texto pegado.`,
-      );
-    }
   } catch (error) {
     mostrarErrorBorrador(error);
   }
