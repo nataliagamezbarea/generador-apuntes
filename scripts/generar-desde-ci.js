@@ -251,35 +251,43 @@ async function main() {
       }
       const bloques = dividirTextoPorApartados(textoFuente, [], apartadosDetectados);
       const todosLosArchivos = [];
+      const tamanoLote = 3;
 
-      for (let i = 0; i < bloques.length; i++) {
-        const blq = bloques[i];
-        const apInfo = apartadosDetectados[i] || { subtema: i + 1, titulo: `Apartado ${i + 1}` };
-        const subtemaId = String(apInfo.subtema || i + 1);
-        const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
+      for (let i = 0; i < bloques.length; i += tamanoLote) {
+        const lote = bloques.slice(i, i + tamanoLote);
+        const promesasLote = lote.map((blq, idxRelativo) => {
+          const idx = i + idxRelativo;
+          const apInfo = apartadosDetectados[idx] || { subtema: idx + 1, titulo: `Apartado ${idx + 1}` };
+          const subtemaId = String(apInfo.subtema || idx + 1);
+          const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
 
-        const esApartadoCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
-          `${subtemaTitulo} ${blq.texto}`
-        );
-        const modeloAEjecutar = esApartadoCodigo ? modeloCodigoConfigurado : modeloConfigurado;
-        console.log(`\n🤖 Redactando con IA Apartado ${tema}.${subtemaId}: "${subtemaTitulo}" (usando ${modeloAEjecutar})...`);
-        const resApartado = await consultarIAApartado({
-          asignatura,
-          tema,
-          tituloTema: titulo,
-          subtema: subtemaId,
-          subtemaTitulo,
-          instrucciones,
-          textoFuente: blq.texto,
-          apiKey,
-          modeloConfigurado: modeloAEjecutar,
+          const esApartadoCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
+            `${subtemaTitulo} ${blq.texto}`
+          );
+          const modeloAEjecutar = esApartadoCodigo ? modeloCodigoConfigurado : modeloConfigurado;
+          console.log(`🤖 Redactando en paralelo Apartado ${tema}.${subtemaId}: "${subtemaTitulo}" (usando ${modeloAEjecutar})...`);
+
+          return consultarIAApartado({
+            asignatura,
+            tema,
+            tituloTema: titulo,
+            subtema: subtemaId,
+            subtemaTitulo,
+            instrucciones,
+            textoFuente: blq.texto,
+            apiKey,
+            modeloConfigurado: modeloAEjecutar,
+          }).then((resApartado) => ({ subtemaId, resApartado }));
         });
 
-        if (resApartado?.archivos?.length) {
-          for (const arch of resApartado.archivos) {
-            arch.subtema = subtemaId;
-            todosLosArchivos.push(arch);
-            console.log(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
+        const resultadosLote = await Promise.all(promesasLote);
+        for (const { subtemaId, resApartado } of resultadosLote) {
+          if (resApartado?.archivos?.length) {
+            for (const arch of resApartado.archivos) {
+              arch.subtema = subtemaId;
+              todosLosArchivos.push(arch);
+              console.log(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
+            }
           }
         }
       }
