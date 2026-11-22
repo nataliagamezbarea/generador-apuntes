@@ -3041,6 +3041,23 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
+  // Procesar archivos subidos si los hay
+  let contenidoArchivos = "";
+  if (Array.isArray(archivosElegidos) && archivosElegidos.length > 0) {
+    for (const f of archivosElegidos) {
+      if (f.name.endsWith(".txt") || f.name.endsWith(".md") || f.name.endsWith(".json") || f.name.endsWith(".js") || f.name.endsWith(".html")) {
+        try {
+          const t = await f.text();
+          contenidoArchivos += `\n--- Archivo: ${f.name} ---\n${t}\n`;
+        } catch (_) {}
+      } else {
+        contenidoArchivos += `\n[Archivo adjunto: ${f.name} (${Math.round(f.size / 1024)} KB)]\n`;
+      }
+    }
+  }
+
+  const textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
+
   try {
     mostrarProgresoGeneracion(
       {
@@ -3065,11 +3082,11 @@ async function ejecutarGeneracionGitHubActions({
         ref: "main",
         inputs: {
           asignatura,
-          tema,
-          titulo,
-          subtema,
-          instrucciones,
-          texto_fuente: textoFuente.slice(0, 60000), // límite seguro de payload
+          tema: String(tema),
+          titulo: String(titulo),
+          subtema: String(subtema),
+          instrucciones: String(instrucciones || ""),
+          texto_fuente: textoFinal.slice(0, 60000), // límite seguro de payload
         },
       }),
     });
