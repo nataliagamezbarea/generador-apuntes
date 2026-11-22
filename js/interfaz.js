@@ -3350,6 +3350,17 @@ async function extraerTextoPdfBrowser(file) {
   }
 }
 
+function preRepararJsonLatex(jsonStr) {
+  if (!jsonStr || typeof jsonStr !== "string") return jsonStr;
+  return jsonStr
+    .replace(
+      /(?<!\\)\\(begin|textbf|textit|texttt|textcolor|tabla|tablacab|resumen|seccion|secciongrande|subtitulo|subtituloA|subtituloB|definicion|definicionpar|rectangulos|lista|pasos|nota|alertas|cmd|textless|textgreater)(?=[^a-zA-Z]|$)/g,
+      "\\\\$1",
+    )
+    .replace(/(?<!\\)\\([a-zA-Z]+)(?=[^a-zA-Z"\\\/bfnrtu]|$)/g, "\\\\$1")
+    .replace(/\*\*([^*\n]+?)\*\*/g, "\\\\textbf{$1}");
+}
+
 // Consultar NVIDIA NIM apartado a apartado desde navegador
 async function consultarNvidiaNIMApartadoBrowser({
   apiKey,
@@ -3401,10 +3412,8 @@ REGLAS CRÍTICAS:
     new Set([
       modelo,
       "nvidia/nemotron-3.5-bolt-e4b",
-      "mistralai/mistral-large-4-1t-a52b",
-      "nvidia/nemotron-3-ultra-550b-a55b",
-      "poolside/laguna-xs-2.1",
       "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "mistralai/mistral-large-4-1t-a52b",
     ])
   ).filter(Boolean);
 
@@ -3438,13 +3447,25 @@ REGLAS CRÍTICAS:
         continue;
       }
       const matchJ = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      const strJson = matchJ ? matchJ[1].trim() : rawContent;
+      let strJson = matchJ ? matchJ[1].trim() : rawContent;
+      strJson = preRepararJsonLatex(strJson);
       try {
         const parsed = JSON.parse(strJson);
         if (parsed && (parsed.archivos || parsed.latex)) {
           return parsed;
         }
-      } catch (_) {}
+      } catch (_) {
+        const start = strJson.indexOf("{");
+        const end = strJson.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+          try {
+            const parsed = JSON.parse(strJson.slice(start, end + 1));
+            if (parsed && (parsed.archivos || parsed.latex)) {
+              return parsed;
+            }
+          } catch (_) {}
+        }
+      }
     } catch (_) {}
   }
   return null;
@@ -3582,21 +3603,107 @@ async function ejecutarGeneracionGitHubActions({
   }
   titulo = normalizarMayusculasTitulo(titulo);
 
-  // FASE 3: COMPILACIÓN CON LATEX E IA EN LA NUBE (GITHUB ACTIONS)
+  // FASE 3: REDACCIÓN MODULAR CON IA Y MAQUETACIÓN WEC EN EL NAVEGADOR
   const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-bolt-e4b").trim();
+  const modeloCodigo = (selectorModeloCodigo?.value || "nvidia/nemotron-3.5-bolt-e4b").trim();
 
-  try {
+  let contenidoLatexFinal = "";
+  if (cfgSupabase.nvidiaApiKey) {
+    registrarEventoConsola("🤖 [Fase 3/4] Redactando y maquetando apuntes con IA en tu navegador...");
     mostrarProgresoGeneracion(
       {
         fase: "ia",
-        mensaje: `Generando apuntes con IA (${modelo}) y LaTeX en la nube...`,
-        detalle: "Ejecutando workflow en GitHub Actions…",
+        mensaje: "Redactando apuntes con IA en tu navegador...",
+        detalle: "Analizando estructura de apartados...",
         actual: 3,
         total: 4,
       },
       false,
     );
-    registrarEventoConsola(`🚀 [Fase 3/4] Disparando GitHub Actions para redacción con NVIDIA NIM y compilación XeLaTeX...`);
+
+    const apartadosDetectados = detectarApartadosEnTexto(textoFinal);
+    const bloquesApartados = dividirTextoPorApartados(textoFinal, apartadosDetectados);
+    registrarEventoConsola(`Detectados ${bloquesApartados.length} apartados estructurados en el material.`);
+
+    const todosLosArchivos = [];
+    const tamLote = 2;
+    for (let i = 0; i < bloquesApartados.length; i += tamLote) {
+      const lote = bloquesApartados.slice(i, i + tamLote);
+      const promesasLote = lote.map(async (blq, idxRel) => {
+        const idx = i + idxRel;
+        const apInfo = apartadosDetectados[idx] || { subtema: idx + 1, titulo: `Apartado ${idx + 1}` };
+        const subtemaId = String(apInfo.subtema || idx + 1);
+        const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
+
+        const esCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
+          `${subtemaTitulo} ${blq.texto}`
+        );
+        const modeloApartado = esCodigo ? modeloCodigo : modelo;
+
+        registrarEventoConsola(`🤖 Redactando en paralelo Apartado ${tema}.${subtemaId}: "${subtemaTitulo}"...`);
+        mostrarProgresoGeneracion(
+          {
+            fase: "ia",
+            mensaje: `Redactando Apartado ${subtemaId} de ${bloquesApartados.length} con IA...`,
+            detalle: subtemaTitulo,
+            actual: idx + 1,
+            total: bloquesApartados.length,
+          },
+          false,
+        );
+
+        try {
+          const resApartado = await consultarNvidiaNIMApartadoBrowser({
+            apiKey: cfgSupabase.nvidiaApiKey,
+            modelo: modeloApartado,
+            asignatura,
+            tema,
+            tituloTema: titulo,
+            subtema: subtemaId,
+            subtemaTitulo,
+            instrucciones,
+            textoFuente: blq.texto,
+          });
+
+          if (resApartado?.archivos?.length) {
+            for (const arch of resApartado.archivos) {
+              arch.subtema = subtemaId;
+              todosLosArchivos.push(arch);
+              registrarEventoConsola(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
+            }
+          }
+        } catch (errAp) {
+          console.warn(`Aviso en apartado ${subtemaId} en navegador:`, errAp);
+        }
+      });
+
+      await Promise.all(promesasLote);
+    }
+
+    if (todosLosArchivos.length > 0) {
+      contenidoLatexFinal = JSON.stringify({
+        titulo_tema: titulo,
+        titulo_subtema: titulo,
+        conceptos_clave: [],
+        archivos: todosLosArchivos,
+      });
+      registrarEventoConsola(`✓ ¡${todosLosArchivos.length} archivos modulares maquetados con estilo oficial WEC!`);
+    }
+  }
+
+  // FASE 4: COMPILACIÓN CON XELATEX EN GITHUB ACTIONS
+  try {
+    mostrarProgresoGeneracion(
+      {
+        fase: "ia",
+        mensaje: "Compilando PDF con XeLaTeX en GitHub Actions...",
+        detalle: "Ejecutando compilador de alta calidad con bibliotecas_latex...",
+        actual: 4,
+        total: 4,
+      },
+      false,
+    );
+    registrarEventoConsola(`🚀 [Fase 4/4] Enviando a GitHub Actions para compilación instantánea de PDF con XeLaTeX...`);
 
     let ultimoRunIdAntesDeLanzar = 0;
     try {
@@ -3632,8 +3739,8 @@ async function ejecutarGeneracionGitHubActions({
           titulo: String(titulo),
           subtema: String(subtema),
           instrucciones: String(instrucciones || ""),
-          texto_fuente: textoFinal.slice(0, 60000),
-          contenido_latex: "",
+          texto_fuente: contenidoLatexFinal ? "" : textoFinal.slice(0, 60000),
+          contenido_latex: contenidoLatexFinal,
           nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
           nvidia_modelo: selectorModeloIA?.value || modelo,
           nvidia_modelo_codigo: selectorModeloCodigo?.value || "nvidia/nemotron-3.5-bolt-e4b",
