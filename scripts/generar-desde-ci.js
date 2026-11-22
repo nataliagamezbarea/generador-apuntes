@@ -231,7 +231,6 @@ async function main() {
     }
   }
 
-  let contenidoLatexDirecto = (process.env.CONTENIDO_LATEX || "").trim();
   let resultadoIA = null;
   let errorNvidia = "";
 

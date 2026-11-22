@@ -148,6 +148,8 @@ export function convertirMarkdownALatexWec(contenido = "") {
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .replace(/\]\]>/g, "")
+      .replace(/^\s*\n+/, "")
+      .replace(/^(?:javascript|html|css|python|java|bash|sql|cpp|c)\s*\n/i, "")
       .trimEnd();
     if (["bash", "sh", "shell", "terminal", "consola", "console"].includes(l)) {
       verbatimBlocks.push(`\\begin{consola}\n${cleanCode}\n\\end{consola}`);
@@ -166,6 +168,8 @@ export function convertirMarkdownALatexWec(contenido = "") {
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
       .replace(/\]\]>/g, "")
+      .replace(/^\s*\n+/, "")
+      .replace(/^(?:javascript|html|css|python|java|bash|sql|cpp|c)\s*\n/i, "")
       .trimEnd();
     verbatimBlocks.push(`\\begin{codigo}\n${cleanCode}\n\\end{codigo}`);
     return token;
@@ -565,8 +569,8 @@ export function aplicarEstilosLatex(value, subject = "") {
     (_m, items, resto) => `\\lista{\n  ${items.trim()} |\n  ${resto.trim()}\n}`
   );
 
-  while (/\\lista\{[^{}]*\\lista\{/.test(resultado)) {
-    resultado = resultado.replace(/\\lista\{([^{}]*)\\lista\{([^{}]*)\}([^{}]*)\}/gs, (_m, antes, dentro, despues) => {
+  while (/\\lista\{[\s\S]*?\\lista\{/.test(resultado)) {
+    resultado = resultado.replace(/\\lista\{([\s\S]*?)\\lista\{([\s\S]*?)\}([\s\S]*?)\}/g, (_m, antes, dentro, despues) => {
       const parteAntes = antes.trim();
       const parteDentro = dentro.trim();
       const parteDespues = despues.trim();
@@ -1417,6 +1421,8 @@ export function convertirCodigoWec(value) {
           .replace(/&quot;/g, '"')
           .replace(/&#39;/g, "'")
           .replace(/\]\]>/g, "")
+          .replace(/^\s*\n+/, "")
+          .replace(/^(?:javascript|html|css|python|java|bash|sql|cpp|c)\s*\n/i, "")
           .trimEnd();
         const etiqueta = lang ? `[${lang}]` : "";
         return `\\begin{codigo}${etiqueta}\n${limpia}\n\\end{codigo}`;
@@ -1432,6 +1438,8 @@ export function convertirCodigoWec(value) {
           .replace(/&quot;/g, '"')
           .replace(/&#39;/g, "'")
           .replace(/\]\]>/g, "")
+          .replace(/^\s*\n+/, "")
+          .replace(/^(?:javascript|html|css|python|java|bash|sql|cpp|c)\s*\n/i, "")
           .trimEnd();
         const etiqueta = lang ? `[${lang}]` : "";
         return `\\begin{codigo}${etiqueta}\n${limpia}\n\\end{codigo}`;
@@ -1447,6 +1455,8 @@ export function convertirCodigoWec(value) {
           .replace(/&quot;/g, '"')
           .replace(/&#39;/g, "'")
           .replace(/\]\]>/g, "")
+          .replace(/^\s*\n+/, "")
+          .replace(/^(?:javascript|html|css|python|java|bash|sql|cpp|c)\s*\n/i, "")
           .trimEnd();
         const etiqueta = lang ? `[${lang}]` : "";
         return `\\begin{codigo}${etiqueta}\n${limpia}\n\\end{codigo}`;

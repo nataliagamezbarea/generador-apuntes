@@ -496,9 +496,10 @@ export async function asegurarEstilosGenerador(themeDir) {
 % de bibliotecas_latex/cabecera.tex. Aquí se sincronizan los colores
 % del resaltado de código y el índice automático clicable con hyperref.
 \providecommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\providecommand{\phantomsection}{}
 \providecommand{\subnota}[2]{\nota{#1}{#2}}
 \providecommand{\subnotasin}[2]{\nota{#1}{#2}}
-\AtBeginDocument{\spanishdeactivate{<>}}
+\AtBeginDocument{\ifcsname spanishdeactivate\endcsname\spanishdeactivate{<>}\fi}
 \providecommand{\subt}[1]{\par\Needspace{4\baselineskip}\vspace{2mm}\noindent{\bfseries\color{primary}#1}\par\vspace{1mm}}
 \providecolor{codeForeground}{HTML}{243247}
 \providecolor{codeString}{HTML}{8A4B08}
@@ -520,37 +521,64 @@ export async function asegurarEstilosGenerador(themeDir) {
 \AddToHook{cmd/titulo/after}{\iniciarPaletaSecciones\actualizarColoresCodigo}
 \AddToHook{cmd/secciongrande/after}{\actualizarColoresCodigo}
 
-% --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF Y CONTROL ANTI-HUÉRFANAS ---
-\makeatletter
-\DeclareDocumentCommand{\secciongrande}{o m}{%
-  \par\Needspace{8\baselineskip}%
-  \phantomsection
-  \addcontentsline{toc}{section}{#2}%
-  \vspace{4mm}\noindent{\fontsize{15}{18}\selectfont\bfseries\color{primary}#2}\par
-  \nopagebreak\vspace{2mm}\nopagebreak
-}
-\DeclareDocumentCommand{\seccion}{o m}{%
-  \par\Needspace{6\baselineskip}%
-  \phantomsection
-  \addcontentsline{toc}{section}{#2}%
-  \vspace{3mm}\noindent{\fontsize{13}{16}\selectfont\bfseries\color{primary}#2}\par
-  \nopagebreak\vspace{2mm}\nopagebreak
-}
-\DeclareDocumentCommand{\subtituloA}{m}{%
-  \par\Needspace{5\baselineskip}%
-  \phantomsection
-  \addcontentsline{toc}{subsection}{#1}%
-  \vspace{3mm}\noindent{\fontsize{12}{15}\selectfont\bfseries\color{primary}#1}\par
-  \nopagebreak\vspace{2mm}\nopagebreak
-}
-\DeclareDocumentCommand{\subtituloB}{m}{%
-  \par\Needspace{4\baselineskip}%
-  \phantomsection
-  \addcontentsline{toc}{subsubsection}{#1}%
-  \vspace{2mm}\noindent{\fontsize{11}{14}\selectfont\bfseries\color{primary}#1}\par
-  \nopagebreak\vspace{2mm}\nopagebreak
-}
-\makeatother
+% --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF (PRESERVANDO ESTILOS OFICIALES WEC) ---
+\ifcsname secciongrande\endcsname
+  \AddToHook{cmd/secciongrande/before}{\phantomsection}
+\else
+  \DeclareDocumentCommand{\secciongrande}{o m}{%
+    \par\Needspace{8\baselineskip}%
+    \phantomsection
+    \addcontentsline{toc}{section}{#2}%
+    \vspace{4mm}\noindent{\fontsize{15}{18}\selectfont\bfseries\color{primary}#2}\par
+    \nopagebreak\vspace{2mm}\nopagebreak
+  }
+\fi
+
+\ifcsname seccion\endcsname
+  \AddToHook{cmd/seccion/before}{\phantomsection}
+\else
+  \DeclareDocumentCommand{\seccion}{o m}{%
+    \par\Needspace{6\baselineskip}%
+    \phantomsection
+    \addcontentsline{toc}{section}{#2}%
+    \vspace{3mm}\noindent{\fontsize{13}{16}\selectfont\bfseries\color{primary}#2}\par
+    \nopagebreak\vspace{2mm}\nopagebreak
+  }
+\fi
+
+\ifcsname subtituloA\endcsname
+  \let\origsubtituloA\subtituloA
+  \renewcommand{\subtituloA}[1]{%
+    \phantomsection
+    \addcontentsline{toc}{subsection}{#1}%
+    \origsubtituloA{#1}%
+  }
+\else
+  \DeclareDocumentCommand{\subtituloA}{m}{%
+    \par\Needspace{5\baselineskip}%
+    \phantomsection
+    \addcontentsline{toc}{subsection}{#1}%
+    \vspace{3mm}\noindent{\fontsize{12}{15}\selectfont\bfseries\color{primary}#1}\par
+    \nopagebreak\vspace{2mm}\nopagebreak
+  }
+\fi
+
+\ifcsname subtituloB\endcsname
+  \let\origsubtituloB\subtituloB
+  \renewcommand{\subtituloB}[1]{%
+    \phantomsection
+    \addcontentsline{toc}{subsubsection}{#1}%
+    \origsubtituloB{#1}%
+  }
+\else
+  \DeclareDocumentCommand{\subtituloB}{m}{%
+    \par\Needspace{4\baselineskip}%
+    \phantomsection
+    \addcontentsline{toc}{subsubsection}{#1}%
+    \vspace{2mm}\noindent{\fontsize{11}{14}\selectfont\bfseries\color{primary}#1}\par
+    \nopagebreak\vspace{2mm}\nopagebreak
+  }
+\fi
 
 \lstdefinelanguage{JavaScript}{
   sensitive=true,
@@ -581,6 +609,7 @@ export async function asegurarEstilosGenerador(themeDir) {
 \providecommand{\nota}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
 \providecommand{\alertas}[1]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Alerta:}\ #1}}\par\vspace{2mm}}
 \providecommand{\rectangulos}[1]{#1}
+\ifcsname lista\endcsname\else
 \ExplSyntaxOn
 \DeclareDocumentCommand{\lista}{m}{%
   \begin{itemize}%
@@ -595,6 +624,7 @@ export async function asegurarEstilosGenerador(themeDir) {
   \end{itemize}%
 }
 \ExplSyntaxOff
+\fi
 \providecommand{\pasos}[1]{\begin{enumerate}#1\end{enumerate}}
 \providecommand{\tabla}[2][]{#2}
 \providecommand{\inputcarpeta}[1]{%
@@ -748,18 +778,31 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
 
   const paquetesRequeridos = [
     "\\documentclass[11pt,a4paper]{extarticle}",
-    "\\usepackage[spanish,es-tabla]{babel}",
-    "\\usepackage[table]{xcolor}",
-    "\\usepackage{needspace}",
-    "\\usepackage{amsmath,amssymb}",
-    "\\usepackage{array,booktabs}",
-    "\\usepackage{tikz}",
-    "\\usepackage[most]{tcolorbox}",
-    "\\tcbuselibrary{listings,skins,breakable}",
-    "\\usepackage{listings}",
+    "\\IfFileExists{../../bibliotecas_latex/estilo.tex}{%",
+    "  \\providecommand{\\bibliotecasDir}{../../bibliotecas_latex}%",
+    "  \\input{\\bibliotecasDir/estilo}%",
+    "}{%",
+    "  \\IfFileExists{../../../bibliotecas_latex/estilo.tex}{%",
+    "    \\providecommand{\\bibliotecasDir}{../../../bibliotecas_latex}%",
+    "    \\input{\\bibliotecasDir/estilo}%",
+    "  }{%",
+    "    \\IfFileExists{./bibliotecas_latex/estilo.tex}{%",
+    "      \\providecommand{\\bibliotecasDir}{./bibliotecas_latex}%",
+    "      \\input{\\bibliotecasDir/estilo}%",
+    "    }{%",
+    "      \\usepackage[spanish,es-tabla]{babel}",
+    "      \\usepackage[table]{xcolor}",
+    "      \\usepackage{needspace}",
+    "      \\usepackage{amsmath,amssymb}",
+    "      \\usepackage{array,booktabs}",
+    "      \\usepackage{tikz}",
+    "      \\usepackage[most]{tcolorbox}",
+    "      \\tcbuselibrary{listings,skins,breakable}",
+    "      \\usepackage{listings}",
+    "    }%",
+    "  }%",
+    "}",
     "\\usepackage[hidelinks]{hyperref}",
-    "\\input{carga.tex}",
-    "\\IfFileExists{../preambulo.tex}{\\input{../preambulo.tex}}{\\input{preambulo.tex}}",
     styleInput,
   ];
 
@@ -864,14 +907,8 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
         : bodyLines.findIndex((line) => line.trim()) + 1;
     bodyLines.splice(insertionIndex, 0, ...inputLines);
 
-    // Asegurar paquetes esenciales en preámbulo si faltan
-    let finalPreamble = preambleLines.join("\n").trimEnd();
-    if (!finalPreamble.includes("xcolor")) {
-      finalPreamble = finalPreamble.replace(
-        /\\documentclass[^\n]*/,
-        "\\documentclass[11pt,a4paper]{extarticle}\n\\usepackage[spanish,es-tabla]{babel}\n\\usepackage[table]{xcolor}\n\\usepackage{needspace}\n\\usepackage{amsmath,amssymb}\n\\usepackage{array,booktabs}\n\\usepackage{tikz}\n\\usepackage[most]{tcolorbox}\n\\tcbuselibrary{listings,skins,breakable}\n\\usepackage{listings}\n\\usepackage[hidelinks]{hyperref}",
-      );
-    }
+    // Asegurar paquetes esenciales y biblioteca oficial WEC en preámbulo
+    const finalPreamble = paquetesRequeridos.slice(0, -1).join("\n");
     const updatedPreamble = `${finalPreamble}\n${styleInput}\n`;
     const updated = `${updatedPreamble}\\begin{document}${bodyLines.join("\n")}${
       endDocument < 0 ? "" : `\\end{document}${original.slice(endDocument + "\\end{document}".length)}`

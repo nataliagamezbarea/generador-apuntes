@@ -1,19 +1,33 @@
 \documentclass[11pt,a4paper]{extarticle}
-\usepackage[spanish,es-tabla]{babel}
-\usepackage[table]{xcolor}
-\usepackage{needspace}
-\usepackage{amsmath,amssymb}
-\usepackage{array,booktabs}
-\usepackage{tikz}
-\usepackage[most]{tcolorbox}
-\tcbuselibrary{listings,skins,breakable}
-\usepackage{listings}
+\IfFileExists{../../bibliotecas_latex/estilo.tex}{%
+  \providecommand{\bibliotecasDir}{../../bibliotecas_latex}%
+  \input{\bibliotecasDir/estilo}%
+}{%
+  \IfFileExists{../../../bibliotecas_latex/estilo.tex}{%
+    \providecommand{\bibliotecasDir}{../../../bibliotecas_latex}%
+    \input{\bibliotecasDir/estilo}%
+  }{%
+    \IfFileExists{./bibliotecas_latex/estilo.tex}{%
+      \providecommand{\bibliotecasDir}{./bibliotecas_latex}%
+      \input{\bibliotecasDir/estilo}%
+    }{%
+      \usepackage[spanish,es-tabla]{babel}
+      \usepackage[table]{xcolor}
+      \usepackage{needspace}
+      \usepackage{amsmath,amssymb}
+      \usepackage{array,booktabs}
+      \usepackage{tikz}
+      \usepackage[most]{tcolorbox}
+      \tcbuselibrary{listings,skins,breakable}
+      \usepackage{listings}
+    }%
+  }%
+}
 \usepackage[hidelinks]{hyperref}
-\IfFileExists{../preambulo.tex}{\input{../preambulo.tex}}{\input{preambulo.tex}}
 \input{generador-estilos.tex}
 \begin{document}
 \paletaAzul
-\titulo{TEMA 1}{Selección de arquitecturas y herramientas de programación Colegio Sant Josep Obrer}
+\titulo{TEMA 1}{Selección de arquitecturas}
 \usarfondo
 \renewcommand{\contentsname}{Índice}
 \setcounter{tocdepth}{2}
@@ -49,8 +63,16 @@
 \input{Tema 1.4/3.politica-mismo-origen.tex}
 \input{Tema 1.4/4.autoevaluacion.tex}
 \input{Tema 1.4/4.riesgos-seguridad.tex}
+\input{Tema 1.5/1.ejecucion-basica-script.tex}
+\input{Tema 1.5/1.primer-script-javascript.tex}
 \input{Tema 1.5/1.ubicacion-scripts-html.tex}
+\input{Tema 1.5/2.cierre-etiqueta.tex}
+\input{Tema 1.5/2.sintaxis-apertura-script.tex}
+\input{Tema 1.5/2.sintaxis-apertura-tipo.tex}
+\input{Tema 1.5/2.sintaxis-apertura.tex}
+\input{Tema 1.5/2.sintaxis-atributos.tex}
 \input{Tema 1.5/2.sintaxis-etiqueta-script.tex}
+\input{Tema 1.5/3.basico-ejecucion.tex}
 \input{Tema 1.6/1.metodos-integracion.tex}
 \input{Tema 1.6/2.ventajas-integracion-externa.tex}
 \input{Tema 1.6/3.gestion-rutas-archivos.tex}
