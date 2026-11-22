@@ -3359,13 +3359,25 @@ async function ejecutarGeneracionGitHubActions({
     `;
     panelResultados.scrollIntoView({ behavior: "smooth" });
 
+    const tiempoInicio = Date.now();
+    try {
+      localStorage.setItem("generador_trabajo_activo", JSON.stringify({
+        repoDestino,
+        token,
+        asignatura,
+        tema,
+        titulo,
+        tiempoInicio,
+      }));
+    } catch (_) {}
+
     iniciarMonitoreoGitHubActions({
       repoDestino,
       token,
       asignatura,
       tema,
       titulo,
-      tiempoInicio: Date.now(),
+      tiempoInicio,
     });
   } catch (error) {
     panelError.textContent = `Error al activar GitHub Actions: ${error.message}`;
@@ -3385,6 +3397,9 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
     intentos++;
     if (intentos > maxIntentos) {
       clearInterval(interval);
+      try {
+        localStorage.removeItem("generador_trabajo_activo");
+      } catch (_) {}
       if (badge) badge.textContent = "El trabajo continúa en la nube. Consulta GitHub Actions.";
       return;
     }
@@ -3419,6 +3434,9 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
         }
       } else if (run.status === "completed") {
         clearInterval(interval);
+        try {
+          localStorage.removeItem("generador_trabajo_activo");
+        } catch (_) {}
         if (run.conclusion === "success") {
           mostrarProgresoGeneracion(
             {
@@ -3461,6 +3479,9 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
           panelResultados.scrollIntoView({ behavior: "smooth" });
         } else {
           registrarEventoConsola(`❌ El trabajo de GitHub Actions terminó con estado: ${run.conclusion}`);
+          try {
+            localStorage.removeItem("generador_trabajo_activo");
+          } catch (_) {}
           if (panelError) {
             panelError.textContent = `La generación en GitHub Actions finalizó con estado: ${run.conclusion}. Puedes revisar los detalles en: ${run.html_url}`;
             panelError.hidden = false;
@@ -3469,4 +3490,54 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
       }
     } catch (_) {}
   }, 5000);
+}
+
+async function recuperarTrabajoGitHubActions() {
+  if (!esEntornoEstatico) return;
+  const guardadoStr = localStorage.getItem("generador_trabajo_activo");
+  if (!guardadoStr) return;
+  let datos = null;
+  try {
+    datos = JSON.parse(guardadoStr);
+  } catch (_) {}
+
+  if (!datos || !datos.tiempoInicio) return;
+  // Si han pasado más de 15 minutos, descartar
+  if (Date.now() - datos.tiempoInicio > 15 * 60 * 1000) {
+    try { localStorage.removeItem("generador_trabajo_activo"); } catch (_) {}
+    return;
+  }
+
+  if (progreso) progreso.hidden = false;
+  if (botonGenerar) botonGenerar.disabled = true;
+  mostrarProgresoGeneracion(
+    {
+      fase: "ia",
+      mensaje: `Reanudando seguimiento: ${datos.asignatura} - Tema ${datos.tema}`,
+      detalle: `El trabajo sigue ejecutándose en la nube. Conectando con GitHub Actions…`,
+    },
+    false
+  );
+  if (panelResultados) {
+    panelResultados.hidden = false;
+    panelResultados.innerHTML = `
+      <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
+        <div style="font-size:36px; margin-bottom:8px;">🚀</div>
+        <h3 style="margin:0 0 8px; font-size:18px;">Trabajo en curso en la nube (recuperado)</h3>
+        <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
+          Se está generando el documento LaTeX y compilando el PDF para <strong>${datos.asignatura} - Tema ${datos.tema}: ${datos.titulo}</strong>.
+        </p>
+        <div id="estado-actions-badge" style="display:inline-block; background:#1e293b; border:1px solid #475569; color:#93c5fd; padding:6px 14px; border-radius:999px; font-size:13px; font-weight:500;">
+          Consultando estado en GitHub Actions…
+        </div>
+      </div>
+    `;
+  }
+  iniciarMonitoreoGitHubActions(datos);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => void recuperarTrabajoGitHubActions());
+} else {
+  void recuperarTrabajoGitHubActions();
 }

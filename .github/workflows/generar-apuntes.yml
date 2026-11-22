@@ -120,6 +120,38 @@ jobs:
             git push origin main
           fi
 
+      - name: Sincronizar copia en GRADOS_INFORMATICOS
+        if: success()
+        env:
+          GH_TOKEN: ${{ inputs.gh_token || secrets.GH_TOKEN_GENERAL || secrets.GH_TOKEN }}
+        run: |
+          if [ -n "$GH_TOKEN" ]; then
+            echo "Clonando repositorio privado GRADOS_INFORMATICOS..."
+            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/nataliagamezbarea/GRADOS_INFORMATICOS.git" /tmp/grados_repo
+            cd /tmp/grados_repo
+
+            # Seleccionar rama de trabajo o master
+            git checkout Segundo_grado_superior 2>/dev/null || true
+
+            mkdir -p "apuntes_privados/${{ inputs.asignatura }}"
+            mkdir -p "apuntes/${{ inputs.asignatura }}"
+
+            cp -r $GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}/* "apuntes_privados/${{ inputs.asignatura }}/" 2>/dev/null || true
+            cp -r $GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}/*.pdf "apuntes/${{ inputs.asignatura }}/" 2>/dev/null || true
+
+            git config user.name "Generador Apuntes Bot"
+            git config user.email "bot@generador-apuntes.local"
+            git add apuntes_privados/ apuntes/
+
+            if ! git diff --staged --quiet; then
+              git commit -m "docs(apuntes): sincronizar apuntes generados para ${{ inputs.asignatura }} - Tema ${{ inputs.tema }}"
+              git push origin HEAD
+              echo "✓ Sincronizado con éxito en GRADOS_INFORMATICOS"
+            else
+              echo "Sin cambios para subir en GRADOS_INFORMATICOS."
+            fi
+          fi
+
       - name: Subir PDF como artefacto
         uses: actions/upload-artifact@v4
         with:
