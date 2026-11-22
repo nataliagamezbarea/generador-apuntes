@@ -2997,7 +2997,7 @@ modalEnviados?.addEventListener("click", (e) => {
 });
 
 // ============================================================
-// OBTENER CONFIGURACIÓN CENTRALIZADA DE SUPABASE (PRIVADA Y PÚBLICA)
+// OBTENER CONFIGURACIÓN CENTRALIZADA DE SUPABASE (TABLA configuracion_publica)
 // ============================================================
 async function obtenerConfiguracionSupabase() {
   const config = {
@@ -3009,31 +3009,7 @@ async function obtenerConfiguracionSupabase() {
   const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
   const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
 
-  // 1. Intentar leer de configuracion_privada mediante el cliente autenticado de Supabase
-  try {
-    const sb = window.supabaseClient || (window.SupabaseAuth && typeof window.SupabaseAuth.getClient === "function" ? window.SupabaseAuth.getClient() : null);
-    if (sb) {
-      const { data, error } = await sb
-        .schema("grados-informaticos")
-        .from("configuracion_privada")
-        .select("clave, valor");
-      if (!error && Array.isArray(data)) {
-        for (const r of data) {
-          if ((r.clave === "gh_token_general" || r.clave === "gh_token") && !config.ghToken && r.valor) {
-            config.ghToken = r.valor.trim();
-          }
-          if ((r.clave === "gh_repo_general" || r.clave === "gh_repo") && !config.ghRepo && r.valor) {
-            config.ghRepo = r.valor.trim();
-          }
-          if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && r.valor) {
-            config.nvidiaApiKey = r.valor.trim();
-          }
-        }
-      }
-    }
-  } catch (_) {}
-
-  // 2. Si falta alguna clave, consultar configuracion_publica como fallback
+  // Consultar directamente configuracion_publica (permite lectura segura sin fallo 520 de CORS)
   try {
     const resp = await fetch(
       `${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token,gh_repo,gh_repo_general,nvidia_api_key,NVIDIA_API_KEY)`,
