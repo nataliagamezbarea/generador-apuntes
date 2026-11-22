@@ -28,6 +28,11 @@
             <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
             <span>Ir a los tests</span>
           </a>
+          <button id="boton-ver-enviados" class="nav-button nav-enviados" type="button" title="Ver trabajos y archivos enviados">
+            <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+            <span>Enviados</span>
+            <span id="badge-enviados" class="badge-count" style="display:none;">0</span>
+          </button>
           <a class="nav-button" href="/mejorar" title="Revisar apuntes creados">
             <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
             <span>Revisar mis apuntes</span>
@@ -239,17 +244,57 @@
           >
         </section>
 
+        <div id="aviso-trabajo-activo" class="active-job-banner" style="display:none;">
+          <div class="active-job-info">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Hay un trabajo enviado en proceso: <strong id="texto-trabajo-activo">...</strong></span>
+          </div>
+          <div class="active-job-actions">
+            <button id="btn-ver-progreso-activo" class="secondary-button" type="button">
+              <i class="fa-solid fa-eye"></i> Ver progreso
+            </button>
+            <button id="btn-cancelar-trabajo-activo" class="secondary-button warn" type="button">
+              <i class="fa-solid fa-xmark"></i> Cancelar para enviar nuevo
+            </button>
+          </div>
+        </div>
+
         <div class="submit-row">
           <p>
             La generación utilizará únicamente los archivos y el texto que
             añadas ahora.
           </p>
-          <button id="boton-generar" type="submit">
-            <span>Generar apuntes</span
-            ><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
-          </button>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button id="boton-enviados-inline" class="secondary-button" type="button" title="Ver trabajos enviados">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <span>Enviados (<span id="contador-enviados-inline">0</span>)</span>
+            </button>
+            <button id="boton-generar" type="submit">
+              <span>Generar apuntes</span
+              ><i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
       </form>
+
+      <!-- MODAL DE TRABAJOS ENVIADOS -->
+      <div id="modal-enviados" class="modal-backdrop" hidden>
+        <div class="modal-card">
+          <div class="modal-header">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <i class="fa-solid fa-paper-plane" style="color:var(--accent); font-size:1.2rem;"></i>
+              <h3 style="margin:0; font-size:1.1rem; font-weight:700;">Trabajos y generaciones enviadas</h3>
+            </div>
+            <button id="cerrar-modal-enviados" class="icon-button" type="button" aria-label="Cerrar modal">&times;</button>
+          </div>
+          <p style="color:var(--muted); font-size:12px; margin:4px 0 16px;">
+            Consulta el estado de las generaciones enviadas a la IA local, reanuda trabajos pendientes o cancela los que estén en curso para desbloquear nuevos envíos.
+          </p>
+          <div id="lista-trabajos-enviados" class="enviados-list">
+            <p style="color:var(--muted); font-size:12px;">Cargando trabajos enviados…</p>
+          </div>
+        </div>
+      </div>
 
       <section id="progreso" class="progress panel" hidden>
         <div class="progress-heading">

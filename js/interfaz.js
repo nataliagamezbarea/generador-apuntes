@@ -37,6 +37,17 @@ const ultimaGeneracion = document.querySelector("#ultima-generacion");
 const trabajosPendientes = document.querySelector("#trabajos-pendientes");
 const botonGenerar = document.querySelector("#boton-generar");
 const estadoModelo = document.querySelector("#estado-modelo");
+const botonVerEnviados = document.querySelector("#boton-ver-enviados");
+const botonEnviadosInline = document.querySelector("#boton-enviados-inline");
+const badgeEnviados = document.querySelector("#badge-enviados");
+const contadorEnviadosInline = document.querySelector("#contador-enviados-inline");
+const modalEnviados = document.querySelector("#modal-enviados");
+const cerrarModalEnviados = document.querySelector("#cerrar-modal-enviados");
+const listaTrabajosEnviados = document.querySelector("#lista-trabajos-enviados");
+const avisoTrabajoActivo = document.querySelector("#aviso-trabajo-activo");
+const textoTrabajoActivo = document.querySelector("#texto-trabajo-activo");
+const btnVerProgresoActivo = document.querySelector("#btn-ver-progreso-activo");
+const btnCancelarTrabajoActivo = document.querySelector("#btn-cancelar-trabajo-activo");
 let archivosElegidos = [];
 const selectorModeloIA = document.querySelector("#selector-modelo-ia");
 const selectorModeloCodigo = document.querySelector("#selector-modelo-codigo");
@@ -285,6 +296,47 @@ async function cargarTrabajosPendientes() {
     (trabajo) =>
       trabajo.estado === "procesando" || trabajo.estado === "pendiente",
   );
+
+  // Actualizar badges e indicadores de trabajos enviados
+  if (badgeEnviados && contadorEnviadosInline) {
+    const totalTrabajos = trabajos.length;
+    contadorEnviadosInline.textContent = String(totalTrabajos);
+    badgeEnviados.textContent = trabajoActivo ? "⏳ 1 activo" : String(totalTrabajos);
+    badgeEnviados.style.display = totalTrabajos > 0 ? "inline-flex" : "none";
+    badgeEnviados.classList.toggle("processing", Boolean(trabajoActivo));
+  }
+
+  // Aviso inline si hay un trabajo activo en segundo plano
+  if (avisoTrabajoActivo && textoTrabajoActivo) {
+    if (trabajoActivo) {
+      avisoTrabajoActivo.style.display = "flex";
+      textoTrabajoActivo.textContent = `${trabajoActivo.asignatura} · ${trabajoActivo.fase} (${trabajoActivo.unidadActual}/${trabajoActivo.totalUnidades} bloques)`;
+      if (btnVerProgresoActivo) {
+        btnVerProgresoActivo.onclick = () => {
+          progreso.hidden = false;
+          void reanudarTrabajoEtapas(trabajoActivo.id);
+        };
+      }
+      if (btnCancelarTrabajoActivo) {
+        btnCancelarTrabajoActivo.onclick = async () => {
+          if (!confirm("¿Deseas cancelar el trabajo actual en proceso para desbloquear el envío de nuevos apuntes?")) return;
+          btnCancelarTrabajoActivo.disabled = true;
+          try {
+            await fetch(`/api/progress/${encodeURIComponent(trabajoActivo.id)}/cancel`, { method: "POST" });
+            await fetch(`/api/staged-generations/${encodeURIComponent(trabajoActivo.id)}`, { method: "DELETE" }).catch(() => {});
+            await cargarTrabajosPendientes();
+          } catch (e) {
+            alert("Error al cancelar: " + e.message);
+          } finally {
+            btnCancelarTrabajoActivo.disabled = false;
+          }
+        };
+      }
+    } else {
+      avisoTrabajoActivo.style.display = "none";
+    }
+  }
+
   if (!idGeneracionActiva && !controladorGeneracion)
     progreso.hidden = true;
   botonGenerar.disabled =
@@ -2666,3 +2718,128 @@ if (botonReiniciarServidor) {
     }, 1000);
   });
 }
+
+// ============================================================
+// GESTOR DE MODAL Y LISTA DE TRABAJOS ENVIADOS
+// ============================================================
+async function abrirModalEnviados() {
+  if (!modalEnviados) return;
+  modalEnviados.hidden = false;
+  if (!listaTrabajosEnviados) return;
+  listaTrabajosEnviados.innerHTML =
+    '<p style="color:var(--muted); font-size:12px;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando trabajos enviados…</p>';
+  try {
+    const respuesta = await fetch("/api/staged-generations?include_completed=true");
+    const datos = await respuesta.json();
+    const trabajos = datos.trabajos || [];
+    if (!trabajos.length) {
+      listaTrabajosEnviados.innerHTML =
+        '<p style="color:var(--muted); font-size:12px;">No hay trabajos enviados todavía. Elige una asignatura, selecciona archivos y pulsa «Generar apuntes».</p>';
+      return;
+    }
+    listaTrabajosEnviados.replaceChildren();
+    for (const t of trabajos) {
+      const item = document.createElement("div");
+      item.className = "enviados-item";
+
+      const main = document.createElement("div");
+      main.className = "enviados-item-main";
+
+      const title = document.createElement("div");
+      title.className = "enviados-item-title";
+      title.textContent = `${t.asignatura} (${t.fase || "general"})`;
+
+      const sub = document.createElement("div");
+      sub.className = "enviados-item-sub";
+      const fecha = t.actualizado
+        ? new Date(t.actualizado).toLocaleString("es-ES")
+        : "";
+      sub.textContent = `${t.unidadActual || 0} de ${t.totalUnidades || 0} bloques procesados ${fecha ? "· " + fecha : ""}`;
+
+      main.append(title, sub);
+
+      const badge = document.createElement("span");
+      badge.className = `enviados-badge ${t.estado}`;
+      badge.textContent =
+        t.estado === "procesando"
+          ? "En proceso"
+          : t.estado === "completado"
+            ? "Completado"
+            : t.estado;
+
+      const actions = document.createElement("div");
+      actions.className = "enviados-actions";
+
+      if (t.estado === "procesando") {
+        const btnProgreso = document.createElement("button");
+        btnProgreso.className = "secondary-button";
+        btnProgreso.type = "button";
+        btnProgreso.innerHTML = '<i class="fa-solid fa-eye"></i> Progreso';
+        btnProgreso.onclick = () => {
+          modalEnviados.hidden = true;
+          progreso.hidden = false;
+          void reanudarTrabajoEtapas(t.id);
+        };
+
+        const btnCancel = document.createElement("button");
+        btnCancel.className = "secondary-button warn";
+        btnCancel.type = "button";
+        btnCancel.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancelar';
+        btnCancel.onclick = async () => {
+          if (!confirm("¿Deseas cancelar esta generación en curso?")) return;
+          btnCancel.disabled = true;
+          await fetch(`/api/progress/${encodeURIComponent(t.id)}/cancel`, {
+            method: "POST",
+          });
+          await fetch(
+            `/api/staged-generations/${encodeURIComponent(t.id)}`,
+            { method: "DELETE" },
+          ).catch(() => {});
+          await cargarTrabajosPendientes();
+          await abrirModalEnviados();
+        };
+        actions.append(btnProgreso, btnCancel);
+      } else {
+        const btnReanudar = document.createElement("button");
+        btnReanudar.className = "secondary-button";
+        btnReanudar.type = "button";
+        btnReanudar.innerHTML = '<i class="fa-solid fa-play"></i> Reanudar';
+        btnReanudar.onclick = () => {
+          modalEnviados.hidden = true;
+          progreso.hidden = false;
+          void reanudarTrabajoEtapas(t.id);
+        };
+
+        const btnBorrar = document.createElement("button");
+        btnBorrar.className = "secondary-button";
+        btnBorrar.type = "button";
+        btnBorrar.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        btnBorrar.title = "Eliminar de la lista";
+        btnBorrar.onclick = async () => {
+          btnBorrar.disabled = true;
+          await fetch(
+            `/api/staged-generations/${encodeURIComponent(t.id)}`,
+            { method: "DELETE" },
+          ).catch(() => {});
+          await cargarTrabajosPendientes();
+          await abrirModalEnviados();
+        };
+        actions.append(btnReanudar, btnBorrar);
+      }
+
+      item.append(main, badge, actions);
+      listaTrabajosEnviados.append(item);
+    }
+  } catch (err) {
+    listaTrabajosEnviados.innerHTML = `<p style="color:#f87171; font-size:12px;">Error al cargar trabajos: ${err.message}</p>`;
+  }
+}
+
+botonVerEnviados?.addEventListener("click", abrirModalEnviados);
+botonEnviadosInline?.addEventListener("click", abrirModalEnviados);
+cerrarModalEnviados?.addEventListener("click", () => {
+  if (modalEnviados) modalEnviados.hidden = true;
+});
+modalEnviados?.addEventListener("click", (e) => {
+  if (e.target === modalEnviados) modalEnviados.hidden = true;
+});
