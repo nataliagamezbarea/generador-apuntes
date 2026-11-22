@@ -2997,8 +2997,8 @@ modalEnviados?.addEventListener("click", (e) => {
 });
 
 // ============================================================
-// OBTENER CONFIGURACIÓN CENTRALIZADA DE SUPABASE (TABLA configuracion_publica)
-// ============================================================
+// OBTENER CONFIGURACIÓN EXCLUSIVA DE SUPABASE (configuracion_privada EN grados-informaticos)
+// =========================================================================================
 async function obtenerConfiguracionSupabase() {
   const config = {
     ghToken: "",
@@ -3009,36 +3009,85 @@ async function obtenerConfiguracionSupabase() {
   const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
   const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
 
-  // Consultar directamente configuracion_publica (permite lectura segura sin fallo 520 de CORS)
+  // 1. Consultar configuracion_privada en el esquema grados-informaticos con token de sesion activa
   try {
-    const resp = await fetch(
-      `${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token,gh_repo,gh_repo_general,nvidia_api_key,NVIDIA_API_KEY)`,
-      {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-          Accept: "application/json",
-          "Accept-Profile": "grados-informaticos",
-        },
-      }
-    );
+    let accessToken = anonKey;
+    const sb = window.supabaseClient || (window.SupabaseAuth && typeof window.SupabaseAuth.getClient === "function" ? window.SupabaseAuth.getClient() : null);
+
+    if (sb?.auth?.getSession) {
+      try {
+        const sRes = await sb.auth.getSession();
+        if (sRes?.data?.session?.access_token) {
+          accessToken = sRes.data.session.access_token;
+        }
+      } catch (_) {}
+    }
+
+    const url = `${supabaseUrl}/rest/v1/configuracion_privada?select=clave,valor`;
+    const resp = await fetch(url, {
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+        "Accept-Profile": "grados-informaticos",
+        "Content-Profile": "grados-informaticos",
+      },
+      cache: "no-store",
+    });
+
     if (resp.ok) {
       const filas = await resp.json();
       if (Array.isArray(filas)) {
         for (const r of filas) {
-          if ((r.clave === "gh_token_general" || r.clave === "gh_token") && !config.ghToken && r.valor) {
+          if ((r.clave === "gh_token_general" || r.clave === "gh_token") && r.valor && !config.ghToken) {
             config.ghToken = r.valor.trim();
           }
-          if ((r.clave === "gh_repo_general" || r.clave === "gh_repo") && !config.ghRepo && r.valor) {
+          if ((r.clave === "gh_repo_general" || r.clave === "gh_repo") && r.valor && !config.ghRepo) {
             config.ghRepo = r.valor.trim();
           }
-          if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && !config.nvidiaApiKey && r.valor) {
+          if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && r.valor && !config.nvidiaApiKey) {
             config.nvidiaApiKey = r.valor.trim();
           }
         }
       }
     }
-  } catch (_) {}
+  } catch (err) {
+    console.warn("Fallo leyendo configuracion_privada en grados-informaticos:", err);
+  }
+
+  // 2. Si falta alguna clave, consultar configuracion_publica en grados-informaticos
+  if (!config.ghToken || !config.nvidiaApiKey) {
+    try {
+      const respPub = await fetch(
+        `${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token,gh_repo,gh_repo_general,nvidia_api_key,NVIDIA_API_KEY)`,
+        {
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+            Accept: "application/json",
+            "Accept-Profile": "grados-informaticos",
+          },
+          cache: "no-store",
+        }
+      );
+      if (respPub.ok) {
+        const filasPub = await respPub.json();
+        if (Array.isArray(filasPub)) {
+          for (const r of filasPub) {
+            if ((r.clave === "gh_token_general" || r.clave === "gh_token") && r.valor && !config.ghToken) {
+              config.ghToken = r.valor.trim();
+            }
+            if ((r.clave === "gh_repo_general" || r.clave === "gh_repo") && r.valor && !config.ghRepo) {
+              config.ghRepo = r.valor.trim();
+            }
+            if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && r.valor && !config.nvidiaApiKey) {
+              config.nvidiaApiKey = r.valor.trim();
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
 
   return config;
 }
@@ -3055,7 +3104,7 @@ async function ejecutarGeneracionGitHubActions({
 }) {
   const repoDestino = "nataliagamezbarea/generador-apuntes";
 
-  // 1. Obtener configuración de Supabase (configuracion_privada y publica)
+  // 1. Obtener configuración exclusivamente desde Supabase
   const cfgSupabase = await obtenerConfiguracionSupabase();
 
   let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || cfgSupabase.ghToken || "";
@@ -3081,7 +3130,28 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
-  // 2. Comprobar si hay clave en Supabase (si no, se usará el secreto NVIDIA_API_KEY configurado en GitHub)
+  // 2. REGLA ESTRICTA: SOLO MIRAR EN SUPABASE (EN GITHUB NO SE MIRA NUNCA).
+  // Si falta nvidia_api_key en configuracion_privada de Supabase (grados-informaticos), BLOQUEAR.
+  if (!cfgSupabase.nvidiaApiKey) {
+    botonGenerar.disabled = false;
+    progreso.hidden = true;
+    panelError.innerHTML = `
+      <div style="background:rgba(239,68,68,0.12); border:1px solid #ef4444; border-radius:12px; padding:20px; color:#fff; text-align:left;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <span style="font-size:24px;">⛔</span>
+          <h3 style="margin:0; font-size:17px; color:#f87171;">Generación bloqueada: Falta NVIDIA_API_KEY</h3>
+        </div>
+        <p style="margin:0; color:#e2e8f0; font-size:14px; line-height:1.5;">
+          No se puede generar ningún apunte porque <strong>no está configurada la clave nvidia_api_key en Supabase (tabla configuracion_privada, esquema grados-informaticos)</strong>. No se permite avanzar sin ella.
+        </p>
+      </div>
+    `;
+    panelError.hidden = false;
+    panelError.scrollIntoView({ behavior: "smooth" });
+    registrarEventoConsola("⛔ Generación bloqueada: falta nvidia_api_key en configuracion_privada de Supabase. No se puede avanzar.");
+    return; // NO DEJA AVANZAR
+  }
+
   panelError.hidden = true;
   progreso.hidden = false;
   botonGenerar.disabled = true;
