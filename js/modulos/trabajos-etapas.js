@@ -12,6 +12,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { config } from "./configuracion.js";
 import { detectarBloquesCodigo } from "./deteccion-codigo.js";
+import { desglosarBloquesPorSubtitulos, deducirSlugConceptual } from "./apuntes.js";
 
 const idTrabajoValido = /^[\da-f-]{36}$/i;
 
@@ -141,7 +142,26 @@ export async function guardarTrabajoEtapas(trabajo) {
 export async function cargarTrabajoEtapas(id) {
   const directory = rutaTrabajo(id);
   try {
-    return JSON.parse(await readFile(path.join(directory, "estado.json"), "utf8"));
+    const raw = JSON.parse(await readFile(path.join(directory, "estado.json"), "utf8"));
+    if (Array.isArray(raw.resultadosPreparados)) {
+      for (const item of raw.resultadosPreparados) {
+        if (item?.resultado?.archivos && Array.isArray(item.resultado.archivos)) {
+          item.resultado.archivos = desglosarBloquesPorSubtitulos(item.resultado.archivos);
+          const contadorSub = new Map();
+          for (const arch of item.resultado.archivos) {
+            const sub = arch.subtema || item.destino?.apartado || 1;
+            const count = (contadorSub.get(sub) || 0) + 1;
+            contadorSub.set(sub, count);
+            arch.orden = count;
+            arch.indiceApartado = count;
+            let slug = deducirSlugConceptual("", arch.titulo || arch.nombre || "apartado");
+            slug = slug.replace(/^\d+[.\-]+\s*/, "");
+            arch.nombre = `${count}.${slug || "apartado"}`;
+          }
+        }
+      }
+    }
+    return raw;
   } catch (error) {
     if (error.code === "ENOENT")
       throw Object.assign(

@@ -40,6 +40,7 @@ import {
   aplicarEstilosLatex,
   detectarCatalan,
   esTituloDePlantilla,
+  desglosarBloquesPorSubtitulos,
 } from "./modulos/apuntes.js";
 import {
   cargarReferenciaBiblioteca,
@@ -1154,6 +1155,18 @@ aplicacion.post(
           console.warn(`Verificación del LaTeX omitida: ${errTrad.message}`);
         }
         archivo.latex = aplicarEstilosLatex(archivo.latex, asignatura);
+      }
+      resultado.archivos = desglosarBloquesPorSubtitulos(resultado.archivos);
+      const contadorSubtemasGen = new Map();
+      for (const arch of resultado.archivos) {
+        const sub = arch.subtema || apartado || 1;
+        const count = (contadorSubtemasGen.get(sub) || 0) + 1;
+        contadorSubtemasGen.set(sub, count);
+        arch.orden = count;
+        arch.indiceApartado = count;
+        let slug = deducirSlugConceptual("", arch.titulo || arch.nombre || "apartado");
+        slug = slug.replace(/^\d+[.\-]+\s*/, "");
+        arch.nombre = `${count}.${slug || "apartado"}`;
       }
     }
 
@@ -2448,6 +2461,18 @@ async function generarUnidadEtapas({
         }
         archivo.latex = aplicarEstilosLatex(archivo.latex, trabajo.asignatura);
       }
+      resultado.archivos = desglosarBloquesPorSubtitulos(resultado.archivos);
+      const contadorSubtemasUnidad = new Map();
+      for (const arch of resultado.archivos) {
+        const sub = arch.subtema || apartadoEfectivo || 1;
+        const count = (contadorSubtemasUnidad.get(sub) || 0) + 1;
+        contadorSubtemasUnidad.set(sub, count);
+        arch.orden = count;
+        arch.indiceApartado = count;
+        let slug = deducirSlugConceptual("", arch.titulo || arch.nombre || "apartado");
+        slug = slug.replace(/^\d+[.\-]+\s*/, "");
+        arch.nombre = `${count}.${slug || "apartado"}`;
+      }
     }
 
     const segundos = ((Date.now() - inicioUnidad) / 1000).toFixed(1);
@@ -2720,7 +2745,19 @@ function agruparResultadosTrabajo(trabajo, fase = null) {
       grupos.set(clave, grupo);
     }
     grupo.unidadIds.push(item.unidad);
-    grupo.resultado.archivos.push(...(item.resultado?.archivos ?? []));
+    const archivosDesglosados = desglosarBloquesPorSubtitulos(item.resultado?.archivos ?? []);
+    const contadorSub = new Map();
+    for (const arch of archivosDesglosados) {
+      const sub = arch.subtema || item.destino?.apartado || 1;
+      const count = (contadorSub.get(sub) || 0) + 1;
+      contadorSub.set(sub, count);
+      arch.orden = count;
+      arch.indiceApartado = count;
+      let slug = deducirSlugConceptual("", arch.titulo || arch.nombre || "apartado");
+      slug = slug.replace(/^\d+[.\-]+\s*/, "");
+      arch.nombre = `${count}.${slug || "apartado"}`;
+    }
+    grupo.resultado.archivos.push(...archivosDesglosados);
     grupo.resultado.conceptos_clave.push(...(item.resultado?.conceptos_clave ?? []));
     grupo.resultado.cobertura.push(...(item.resultado?.cobertura ?? []));
     grupo.resultado.imagenes.push(...(item.resultado?.imagenes ?? []));
