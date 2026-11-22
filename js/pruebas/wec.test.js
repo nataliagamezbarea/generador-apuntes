@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execSync } from "child_process";
 import { writeFileSync, unlinkSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { desglosarBloquesPorSubtitulos } from "../modulos/apuntes.js";
 
 function compileLatex(texContent) {
   const texPath = join(process.cwd(), "temp_test.tex");
@@ -70,4 +71,35 @@ test('Debe compilar sin errores fatales', () => {
     }
   }
   assert(true);
+});
+
+test('desglosarBloquesPorSubtitulos divide un bloque con varios subtitulos en archivos numerados', () => {
+  const bloquesEntrada = [
+    {
+      subtema: 1,
+      titulo: "Modelos de ejecución",
+      latex: `\\secciongrande{Modelos de ejecución del código}\n\n\\resumen{Texto del resumen inicial.}\n\n\\subtituloA{Origen y alcance de la web}\n\nContenido del origen.\n\n\\subtituloA{Cuatro campos del diseño web}\n\nContenido de campos.\n\n\\subtituloA{Modelo cliente-servidor}\n\nContenido cliente servidor.`
+    }
+  ];
+
+  const resultado = desglosarBloquesPorSubtitulos(bloquesEntrada);
+  assert.equal(resultado.length, 3, "Debe haberse dividido en 3 bloques");
+
+  // Bloque 1
+  assert.match(resultado[0].nombre, /^1\./, "El primer archivo debe empezar por 1.");
+  assert.match(resultado[0].latex, /\\secciongrande\{Modelos de ejecución del código\}/);
+  assert.match(resultado[0].latex, /\\resumen\{Texto del resumen inicial\.\}/);
+  assert.match(resultado[0].latex, /\\subtituloA\{Origen y alcance de la web\}/);
+
+  // Bloque 2
+  assert.match(resultado[1].nombre, /^2\./, "El segundo archivo debe empezar por 2.");
+  assert.doesNotMatch(resultado[1].latex, /\\secciongrande/);
+  assert.doesNotMatch(resultado[1].latex, /\\resumen/);
+  assert.match(resultado[1].latex, /\\subtituloA\{Cuatro campos del diseño web\}/);
+
+  // Bloque 3
+  assert.match(resultado[2].nombre, /^3\./, "El tercer archivo debe empezar por 3.");
+  assert.doesNotMatch(resultado[2].latex, /\\secciongrande/);
+  assert.doesNotMatch(resultado[2].latex, /\\resumen/);
+  assert.match(resultado[2].latex, /\\subtituloA\{Modelo cliente-servidor\}/);
 });

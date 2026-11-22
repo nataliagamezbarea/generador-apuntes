@@ -603,6 +603,68 @@ export function inferirSubtemaDeBloque(block, subthemePredeterminado = 1) {
   return 1;
 }
 
+export function desglosarBloquesPorSubtitulos(archivos = []) {
+  if (!Array.isArray(archivos) || archivos.length === 0) return archivos;
+
+  const resultado = [];
+
+  for (const block of archivos) {
+    if (!block || typeof block.latex !== "string") {
+      resultado.push(block);
+      continue;
+    }
+
+    const latex = block.latex;
+    const regexSubtitulo = /\\(?:subtituloA|subtitulo|subseccion)\*?(?:\[[^\]]*\])?\{([^}]+)\}/g;
+    const matches = [];
+    let m;
+    while ((m = regexSubtitulo.exec(latex)) !== null) {
+      matches.push({
+        index: m.index,
+        fullMatch: m[0],
+        titulo: m[1].trim(),
+        length: m[0].length,
+      });
+    }
+
+    if (matches.length <= 1) {
+      resultado.push(block);
+      continue;
+    }
+
+    for (let i = 0; i < matches.length; i++) {
+      const matchActual = matches[i];
+      const startPos = i === 0 ? 0 : matchActual.index;
+      const endPos = i + 1 < matches.length ? matches[i + 1].index : latex.length;
+      let trozoLatex = latex.slice(startPos, endPos).trim();
+
+      if (i > 0) {
+        trozoLatex = trozoLatex
+          .replace(/\\secciongrande\*?(?:\[[^\]]*\])?\{([^}]+)\}\s*/g, "")
+          .replace(/\\resumen\*?(?:\[[^\]]*\])?\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*/g, "");
+        if (!trozoLatex.startsWith("\\subtituloA") && !trozoLatex.startsWith("\\subtitulo")) {
+          trozoLatex = `\\subtituloA{${matchActual.titulo}}\n\n${trozoLatex}`;
+        }
+      }
+
+      const tituloSub = matchActual.titulo;
+      const slugSub = deducirSlugConceptual("", tituloSub) || `apartado-${i + 1}`;
+
+      resultado.push({
+        ...block,
+        titulo: tituloSub,
+        nombre: `${i + 1}.${slugSub}`,
+        orden: i + 1,
+        indiceApartado: i + 1,
+        apartadoNumero: i + 1,
+        latex: trozoLatex,
+      });
+    }
+  }
+
+  return resultado;
+}
+
 function stemArchivoGenerado(block, theme, subtheme, index) {
   let orden = null;
 
@@ -640,10 +702,10 @@ function stemArchivoGenerado(block, theme, subtheme, index) {
       : `seccion-${orden}`;
   }
 
-  // Quitar cualquier prefijo numérico previo (ej: "1-origen", "1.origen" -> "origen") para no poner 1, 2 en los nombres de archivo
+  // Quitar cualquier prefijo numérico previo (ej: "1-origen", "1.origen" -> "origen") para garantizar el prefijo ${orden}.
   slug = slug.replace(/^\d+[.\-]+\s*/, "");
 
-  return slug || "apartado";
+  return `${orden}.${slug || "apartado"}`;
 }
 
 export async function inspeccionarReemplazosGeneracion({
@@ -668,6 +730,17 @@ export async function inspeccionarReemplazosGeneracion({
     !inputFiles.some((archivo) => fuentesAnalizadas.has(archivo.originalname))
   )
     return [];
+
+  result.archivos = desglosarBloquesPorSubtitulos(result.archivos);
+  const contadorSubtemasInsp = new Map();
+  for (const block of result.archivos) {
+    const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
+    const contadorActual = (contadorSubtemasInsp.get(bloqueSubtema) || 0) + 1;
+    contadorSubtemasInsp.set(bloqueSubtema, contadorActual);
+    if (!block.orden) {
+      block.orden = contadorActual;
+    }
+  }
 
   const existentes = [];
   for (const [index, block] of result.archivos.entries()) {
@@ -735,6 +808,18 @@ export async function guardarGeneracion({
       ? (informeAnterior.archivos_generados ?? []).map((archivo) => archivo.path)
       : [],
   );
+
+  result.archivos = desglosarBloquesPorSubtitulos(result.archivos);
+  const contadorSubtemas = new Map();
+  for (const block of result.archivos) {
+    const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
+    const contadorActual = (contadorSubtemas.get(bloqueSubtema) || 0) + 1;
+    contadorSubtemas.set(bloqueSubtema, contadorActual);
+    if (!block.orden) {
+      block.orden = contadorActual;
+    }
+  }
+
   for (const [index, block] of result.archivos.entries()) {
     const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
     const subDir = path.join(themeDir, `Tema ${theme}.${bloqueSubtema}`);
@@ -802,7 +887,8 @@ export async function guardarGeneracion({
     });
     const diagramas = imagenesDelApartado(result.imagenes, stem, block.titulo);
     let latexBloque = block.latex.trim();
-    if (index > 0) {
+    const indiceEnSubtema = (block.orden || (index + 1)) - 1;
+    if (indiceEnSubtema > 0) {
       latexBloque = latexBloque
         .replace(/\\secciongrande\*?(?:\[[^\]]*\])?\{([^}]+)\}/g, "\\subtituloA{$1}")
         .replace(/\\resumen\*?(?:\[[^\]]*\])?\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*/g, "$1\n\n");
@@ -1401,8 +1487,9 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(?:^|\s)egin\{seccion\}/g, "\\seccion")
     .replace(/(?:^|\s)egin\{/g, (m) => m.replace("egin{", "\\begin{"))
     .replace(/(?:^|\s)end\{/g, (m) => m.replace("end{", "\\end{"))
-    .replace(/(?:[\x00-\x1f\s]|\b)extbf([A-Z\s{])/g, "\\textbf{$1")
-    .replace(/(?:[\x00-\x1f\s]|\b)extcolor([a-z\s{])/g, "\\textcolor{$1")
+    .replace(/(?:[\x00-\x1f\s]|\b)extbf\s*\{*/g, "\\textbf{")
+    .replace(/(?:[\x00-\x1f\s]|\b)extcolor\s*\{*/g, "\\textcolor{")
+    .replace(/\\(textbf|textit|cmd|nota|definicion)\s*\{{2,}/g, "\\$1{")
     .replace(/(?:[\x00-\x1f\s]|\b)eginconsola/g, "\\begin{consola}")
     .replace(/(?:[\x00-\x1f\s]|\b)eginhtml/g, "\\begin{codigo}")
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "")
@@ -1739,6 +1826,22 @@ export function aplicarEstilosLatex(value, subject = "") {
   });
   resultado = resultado.replace(/(?<!\\)_/g, "\\_");
   resultado = resultado.replace(/@@@VERBATIM(\d+)@@@/g, (_, i) => partesVerbatim[Number(i)]);
+
+  // Proteger & no escapados fuera de tablas y código para evitar "Misplaced alignment tab character &"
+  const partesTablasYVerbatim = [];
+  resultado = resultado.replace(
+    /(\\begin\{(?:codigo|consola)\}[\s\S]*?\\end\{(?:codigo|consola)\}|\\tabla\[[\s\S]*?\}\s*\}|\\begin\{(?:tabular|table)\}[\s\S]*?\\end\{(?:tabular|table)\}|\\cmd\{[^}]*\})/g,
+    (m) => {
+      const ph = `@@@TABVERBATIM${partesTablasYVerbatim.length}@@@`;
+      partesTablasYVerbatim.push(m);
+      return ph;
+    }
+  );
+  resultado = resultado.replace(/(?<!\\)&/g, "\\&");
+  resultado = resultado.replace(/@@@TABVERBATIM(\d+)@@@/g, (_, i) => partesTablasYVerbatim[Number(i)]);
+
+  // Corregir acumulación espuria de llaves de cierre
+  resultado = resultado.replace(/\}{4,}/g, "}\n}");
 
   // Deduplicar bloques de código o consola idénticos consecutivos
   resultado = resultado.replace(/(\\begin\{codigo\}[\s\S]*?\\end\{codigo\})(?:\s*\1)+/g, "$1");
@@ -2495,7 +2598,19 @@ export function normalizarResultadoIA(payload, {
       },
     ];
   });
-  if (!blocks.length)
+
+  const bloquesFinales = desglosarBloquesPorSubtitulos(blocks);
+  const contadorSubtemasNorm = new Map();
+  for (const block of bloquesFinales) {
+    const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
+    const contadorActual = (contadorSubtemasNorm.get(bloqueSubtema) || 0) + 1;
+    contadorSubtemasNorm.set(bloqueSubtema, contadorActual);
+    if (!block.orden) {
+      block.orden = contadorActual;
+    }
+  }
+
+  if (!bloquesFinales.length)
     throw Object.assign(
       new Error(
         `La IA no devolvió apartados LaTeX utilizables. Campos recibidos: ${Object.keys(payload).slice(0, 20).join(", ") || "ninguno"}.`,
@@ -2529,7 +2644,7 @@ export function normalizarResultadoIA(payload, {
     for (const concept of conceptNames) {
       cobertura.push({
         concepto: concept,
-        estado: blocks.some((block) =>
+        estado: bloquesFinales.some((block) =>
           block.conceptos.some(
             (name) => normalizarTexto(name) === normalizarTexto(concept),
           ),
@@ -2557,7 +2672,7 @@ export function normalizarResultadoIA(payload, {
       subject,
     ).slice(0, 160),
     resumen: String(payload.resumen ?? "").trim(),
-    archivos: blocks,
+    archivos: bloquesFinales,
     imagenes: images,
     conceptos_clave: conceptNames,
     cobertura,
