@@ -3149,14 +3149,6 @@ async function obtenerConfiguracionSupabase() {
       console.warn("Fallo c.schema grados-informaticos configuracion_privada:", err);
     }
 
-    if (!config.nvidiaApiKey) {
-      try {
-        const { data, error } = await c.from("configuracion_privada").select("*");
-        if (!error && Array.isArray(data) && data.length > 0) {
-          procesarFilas(data);
-        }
-      } catch (_) {}
-    }
 
     // Comprobar también public.configuracion por si estuviese ahí
     if (!config.nvidiaApiKey) {
