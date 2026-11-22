@@ -1,23 +1,36 @@
 \subtituloA{Motores de JavaScript}
 
 \lista{
-  **V8:** Utilizado por Chrome, Edge, Opera y Brave. Soporte para Node.js. |
-  **SpiderMonkey:** Motor de Firefox. |
-  **JavaScriptCore:** Utilizado por Safari (iOS/iPadOS).
-}
-
-\nota{Para el examen}{
-Los motores modernos (V8, SpiderMonkey, JSC) utilizan compilación Just-In-Time (JIT) a código máquina, lo que garantiza una ejecución muy rápida, superando a los intérpretes lentos antiguos. ¡Recordar que Microsoft abandonó Chakra en 2020!
+  **V8:** Motor de Chrome, Edge, Opera y Brave, y base de Node.js, permitiendo el uso unificado de JS en navegador y servidor. |
+  **SpiderMonkey:** Motor de Firefox, desarrollado inicialmente por Brendan Eich en 1995. |
+  **JavaScriptCore:** Motor de Safari, exclusivo para navegadores en iPhone e iPad. |
+  **Optimización:** Los tres motores utilizan compilación a código máquina justo antes de ejecutar (JIT), logrando alta velocidad. |
+  **Nota de actualización:** Microsoft abandonó Chakra en 2020; Edge utiliza V8 desde entonces.
 }
 
 \begin{codigo}
-// Ejemplo conceptual de interacción
-function cargarRecurso(url) {
-  // 1. Motor del Buscador solicita al Subsistema de Comunicaciones
-  // 2. Subsistema recibe datos
-  // 3. Motor de Renderizado parsea HTML y Parser XML crea el DOM
-  // 4. Intérprete de JavaScript ejecuta scripts
-  console.log(
+ // Ejemplo conceptual de ejecución JS en el navegador
+document.getElementById('titulo').style.color = 'blue';
+
+// El motor JS interpreta y ejecuta esta línea
+\end{codigo}
+
+
+
+\begin{codigo}
+
+// Ejemplo de URL
+const url = 'https://ejemplo.com';
+
+// El motor del buscador gestiona la carga de esta URL
+
+\nota{Para el examen}{
+¿Por qué los motores modernos de JavaScript son rápidos?
+
+\textbf{Respuesta:} Porque utilizan compilación JIT (Just-In-Time) a código máquina, superando a los intérpretes lentos antiguos.
+}
+
+}
 \end{codigo}
 
 
