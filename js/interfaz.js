@@ -116,17 +116,28 @@ function inicializarModelos() {
   const modeloIAGuardado = localStorage.getItem("generador.modeloIA");
   const modeloCodigoGuardado = localStorage.getItem("generador.modeloCodigo");
 
+  // Modelos NVIDIA NIM (disponibles en la nube y también en local con Ollama)
+  const modelosNvidia = [
+    { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo (Recomendado)", disponible: false },
+    { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Calidad docente WEC", disponible: false },
+    { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Rápido", disponible: false },
+    { id: "nvidia/nemotron-3-ultra-550b-a55b", nombre: "NVIDIA Nemotron 3 Ultra (550B) · Modelo gigante", disponible: false },
+    { id: "poolside/laguna-xs-2.1", nombre: "Laguna XS 2.1 · Rápido y conciso", disponible: false },
+    { id: "stepfun-ai/step-5-preview", nombre: "StepFun Step-5 · Alternativa", disponible: false },
+    { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) (No disponible)", disponible: false },
+  ];
+
   if (esEntornoEstatico) {
-    // En la nube (GitHub Pages): modelos funcionales y verificados de NVIDIA NIM
-    const modelosNvidia = [
-      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo (Recomendado)", disponible: true },
-      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Calidad docente WEC", disponible: true },
-      { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Rápido", disponible: true },
-      { id: "nvidia/nemotron-3-ultra-550b-a55b", nombre: "NVIDIA Nemotron 3 Ultra (550B) · Modelo gigante", disponible: true },
-      { id: "poolside/laguna-xs-2.1", nombre: "Laguna XS 2.1 · Rápido y conciso", disponible: true },
-      { id: "stepfun-ai/step-5-preview", nombre: "StepFun Step-5 · Alternativa", disponible: true },
-      { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) (No disponible)", disponible: false },
-    ];
+    // Sobreescribir con los modelos verificados de GitHub Pages
+    modelosNvidia[0].nombre = "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo (Recomendado)";
+    modelosNvidia[0].disponible = true;
+    modelosNvidia[1].disponible = true;
+    modelosNvidia[2].disponible = true;
+    modelosNvidia[3].disponible = true;
+    modelosNvidia[4].disponible = true;
+    modelosNvidia[5].disponible = true;
+    modelosNvidia[6].disponible = false;
+  }
 
     const modelosCodigoNvidia = [
       { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", nombre: "NVIDIA Nemotron 3 (30B Reasoning) · Razonamiento profundo código (Recomendado)", disponible: true },
