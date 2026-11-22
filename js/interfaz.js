@@ -3637,27 +3637,7 @@ async function ejecutarGeneracionGitHubActions({
 
     registrarEventoConsola("✓ Orden recibida con éxito por GitHub Actions.");
     registrarEventoConsola("Compilando PDF en GitHub Actions con XeLaTeX...");
-
-    panelResultados.hidden = false;
-    panelResultados.innerHTML = `
-      <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
-        <div style="font-size:36px; margin-bottom:8px;">⚙️</div>
-        <h3 style="margin:0 0 8px; font-size:18px;">Compilando apuntes con LaTeX en la nube</h3>
-        <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
-          Se está generando el documento LaTeX y compilando el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
-        </p>
-        <div style="display:inline-flex; align-items:center; gap:8px; margin-bottom:12px; color:#93c5fd; font-size:13px;">
-          <i class="fa-solid fa-spinner fa-spin"></i>
-          <span id="estado-actions-badge">Conectando con la ejecución en GitHub…</span>
-        </div>
-        <br/>
-        <a href="https://github.com/${repoDestino}/actions" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#2563eb; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px;">
-          <i class="fa-brands fa-github"></i>
-          <span>Ver ejecución en tiempo real en GitHub Actions</span>
-        </a>
-      </div>
-    `;
-    panelResultados.scrollIntoView({ behavior: "smooth" });
+    panelResultados.hidden = true;
 
     const tiempoInicio = Date.now();
     try {
@@ -3880,19 +3860,7 @@ async function recuperarTrabajoGitHubActions() {
     false
   );
   if (panelResultados) {
-    panelResultados.hidden = false;
-    panelResultados.innerHTML = `
-      <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
-        <div style="font-size:36px; margin-bottom:8px;">⚙️</div>
-        <h3 style="margin:0 0 8px; font-size:18px;">Compilación en curso en GitHub Actions</h3>
-        <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
-          Se está compilando el PDF para <strong>${datos.asignatura} - Tema ${datos.tema}: ${datos.titulo}</strong>.
-        </p>
-        <div id="estado-actions-badge" style="display:inline-block; background:#1e293b; border:1px solid #475569; color:#93c5fd; padding:6px 14px; border-radius:999px; font-size:13px; font-weight:500;">
-          Consultando estado en GitHub Actions…
-        </div>
-      </div>
-    `;
+    panelResultados.hidden = true;
   }
   iniciarMonitoreoGitHubActions(datos);
 }
