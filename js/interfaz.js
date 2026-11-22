@@ -2999,6 +2999,43 @@ modalEnviados?.addEventListener("click", (e) => {
 // ============================================================
 // GENERACIÓN EN LA NUBE VÍA GITHUB ACTIONS (MODO GITHUB PAGES)
 // ============================================================
+function sincronizarNvidiaKeyUI() {
+  const guardada = (localStorage.getItem("preparar_tests_nvidia_key") || localStorage.getItem("nvidia_api_key") || "").trim();
+  const inputNvKey = document.querySelector("#input-nvidia-key");
+  const estadoNvKey = document.querySelector("#estado-nvidia-key");
+  if (inputNvKey) inputNvKey.value = guardada;
+  if (estadoNvKey) {
+    if (guardada) {
+      estadoNvKey.innerHTML = '<span style="color:#34d399; font-weight:600;"><i class="fa-solid fa-check"></i> Clave API de NVIDIA configurada</span>';
+    } else {
+      estadoNvKey.innerHTML = '<span style="color:#f87171; font-weight:600;"><i class="fa-solid fa-triangle-exclamation"></i> Sin clave API de NVIDIA: obligatoria para generar apuntes con IA</span>';
+    }
+  }
+}
+
+// Inicializar control de API Key de NVIDIA en la interfaz
+document.addEventListener("DOMContentLoaded", () => {
+  sincronizarNvidiaKeyUI();
+  const btnGuardarNvKey = document.querySelector("#btn-guardar-nvidia-key-panel");
+  if (btnGuardarNvKey) {
+    btnGuardarNvKey.addEventListener("click", () => {
+      const input = document.querySelector("#input-nvidia-key");
+      const val = (input?.value || "").trim();
+      if (val) {
+        localStorage.setItem("nvidia_api_key", val);
+        localStorage.setItem("preparar_tests_nvidia_key", val);
+      } else {
+        localStorage.removeItem("nvidia_api_key");
+        localStorage.removeItem("preparar_tests_nvidia_key");
+      }
+      sincronizarNvidiaKeyUI();
+      panelError.hidden = true;
+      registrarEventoConsola(val ? "✓ Clave API de NVIDIA guardada." : "Clave API de NVIDIA eliminada.");
+    });
+  }
+});
+setTimeout(sincronizarNvidiaKeyUI, 200);
+
 async function ejecutarGeneracionGitHubActions({
   asignatura,
   tema,
@@ -3007,6 +3044,48 @@ async function ejecutarGeneracionGitHubActions({
   instrucciones,
   textoFuente,
 }) {
+  // 1. REGLA ESTRICTA: SI FALTA LA API KEY DE NVIDIA, MOSTRAR AVISO Y NO DEJAR AVANZAR
+  const nvKey = (localStorage.getItem("preparar_tests_nvidia_key") || localStorage.getItem("nvidia_api_key") || "").trim();
+  if (!nvKey) {
+    botonGenerar.disabled = false;
+    progreso.hidden = true;
+    panelError.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:10px; text-align:left;">
+        <div style="font-weight:700; font-size:16px; color:#ef4444; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>Falta la clave API de NVIDIA (Obligatoria para la IA)</span>
+        </div>
+        <div style="color:#e2e8f0; font-size:14px; line-height:1.5;">
+          Para generar los apuntes con IA en GitHub Pages <strong>es obligatorio configurar la API Key de NVIDIA NIM (nvapi-...)</strong>. No se puede avanzar sin ella.
+        </div>
+        <div style="display:flex; gap:8px; margin-top:4px; flex-wrap:wrap;">
+          <input type="password" id="input-nvidia-error-inline" placeholder="Pega aquí tu clave: nvapi-..." style="flex:1; min-width:240px; padding:10px 14px; background:#0f172a; color:#fff; border:1px solid #ef4444; border-radius:6px; font-size:13px;" />
+          <button type="button" id="btn-guardar-nvidia-inline" style="background:#ef4444; color:#fff; padding:10px 20px; border:none; border-radius:6px; font-weight:700; cursor:pointer;">
+            Guardar y continuar
+          </button>
+        </div>
+        <small style="color:#94a3b8;">Consigue tu clave gratuita en <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.</small>
+      </div>
+    `;
+    panelError.hidden = false;
+    panelError.scrollIntoView({ behavior: "smooth" });
+
+    document.querySelector("#btn-guardar-nvidia-inline")?.addEventListener("click", () => {
+      const v = (document.querySelector("#input-nvidia-error-inline")?.value || "").trim();
+      if (v) {
+        localStorage.setItem("nvidia_api_key", v);
+        localStorage.setItem("preparar_tests_nvidia_key", v);
+        panelError.hidden = true;
+        sincronizarNvidiaKeyUI();
+        botonGenerar.click();
+      }
+    });
+
+    registrarEventoConsola("⚠️ Generación bloqueada: falta la clave API de NVIDIA. No se puede avanzar.");
+    return; // NO DEJA AVANZAR
+  }
+
+  panelError.hidden = true;
   progreso.hidden = false;
   botonGenerar.disabled = true;
 
@@ -3027,60 +3106,18 @@ async function ejecutarGeneracionGitHubActions({
 
   const textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
 
-  // PASO 1: Generar el borrador con la IA y mostrarlo en el frontend para revisión
-  registrarEventoConsola(`📝 Paso 1: Generando borrador para ${asignatura} - Tema ${tema}: ${titulo}`);
+  // PASO 1: Generar con la IA de NVIDIA en el navegador
+  registrarEventoConsola(`🤖 Conectando con NVIDIA NIM API (Llama 3.1) para redactar ${asignatura} - Tema ${tema}...`);
   mostrarProgresoGeneracion(
     {
       fase: "ia",
-      mensaje: "Generando borrador con la IA en el frontend…",
-      detalle: "La IA está redactando el contenido. Lo verás en pantalla antes de compilar.",
+      mensaje: `La IA de NVIDIA está redactando los apuntes para ${asignatura}…`,
+      detalle: "Generando contenido estructurado en LaTeX con la API de NVIDIA NIM…",
     },
     false,
   );
 
-  let borradorLatex = "";
-  try {
-    borradorLatex = await generarBorradorIAEnFrontend({
-      asignatura,
-      tema,
-      titulo,
-      instrucciones,
-      textoFinal,
-    });
-  } catch (err) {
-    registrarEventoConsola(`⚠️ Error en borrador: ${err.message}`);
-  }
-
-  // Mostrar el borrador en el frontend para revisión
-  mostrarBorradorParaAprobacion({
-    asignatura,
-    tema,
-    titulo,
-    subtema,
-    instrucciones,
-    borradorLatex,
-    textoFinal,
-  });
-}
-
-async function generarBorradorIAEnFrontend({ asignatura, tema, titulo, instrucciones, textoFinal }) {
-  let nvKey = localStorage.getItem("preparar_tests_nvidia_key") || localStorage.getItem("nvidia_api_key") || "";
-
-  if (!nvKey) {
-    const clave = window.prompt(
-      "Introduce tu API Key de NVIDIA NIM (nvapi-...) para que la IA redacte los apuntes en pantalla antes de compilar con LaTeX:\n\n(Si pulsas Cancelar, se preparará una plantilla base con tus fuentes para que la revises)",
-      ""
-    );
-    if (clave && clave.trim()) {
-      nvKey = clave.trim();
-      localStorage.setItem("nvidia_api_key", nvKey);
-      localStorage.setItem("preparar_tests_nvidia_key", nvKey);
-    }
-  }
-
-  if (nvKey) {
-    registrarEventoConsola("🤖 Conectando con NVIDIA NIM API (Llama 3.1) desde el navegador...");
-    const prompt = `Eres un profesor experto en informática y redactor de apuntes universitarios en LaTeX.
+  const prompt = `Eres un profesor experto en informática y redactor de apuntes universitarios en LaTeX.
 Genera unos apuntes completos, rigurosos y perfectamente estructurados en formato LaTeX para la asignatura "${asignatura}", Tema ${tema}: "${titulo}".
 
 Instrucciones:
@@ -3094,136 +3131,66 @@ Devuelve un documento LaTeX completo y válido que compile directamente, empezan
 Usa los paquetes babel [spanish], inputenc [utf8], amsmath, hyperref, listings y geometry.
 No incluyas explicaciones antes o después; entrega solo el código LaTeX entre triples comillas invertidas.`;
 
-    try {
-      const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${nvKey}`,
-        },
-        body: JSON.stringify({
-          model: "meta/llama-3.1-8b-instruct",
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.3,
-          max_tokens: 4096,
-        }),
-      });
+  let borradorLatex = "";
+  try {
+    const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${nvKey}`,
+      },
+      body: JSON.stringify({
+        model: "meta/llama-3.1-8b-instruct",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+        max_tokens: 4096,
+      }),
+    });
 
-      if (resp.ok) {
-        const data = await resp.json();
-        const raw = data.choices?.[0]?.message?.content || "";
-        const m = raw.match(/```(?:latex|tex)?([\s\S]*?)```/i);
-        const latex = m ? m[1].trim() : raw.trim();
-        if (latex && latex.includes("\\documentclass")) {
-          registrarEventoConsola("✓ Borrador redactado con éxito por la IA.");
-          return latex;
-        }
-      } else {
-        const errTxt = await resp.text();
-        registrarEventoConsola(`⚠️ NVIDIA respondió ${resp.status}: ${errTxt.slice(0, 120)}`);
-      }
-    } catch (e) {
-      registrarEventoConsola(`⚠️ Conexión con NVIDIA fallida: ${e.message}`);
+    if (!resp.ok) {
+      const errTxt = await resp.text();
+      botonGenerar.disabled = false;
+      progreso.hidden = true;
+      panelError.innerHTML = `
+        <div style="font-weight:700; font-size:15px; color:#ef4444;"><i class="fa-solid fa-circle-xmark"></i> Error de la API de NVIDIA (${resp.status})</div>
+        <div style="margin-top:6px; color:#e2e8f0; font-size:13px;">${errTxt.slice(0, 300)}</div>
+        <div style="margin-top:8px; font-size:13px; color:#cbd5e1;">Por favor, revisa o renueva tu clave en <a href="https://build.nvidia.com" target="_blank" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.</div>
+      `;
+      panelError.hidden = false;
+      panelError.scrollIntoView({ behavior: "smooth" });
+      registrarEventoConsola(`❌ Error de la API de NVIDIA (${resp.status}): no se puede avanzar.`);
+      return; // NO DEJA AVANZAR
     }
+
+    const data = await resp.json();
+    const raw = data.choices?.[0]?.message?.content || "";
+    const m = raw.match(/```(?:latex|tex)?([\s\S]*?)```/i);
+    borradorLatex = m ? m[1].trim() : raw.trim();
+
+    if (!borradorLatex || !borradorLatex.includes("\\documentclass")) {
+      throw new Error("La IA no devolvió un documento LaTeX válido.");
+    }
+
+    registrarEventoConsola("✓ Contenido LaTeX generado con éxito por la IA.");
+  } catch (errNvidia) {
+    botonGenerar.disabled = false;
+    progreso.hidden = true;
+    panelError.textContent = `Error al conectar con la IA de NVIDIA: ${errNvidia.message}. No se puede avanzar.`;
+    panelError.hidden = false;
+    registrarEventoConsola(`❌ Falló la generación con IA: ${errNvidia.message}`);
+    return; // NO DEJA AVANZAR
   }
 
-  return `\\documentclass[a4paper,11pt]{article}
-\\usepackage[utf8]{inputenc}
-\\usepackage[spanish]{babel}
-\\usepackage{amsmath,amssymb}
-\\usepackage{geometry}
-\\usepackage{hyperref}
-\\usepackage{listings}
-\\usepackage{xcolor}
-
-\\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
-
-\\title{\\textbf{${asignatura}}\\\\ \\large Tema ${tema}: ${titulo}}
-\\author{Generador Automático de Apuntes}
-\\date{\\today}
-
-\\begin{document}
-\\maketitle
-\\tableofcontents
-\\newpage
-
-\\section{Introducción y Objetivos}
-Estos apuntes corresponden al Tema ${tema} de la asignatura \\textbf{${asignatura}}.
-
-\\section{Contenido del Tema}
-${textoFinal ? textoFinal.slice(0, 10000).replace(/[\\$%&#_{}~^]/g, "\\$&") : "Contenido a desarrollar en este apartado."}
-
-\\section{Resumen y Conclusiones}
-Resumen pedagógico y puntos clave tratados.
-
-\\end{document}`;
-}
-
-function mostrarBorradorParaAprobacion({
-  asignatura,
-  tema,
-  titulo,
-  subtema,
-  instrucciones,
-  borradorLatex,
-  textoFinal,
-}) {
-  mostrarProgresoGeneracion(
-    {
-      fase: "confirmacion",
-      mensaje: "Borrador listo en el frontend",
-      detalle: "Revisa el contenido. Solo si estás conforme, pulsa «Compilar con LaTeX» para generar el PDF.",
-    },
-    false,
-  );
-
-  botonGenerar.disabled = false;
-  panelResultados.hidden = false;
-  panelResultados.innerHTML = `
-    <div style="background:#1e293b; border:1px solid #3b82f6; border-radius:12px; padding:20px; color:#fff;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-        <h3 style="margin:0; font-size:18px; color:#60a5fa;">
-          <i class="fa-solid fa-file-pen"></i> Contenido generado para revisión (${asignatura} - Tema ${tema}: ${titulo})
-        </h3>
-        <span style="background:#2563eb; color:#fff; font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px;">
-          Paso 1: Localizado y enseñado
-        </span>
-      </div>
-      <p style="margin:0 0 12px; color:#cbd5e1; font-size:13px;">
-        Revisa aquí abajo el contenido generado por la IA. Puedes modificar o retocar cualquier parte. <strong>Solo si eso vale</strong>, pulsa el botón verde para compilar el PDF con LaTeX en GitHub Actions:
-      </p>
-      <textarea id="editor-latex-revision" style="width:100%; height:320px; background:#0f172a; color:#f8fafc; font-family:monospace; font-size:13px; line-height:1.5; padding:12px; border:1px solid #475569; border-radius:8px; box-sizing:border-box; resize:vertical;">${borradorLatex}</textarea>
-      
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:12px;">
-        <button id="btn-cancelar-revision" class="secondary-button" type="button" style="padding:10px 16px;">
-          <i class="fa-solid fa-arrow-left"></i> Descartar y volver
-        </button>
-        <button id="btn-aprobar-compilar" type="button" style="display:inline-flex; align-items:center; gap:8px; background:#10b981; color:#fff; border:none; padding:12px 24px; border-radius:8px; font-weight:700; font-size:15px; cursor:pointer; box-shadow:0 4px 14px rgba(16,185,129,0.35);">
-          <i class="fa-solid fa-file-pdf"></i>
-          <span>El contenido es válido: Compilar PDF con LaTeX</span>
-        </button>
-      </div>
-    </div>
-  `;
-  panelResultados.scrollIntoView({ behavior: "smooth" });
-
-  document.querySelector("#btn-cancelar-revision")?.addEventListener("click", () => {
-    panelResultados.hidden = true;
-    progreso.hidden = true;
-    registrarEventoConsola("Borrador descartado por el usuario.");
-  });
-
-  document.querySelector("#btn-aprobar-compilar")?.addEventListener("click", async () => {
-    const textoAprobado = document.querySelector("#editor-latex-revision")?.value || borradorLatex;
-    await ejecutarCompilacionGitHubActions({
-      asignatura,
-      tema,
-      titulo,
-      subtema,
-      instrucciones,
-      contenidoLatex: textoAprobado,
-      textoFuente: textoFinal,
-    });
+  // PASO 2: DIRECTO A COMPILACIÓN CON LATEX EN GITHUB ACTIONS (SIN ESPERAR VISTO BUENO MANUAL)
+  registrarEventoConsola(`🚀 Contenido generado con éxito. Compilando PDF en GitHub Actions con biblioteca de estilos...`);
+  await ejecutarCompilacionGitHubActions({
+    asignatura,
+    tema,
+    titulo,
+    subtema,
+    instrucciones,
+    contenidoLatex: borradorLatex,
+    textoFuente: textoFinal,
   });
 }
 
