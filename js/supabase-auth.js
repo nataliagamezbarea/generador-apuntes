@@ -279,12 +279,17 @@ const SupabaseAuth = (() => {
           try {
             const hp = new URLSearchParams(window.location.hash.replace(/^#/, ""));
             const accessToken = hp.get("access_token");
-            const refreshToken = hp.get("refresh_token") || "";
+            const refreshToken = hp.get("refresh_token");
             if (accessToken) {
-              const res = await c.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+              const opts = { access_token: accessToken, refresh_token: refreshToken || accessToken };
+              const res = await c.auth.setSession(opts);
               if (res.data?.session) session = res.data.session;
+              localStorage.setItem("cache_supabase_token", accessToken);
+              window.SUPABASE_ACCESS_TOKEN = accessToken;
             }
-          } catch (_) {}
+          } catch (e) {
+            console.warn("Fallo procesando hash access_token:", e);
+          }
         }
         if (!session && window.location.search.includes("code=")) {
           const code = urlParams.get("code");
@@ -327,6 +332,8 @@ const SupabaseAuth = (() => {
         if (session?.access_token) {
           const payload = { access_token: session.access_token, refresh_token: session.refresh_token };
           document.cookie = `sb_shared_session=${encodeURIComponent(JSON.stringify(payload))}; path=/; max-age=604800; samesite=lax`;
+          localStorage.setItem("cache_supabase_token", session.access_token);
+          window.SUPABASE_ACCESS_TOKEN = session.access_token;
         }
       } catch (_) {}
 
@@ -481,6 +488,10 @@ const SupabaseAuth = (() => {
     const c = getClient();
     if (c) {
       c.auth.onAuthStateChange(async (event, session) => {
+        if (session?.access_token) {
+          localStorage.setItem("cache_supabase_token", session.access_token);
+          window.SUPABASE_ACCESS_TOKEN = session.access_token;
+        }
         if (session?.user) {
           await autenticarConGate();
         } else if (event === "SIGNED_OUT") {

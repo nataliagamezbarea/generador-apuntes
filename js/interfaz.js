@@ -3054,6 +3054,61 @@ async function obtenerConfiguracionSupabase() {
   const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
   const c = window.SupabaseAuth?.getClient?.() || window.supabaseClient;
 
+  // 1. Extraer el token de acceso de Supabase (Google OAuth o email)
+  let accessToken = window.SUPABASE_ACCESS_TOKEN || localStorage.getItem("cache_supabase_token") || "";
+
+  if (!accessToken && c?.auth?.getSession) {
+    try {
+      const sRes = await c.auth.getSession();
+      if (sRes?.data?.session?.access_token) {
+        accessToken = sRes.data.session.access_token;
+        localStorage.setItem("cache_supabase_token", accessToken);
+        window.SUPABASE_ACCESS_TOKEN = accessToken;
+      }
+    } catch (_) {}
+  }
+
+  if (!accessToken) {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("sb-") || key.includes("supabase")) && key.endsWith("-auth-token")) {
+          const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+          if (parsed?.access_token) {
+            accessToken = parsed.access_token;
+            localStorage.setItem("cache_supabase_token", accessToken);
+            window.SUPABASE_ACCESS_TOKEN = accessToken;
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (!accessToken) {
+    try {
+      const m = document.cookie.match(/(?:^|; )sb_shared_session=([^;]*)/);
+      if (m) {
+        const parsed = JSON.parse(decodeURIComponent(m[1]));
+        if (parsed?.access_token) {
+          accessToken = parsed.access_token;
+          localStorage.setItem("cache_supabase_token", accessToken);
+          window.SUPABASE_ACCESS_TOKEN = accessToken;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Si tenemos el token pero el cliente no lo tenía sincronizado, hidratarlo
+  if (c && accessToken) {
+    try {
+      const sCheck = (await c.auth.getSession())?.data?.session;
+      if (!sCheck?.access_token) {
+        await c.auth.setSession({ access_token: accessToken, refresh_token: accessToken });
+      }
+    } catch (_) {}
+  }
+
   function procesarFilas(filas) {
     if (!Array.isArray(filas)) return;
     for (const r of filas) {
@@ -3077,7 +3132,7 @@ async function obtenerConfiguracionSupabase() {
     }
   }
 
-  // 1. Consultar mediante el cliente Supabase (con sesión y esquema grados-informaticos)
+  // 2. Consultar con el cliente Supabase oficial en el esquema grados-informaticos (configuracion_privada)
   if (c) {
     try {
       const { data, error } = await c
@@ -3086,6 +3141,8 @@ async function obtenerConfiguracionSupabase() {
         .select("*");
       if (!error && Array.isArray(data) && data.length > 0) {
         procesarFilas(data);
+      } else if (error) {
+        console.warn("Aviso c.schema grados-informaticos configuracion_privada:", error.message || error);
       }
     } catch (err) {
       console.warn("Fallo c.schema grados-informaticos configuracion_privada:", err);
@@ -3099,56 +3156,26 @@ async function obtenerConfiguracionSupabase() {
         }
       } catch (_) {}
     }
-  }
 
-  // 2. Extraer token de sesión activa para petición REST autenticada
-  let accessToken = "";
-  if (c?.auth?.getSession) {
-    try {
-      const sRes = await c.auth.getSession();
-      if (sRes?.data?.session?.access_token) {
-        accessToken = sRes.data.session.access_token;
-      }
-    } catch (_) {}
-  }
-
-  if (!accessToken) {
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith("sb-") || key.includes("supabase")) && key.endsWith("-auth-token")) {
-          const parsed = JSON.parse(localStorage.getItem(key) || "{}");
-          if (parsed?.access_token) {
-            accessToken = parsed.access_token;
-            break;
-          }
+    // Comprobar también public.configuracion por si estuviese ahí
+    if (!config.nvidiaApiKey) {
+      try {
+        const { data, error } = await c.schema("public").from("configuracion").select("*");
+        if (!error && Array.isArray(data) && data.length > 0) {
+          procesarFilas(data);
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
-  if (!accessToken) {
-    try {
-      const m = document.cookie.match(/(?:^|; )sb_shared_session=([^;]*)/);
-      if (m) {
-        const parsed = JSON.parse(decodeURIComponent(m[1]));
-        if (parsed?.access_token) {
-          accessToken = parsed.access_token;
-        }
-      }
-    } catch (_) {}
-  }
-
-  const tokenParaLlamada = accessToken || anonKey;
-
-  // 3. Consultar vía REST directo si aún no se tiene
-  if (!config.nvidiaApiKey) {
+  // 3. Si aún no se encontró y tenemos un token de usuario real, probar REST autenticado con profile
+  if (!config.nvidiaApiKey && accessToken && accessToken !== anonKey) {
     try {
       const url = `${supabaseUrl}/rest/v1/configuracion_privada?select=*`;
       const resp = await fetch(url, {
         headers: {
           apikey: anonKey,
-          Authorization: `Bearer ${tokenParaLlamada}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
           "Accept-Profile": "grados-informaticos",
           "Content-Profile": "grados-informaticos",
@@ -3160,9 +3187,7 @@ async function obtenerConfiguracionSupabase() {
         const filas = await resp.json();
         procesarFilas(filas);
       }
-    } catch (err) {
-      console.warn("Fallo REST configuracion_privada:", err);
-    }
+    } catch (_) {}
   }
 
   // 4. Consultar configuracion_publica como respaldo
