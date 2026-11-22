@@ -168,7 +168,7 @@ const SupabaseAuth = (() => {
     const c = getClient();
     if (c) {
       try {
-        await c.auth.signOut();
+        await c.auth.signOut({ scope: "local" });
       } catch (_) {}
     }
     currentUser = null;
@@ -311,7 +311,7 @@ const SupabaseAuth = (() => {
 
       const esAdmin = await verificarPermisoAdmin(c, session.user);
       if (!esAdmin) {
-        await c.auth.signOut().catch(() => {});
+        await c.auth.signOut({ scope: "local" }).catch(() => {});
         currentUser = null;
         mostrarLoginGate(`Acceso denegado: tu usuario (${session.user.email || session.user.id}) no tiene rol admin en Supabase.`);
         return false;
@@ -397,7 +397,7 @@ const SupabaseAuth = (() => {
 
         const esAdmin = await verificarPermisoAdmin(c, data.user);
         if (!esAdmin) {
-          await c.auth.signOut().catch(() => {});
+          await c.auth.signOut({ scope: "local" }).catch(() => {});
           currentUser = null;
           if (errBox) {
             errBox.textContent = `Acceso denegado: tu usuario (${email}) no tiene rol admin en Supabase.`;
