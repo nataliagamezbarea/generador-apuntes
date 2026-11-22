@@ -313,6 +313,8 @@ REGLAS CRÍTICAS DE CALIDAD:
       new Set([
         modeloConfigurado,
         "nvidia/nemotron-3.5-bolt-e4b",
+        "mistralai/mistral-large-4-1t-a52b",
+        "nvidia/nemotron-3-ultra-550b-a55b",
         "poolside/laguna-xs-2.1",
         "nvidia/nemotron-3.5-lightning-30b-a3b",
       ])

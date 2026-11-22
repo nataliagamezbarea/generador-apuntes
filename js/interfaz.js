@@ -112,11 +112,15 @@ function inicializarModelos() {
   const modeloCodigoGuardado = localStorage.getItem("generador.modeloCodigo");
 
   if (esEntornoEstatico) {
-    // En la nube (GitHub Pages): listar únicamente los modelos 100% probados y funcionales de NVIDIA NIM
+    // En la nube (GitHub Pages): modelos funcionales y verificados de NVIDIA NIM
     const modelosNvidia = [
       { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Ultra rápido (4s) / Recomendado" },
+      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Máxima calidad pedagógica" },
+      { id: "nvidia/nemotron-3-ultra-550b-a55b", nombre: "NVIDIA Nemotron 3 Ultra (550B) · Modelo gigante" },
       { id: "poolside/laguna-xs-2.1", nombre: "Laguna XS 2.1 · Rápido y conciso" },
-      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Alternativa" },
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo" },
+      { id: "stepfun-ai/step-5-preview", nombre: "StepFun Step-5 · Alternativa" },
+      { id: "bigcode/starcoder2-15b", nombre: "StarCoder2 (15B) · Especializado en código" },
     ];
 
     modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado)
@@ -3333,6 +3337,8 @@ REGLAS CRÍTICAS:
     new Set([
       modelo,
       "nvidia/nemotron-3.5-bolt-e4b",
+      "mistralai/mistral-large-4-1t-a52b",
+      "nvidia/nemotron-3-ultra-550b-a55b",
       "poolside/laguna-xs-2.1",
       "nvidia/nemotron-3.5-lightning-30b-a3b",
     ])
