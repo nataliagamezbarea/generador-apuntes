@@ -75,6 +75,13 @@ document.querySelectorAll(".nav-tests").forEach((el) => {
         if (cfg?.urlTests) el.href = cfg.urlTests;
       })
       .catch(() => {});
+  } else {
+    setTimeout(() => {
+      const txtConsola = document.querySelector("#texto-consola");
+      if (txtConsola && txtConsola.textContent.includes("Conectando con la actividad de la IA")) {
+        txtConsola.textContent = "Consola en la nube lista.\nPulsa «Generar apuntes» para redactar con la IA y compilar con LaTeX en GitHub Actions.";
+      }
+    }, 100);
   }
 });
 
@@ -3113,10 +3120,11 @@ async function ejecutarGeneracionGitHubActions({
   const textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
 
   try {
+    registrarEventoConsola(`🚀 Solicitando generación en GitHub Actions para ${asignatura} - Tema ${tema}: ${titulo}`);
     mostrarProgresoGeneracion(
       {
-        fase: "redaccion",
-        mensaje: `Disparando GitHub Actions para ${asignatura} - Tema ${tema}`,
+        fase: "subida",
+        mensaje: `Iniciando GitHub Actions para ${asignatura} - Tema ${tema}`,
         detalle: "Enviando workflow_dispatch a la nube de GitHub…",
       },
       false,
@@ -3196,11 +3204,14 @@ async function ejecutarGeneracionGitHubActions({
       }
     }
 
+    registrarEventoConsola("✓ Orden recibida con éxito por GitHub Actions.");
+    registrarEventoConsola("Pipeline en marcha: 1. IA redacta contenido en LaTeX -> 2. Compilación a PDF con biblioteca.");
+
     mostrarProgresoGeneracion(
       {
-        fase: "compilacion",
-        mensaje: "¡Generación iniciada con éxito en GitHub Actions!",
-        detalle: `El trabajo se está ejecutando en la nube de GitHub con la IA de NVIDIA y LaTeX. Puedes seguir el progreso en vivo o descargar el PDF resultante cuando finalice.`,
+        fase: "ia",
+        mensaje: "¡Generación iniciada en GitHub Actions!",
+        detalle: `Fase 1: La IA redacta los apuntes en LaTeX. Fase 2: LaTeX compila el PDF final. Siguiendo estado en vivo…`,
       },
       false,
     );
@@ -3213,6 +3224,11 @@ async function ejecutarGeneracionGitHubActions({
         <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
           Se está generando el documento LaTeX y compilando el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
         </p>
+        <div style="display:inline-flex; align-items:center; gap:8px; margin-bottom:12px; color:#93c5fd; font-size:13px;">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span id="estado-actions-badge">Conectando con la ejecución en GitHub…</span>
+        </div>
+        <br/>
         <a href="https://github.com/${repoDestino}/actions" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#2563eb; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px;">
           <i class="fa-brands fa-github"></i>
           <span>Ver ejecución en tiempo real en GitHub Actions</span>
@@ -3220,10 +3236,116 @@ async function ejecutarGeneracionGitHubActions({
       </div>
     `;
     panelResultados.scrollIntoView({ behavior: "smooth" });
+
+    // Iniciar monitorización en segundo plano para actualizar consola y ofrecer descarga directa
+    iniciarMonitoreoGitHubActions({
+      repoDestino,
+      token,
+      asignatura,
+      tema,
+      titulo,
+      tiempoInicio: Date.now(),
+    });
   } catch (error) {
     panelError.textContent = `Error al activar GitHub Actions: ${error.message}`;
     panelError.hidden = false;
+    registrarEventoConsola(`❌ Error al conectar con GitHub Actions: ${error.message}`);
   } finally {
     botonGenerar.disabled = false;
   }
+}
+
+function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, titulo, tiempoInicio }) {
+  const badge = document.querySelector("#estado-actions-badge");
+  let intentos = 0;
+  const maxIntentos = 90; // Hasta ~7 minutos
+
+  const interval = setInterval(async () => {
+    intentos++;
+    if (intentos > maxIntentos) {
+      clearInterval(interval);
+      if (badge) badge.textContent = "El trabajo continúa en la nube. Consulta GitHub Actions.";
+      return;
+    }
+
+    try {
+      const resp = await fetch(
+        `https://api.github.com/repos/${repoDestino}/actions/runs?event=workflow_dispatch&per_page=3`,
+        {
+          headers: {
+            Accept: "application/vnd.github+json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!resp.ok) return;
+
+      const datos = await resp.json();
+      const runs = datos.workflow_runs || [];
+      const run = runs.find((r) => {
+        const creado = new Date(r.created_at).getTime();
+        return creado >= tiempoInicio - 45000;
+      }) || runs[0];
+
+      if (!run) return;
+
+      if (run.status === "queued") {
+        if (badge) badge.textContent = `En cola en GitHub (Run #${run.id})…`;
+      } else if (run.status === "in_progress") {
+        if (badge) badge.textContent = `En ejecución: IA redactando y compilando con LaTeX (Run #${run.id})…`;
+        if (intentos % 4 === 0) {
+          registrarEventoConsola(`[GitHub Actions #${run.id}] Trabajo en marcha: redactando y compilando PDF…`);
+        }
+      } else if (run.status === "completed") {
+        clearInterval(interval);
+        if (run.conclusion === "success") {
+          mostrarProgresoGeneracion(
+            {
+              fase: "completado",
+              mensaje: "¡Apuntes generados y PDF compilado con éxito!",
+              detalle: `El PDF ha sido creado y publicado en el repositorio.`,
+            },
+            false
+          );
+          registrarEventoConsola("🎉 ¡Generación completada con éxito en GitHub Actions!");
+          registrarEventoConsola(`📄 Archivo PDF: apuntes-generados/${asignatura}/tema-${tema}.pdf`);
+
+          const urlPdf = `https://raw.githubusercontent.com/${repoDestino}/main/apuntes-generados/${encodeURIComponent(asignatura)}/tema-${tema}.pdf`;
+          const urlTex = `https://raw.githubusercontent.com/${repoDestino}/main/apuntes-generados/${encodeURIComponent(asignatura)}/tema-${tema}.tex`;
+
+          panelResultados.hidden = false;
+          panelResultados.innerHTML = `
+            <div style="background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:12px; padding:24px; text-align:center; color:#fff;">
+              <div style="font-size:42px; margin-bottom:8px;">✅</div>
+              <h3 style="margin:0 0 8px; font-size:20px; color:#34d399;">¡Apuntes generados y compilados con éxito!</h3>
+              <p style="margin:0 0 20px; color:#cbd5e1; font-size:14px;">
+                La IA ha redactado el contenido y LaTeX ha compilado el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
+              </p>
+              <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                <a href="${urlPdf}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#10b981; color:#fff; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600; font-size:15px; box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                  <i class="fa-solid fa-file-pdf"></i>
+                  <span>Descargar / Ver PDF</span>
+                </a>
+                <a href="${urlTex}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#334155; color:#cbd5e1; padding:12px 18px; border-radius:8px; text-decoration:none; font-weight:500; font-size:14px;">
+                  <i class="fa-solid fa-code"></i>
+                  <span>Ver código LaTeX (.tex)</span>
+                </a>
+                <a href="${run.html_url}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,0.08); color:#94a3b8; padding:12px 18px; border-radius:8px; text-decoration:none; font-weight:500; font-size:14px;">
+                  <i class="fa-brands fa-github"></i>
+                  <span>Ver registro en GitHub Actions</span>
+                </a>
+              </div>
+            </div>
+          `;
+          panelResultados.scrollIntoView({ behavior: "smooth" });
+        } else {
+          registrarEventoConsola(`❌ El trabajo de GitHub Actions terminó con estado: ${run.conclusion}`);
+          if (panelError) {
+            panelError.textContent = `La generación en GitHub Actions finalizó con estado: ${run.conclusion}. Puedes revisar los detalles en: ${run.html_url}`;
+            panelError.hidden = false;
+          }
+        }
+      }
+    } catch (_) {}
+  }, 5000);
 }

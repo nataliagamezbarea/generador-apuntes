@@ -75,6 +75,7 @@ jobs:
             echo "Sin cambios nuevos para commitear."
           else
             git commit -m "docs: apuntes generados para ${{ inputs.asignatura }} - Tema ${{ inputs.tema }}"
+            git pull --rebase origin main
             git push origin main
           fi
 

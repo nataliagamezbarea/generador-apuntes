@@ -101,21 +101,7 @@ ${errorNvidia.replace(/[_%$#&{}]/g, "\\$&")}
 \\maketitle
 
 ${avisoLatex}
-\\usepackage[spanish]{babel}
-\\usepackage{amsmath,amssymb}
-\\usepackage{geometry}
-\\usepackage{hyperref}
-\\usepackage{listings}
-\\usepackage{xcolor}
 
-\\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
-
-\\title{\\textbf{${asignatura}}\\\\ \\large Tema ${tema}: ${titulo}}
-\\author{Generador Automático de Apuntes}
-\\date{\\today}
-
-\\begin{document}
-\\maketitle
 \\tableofcontents
 \\newpage
 
