@@ -5,6 +5,7 @@ import {
   trabajosEtapasActivos,
   actualizarProgreso,
   maxReintentosTemporalesEtapas,
+  registrarLogGeneracion,
 } from "./estado-trabajos.js";
 import {
   obtenerReferenciaBibliotecaSegura,

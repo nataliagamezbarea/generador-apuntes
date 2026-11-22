@@ -54,6 +54,21 @@ const selectorModeloCodigo = document.querySelector("#selector-modelo-codigo");
 const estadoModeloSeleccionado = document.querySelector("#estado-modelo-seleccionado");
 const estadoModeloCodigo = document.querySelector("#estado-modelo-codigo");
 
+async function parseJsonSeguro(respuesta) {
+  if (!respuesta) return null;
+  try {
+    const texto = await respuesta.text();
+    if (!texto || !texto.trim()) return null;
+    const limpio = texto.trim();
+    if (limpio.startsWith("<") || limpio.startsWith("<!DOCTYPE")) {
+      return null;
+    }
+    return JSON.parse(limpio);
+  } catch {
+    return null;
+  }
+}
+
 // Inicializar selectores de modelos al cargar
 function inicializarModelos() {
   if (!selectorModeloIA || !selectorModeloCodigo) return;
@@ -204,17 +219,33 @@ function compararApuntesHabilitado() {
 }
 
 async function cargarAsignaturas() {
-  const respuesta = await fetch("/api/subjects");
-  if (!respuesta.ok) throw new Error("No se pudieron cargar las asignaturas.");
-  asignaturas = (await respuesta.json()).asignaturas;
-  const respuestaTrabajos = await fetch("/api/staged-generations");
-  if (!respuestaTrabajos.ok)
-    throw new Error("No se pudieron recuperar las generaciones activas.");
-  const trabajosActivos = (await respuestaTrabajos.json()).trabajos ?? [];
+  let asignaturasCargadas = [];
+  try {
+    const respuesta = await fetch("/api/subjects");
+    const datos = await parseJsonSeguro(respuesta);
+    if (datos && Array.isArray(datos.asignaturas)) {
+      asignaturasCargadas = datos.asignaturas;
+    }
+  } catch (e) {
+    console.warn("No se pudieron cargar las asignaturas:", e);
+  }
+  asignaturas = asignaturasCargadas;
+
+  let trabajosActivos = [];
+  try {
+    const respuestaTrabajos = await fetch("/api/staged-generations");
+    const datosTrabajos = await parseJsonSeguro(respuestaTrabajos);
+    if (datosTrabajos && Array.isArray(datosTrabajos.trabajos)) {
+      trabajosActivos = datosTrabajos.trabajos;
+    }
+  } catch (e) {
+    console.warn("No se pudieron recuperar las generaciones activas:", e);
+  }
+
   const trabajoActivo = trabajosActivos.find(
     (trabajo) => trabajo.estado === "procesando" || trabajo.estado === "pendiente",
   );
-    const asignaturaGuardada = localStorage.getItem("generador.asignatura");
+  const asignaturaGuardada = localStorage.getItem("generador.asignatura");
   const asignaturaWec = asignaturas.find(
     (asignatura) => asignatura.nombre.trim().toLocaleUpperCase("es") === "WEC",
   );
@@ -274,13 +305,16 @@ async function cargarTrabajosPendientes() {
     subject: asignatura,
     include_completed: "true",
   });
-  const respuesta = await fetch(`/api/staged-generations?${parametros}`);
-  if (!respuesta.ok)
-    throw new Error(
-      (await respuesta.json()).detail ||
-        "No se pudieron cargar las generaciones pendientes.",
-    );
-  const trabajos = (await respuesta.json()).trabajos ?? [];
+  let trabajos = [];
+  try {
+    const respuesta = await fetch(`/api/staged-generations?${parametros}`);
+    const datos = await parseJsonSeguro(respuesta);
+    if (datos && Array.isArray(datos.trabajos)) {
+      trabajos = datos.trabajos;
+    }
+  } catch (e) {
+    console.warn("No se pudieron cargar las generaciones pendientes:", e);
+  }
   fuentesBloqueadas = trabajos.some(
     (trabajo) => trabajo.estado === "procesando",
   );
@@ -2020,7 +2054,17 @@ async function comprobarEstadoModelo(modeloAComprobar = null) {
   try {
     const modelo = modeloAComprobar || selectorModeloIA?.value || localStorage.getItem("generador.modeloIA") || "qwen2.5:14b";
     const respuesta = await fetch(`/api/health?model=${encodeURIComponent(modelo)}`);
-    const estadoSalud = await respuesta.json();
+    const estadoSalud = await parseJsonSeguro(respuesta);
+    if (!estadoSalud) {
+      if (window.location.hostname.includes("github.io")) {
+        estadoModelo.classList.remove("ready", "pending-download");
+        estadoModelo.classList.add("failed");
+        const spanTexto = estadoModelo.querySelector("span:last-child");
+        if (spanTexto) spanTexto.textContent = "GitHub Pages (usa http://localhost:8002)";
+        return;
+      }
+      throw new Error("Sin respuesta JSON");
+    }
 
     const estaConectado = Boolean(estadoSalud.connected);
     const estaDisponible = Boolean(estadoSalud.modelAvailable);
@@ -2604,8 +2648,9 @@ async function vigilarProgresoStagedGenerations() {
   if (controladorGeneracion) return;
   try {
     const respuesta = await fetch("/api/staged-generations");
-    if (!respuesta.ok) return;
-    const { trabajos } = await respuesta.json();
+    const datos = await parseJsonSeguro(respuesta);
+    if (!datos || !Array.isArray(datos.trabajos)) return;
+    const trabajos = datos.trabajos;
     const trabajoProcesando = (trabajos ?? []).find(
       (t) =>
         t.estado === "procesando" &&
@@ -2688,37 +2733,6 @@ inicializarModelos();
 comprobarEstadoModelo();
 window.setInterval(comprobarEstadoModelo, 30000);
 
-const botonReiniciarServidor = document.querySelector("#boton-reiniciar-servidor");
-if (botonReiniciarServidor) {
-  botonReiniciarServidor.addEventListener("click", async () => {
-    if (!confirm("¿Deseas reiniciar el servidor y recargar la página?")) return;
-    botonReiniciarServidor.disabled = true;
-    botonReiniciarServidor.innerHTML =
-      '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> <span>Reiniciando...</span>';
-    try {
-      await fetch("/api/reiniciar-servidor", { method: "POST" });
-    } catch {
-      // Ignorar caída de conexión esperada al apagarse el servidor
-    }
-
-    let intentos = 0;
-    const intervalo = setInterval(async () => {
-      intentos++;
-      try {
-        const respuesta = await fetch("/api/health", { cache: "no-store" });
-        if (respuesta.ok) {
-          clearInterval(intervalo);
-          window.location.reload();
-        }
-      } catch {}
-      if (intentos > 30) {
-        clearInterval(intervalo);
-        window.location.reload();
-      }
-    }, 1000);
-  });
-}
-
 // ============================================================
 // GESTOR DE MODAL Y LISTA DE TRABAJOS ENVIADOS
 // ============================================================
@@ -2730,7 +2744,22 @@ async function abrirModalEnviados() {
     '<p style="color:var(--muted); font-size:12px;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando trabajos enviados…</p>';
   try {
     const respuesta = await fetch("/api/staged-generations?include_completed=true");
-    const datos = await respuesta.json();
+    const datos = await parseJsonSeguro(respuesta);
+    if (!datos || !Array.isArray(datos.trabajos)) {
+      if (window.location.hostname.includes("github.io")) {
+        listaTrabajosEnviados.innerHTML = `
+          <div style="background:rgba(59, 130, 246, 0.12); border:1px solid #3b82f6; border-radius:8px; padding:14px; font-size:13px; color:#bfdbfe; line-height:1.5;">
+            <p style="font-weight:600; color:#fff;"><i class="fa-solid fa-circle-info" style="color:#60a5fa;"></i> Modo estático (GitHub Pages)</p>
+            <p style="margin-top:6px;">GitHub Pages muestra la interfaz web en la nube, pero no ejecuta el servidor Node.js backend.</p>
+            <p style="margin-top:6px;">Para generar apuntes, procesar documentos y consultar tus trabajos en ejecución, abre la aplicación en tu servidor local:</p>
+            <p style="margin-top:8px;"><a href="http://localhost:8002" target="_blank" style="display:inline-block; background:#2563eb; color:#fff; padding:6px 14px; border-radius:6px; text-decoration:none; font-weight:500;"><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir en http://localhost:8002</a></p>
+          </div>`;
+        return;
+      }
+      listaTrabajosEnviados.innerHTML =
+        '<p style="color:#f87171; font-size:12px;">No se pudo conectar con el servidor backend (puerto 8002). Asegúrate de que está iniciado.</p>';
+      return;
+    }
     const trabajos = datos.trabajos || [];
     if (!trabajos.length) {
       listaTrabajosEnviados.innerHTML =
@@ -2833,6 +2862,7 @@ async function abrirModalEnviados() {
   } catch (err) {
     listaTrabajosEnviados.innerHTML = `<p style="color:#f87171; font-size:12px;">Error al cargar trabajos: ${err.message}</p>`;
   }
+}
 }
 
 botonVerEnviados?.addEventListener("click", abrirModalEnviados);
