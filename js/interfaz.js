@@ -3087,23 +3087,14 @@ async function ejecutarGeneracionGitHubActions({
           <span style="font-size:24px;">⛔</span>
           <h3 style="margin:0; font-size:17px; color:#f87171;">Generación bloqueada: Falta NVIDIA_API_KEY</h3>
         </div>
-        <p style="margin:0 0 14px; color:#e2e8f0; font-size:14px; line-height:1.5;">
-          No se puede generar ningún apunte porque <strong>no has añadido la clave en las variables o secretos de GitHub</strong>. No se permite avanzar sin ella.
+        <p style="margin:0; color:#e2e8f0; font-size:14px; line-height:1.5;">
+          No se puede generar ningún apunte porque <strong>no está configurada la variable o secreto NVIDIA_API_KEY en GitHub</strong>. No se permite avanzar sin ella.
         </p>
-        <div style="margin-bottom:12px;">
-          <a href="https://github.com/${repoDestino}/settings/secrets/actions/new" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#ef4444; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:700; font-size:14px; box-shadow:0 4px 12px rgba(239,68,68,0.35);">
-            <i class="fa-solid fa-plus"></i>
-            <span>Añadir secreto NVIDIA_API_KEY en GitHub</span>
-          </a>
-        </div>
-        <small style="color:#94a3b8; font-size:12px;">
-          Crea el secreto con <strong>Name:</strong> <code style="color:#fff; background:#1e293b; padding:2px 6px; border-radius:4px;">NVIDIA_API_KEY</code> y pega tu token gratuito de <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer" style="color:#60a5fa; text-decoration:underline;">build.nvidia.com</a>.
-        </small>
       </div>
     `;
     panelError.hidden = false;
     panelError.scrollIntoView({ behavior: "smooth" });
-    registrarEventoConsola("⛔ Generación bloqueada: no existe NVIDIA_API_KEY en GitHub Actions. No se puede avanzar.");
+    registrarEventoConsola("⛔ Generación bloqueada: falta el secreto NVIDIA_API_KEY en GitHub. No se puede avanzar.");
     return; // NO DEJA AVANZAR
   }
 
