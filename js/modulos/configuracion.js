@@ -67,6 +67,8 @@ export const config = {
   nvidiaModel: (process.env.NVIDIA_MODELO ?? "meta/llama-3.1-8b-instruct").trim(),
   nvidiaBaseUrl: (process.env.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1").trim().replace(/\/+$/, ""),
   proveedorIA: (process.env.PROVEEDOR_IA ?? "auto").trim().toLowerCase(),
+  supabaseUrl: (process.env.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co").trim(),
+  supabaseAnonKey: (process.env.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ").trim(),
 };
 
 export const extensionesCodigo = new Map([

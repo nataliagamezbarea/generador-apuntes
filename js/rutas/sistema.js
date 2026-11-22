@@ -50,6 +50,8 @@ router.get("/api/configuracion", (_solicitud, respuesta) => {
     urlTests: config.urlTests,
     model: config.model,
     notesRoot: config.notesRoot,
+    supabaseUrl: config.supabaseUrl,
+    supabaseAnonKey: config.supabaseAnonKey,
   });
 });
 
