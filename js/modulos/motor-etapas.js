@@ -24,6 +24,7 @@ import {
   inferirTemaYApartadoDeDocumento,
   resolverDestinoGeneracion,
   combinarFuentes,
+  compararArchivosProcesados,
   crearCitasLatex,
 } from "./utilidades-generacion.js";
 import {
@@ -53,6 +54,7 @@ import {
   limpiarLatex,
   guardarApunte,
   guardarGeneracion,
+  listarApuntes,
   listarHistorialGeneraciones,
   aplicarEstilosLatex,
   detectarCatalan,

@@ -5,6 +5,7 @@ import { config } from "../js/modulos/configuracion.js";
 import {
   traducirTextoGoogle,
   traducirLatexAEspanolConGoogle,
+  consultarModeloIA,
 } from "../js/modulos/modelo.js";
 import {
   detectarCatalan,
@@ -68,7 +69,6 @@ async function consultarIAApartado({
   subtemaTitulo,
   instrucciones,
   textoFuente,
-  apiKey,
   modeloConfigurado,
 }) {
   const prompt = `Asignatura: "${asignatura}"
@@ -103,51 +103,25 @@ REGLAS CRÍTICAS:
 2. Usa las macros oficiales de la biblioteca WEC (\\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}).
 3. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
 
-  const modelosAIntentar = Array.from(
-    new Set([
-      modeloConfigurado,
-      "nvidia/nemotron-3.5-lightning-30b-a3b",
-      "mistralai/mistral-large-4-1t-a52b",
-      "z-ai/glm-5.3-flash",
-    ])
-  ).filter(Boolean);
-
-  for (const mod of modelosAIntentar) {
-    try {
-      const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: mod,
-          messages: [
-            { role: "system", content: sistemaApuntes },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.2,
-          max_tokens: 8192,
-        }),
-      });
-
-      if (!resp.ok) continue;
-
-      const data = await resp.json();
-      const rawContent = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || "";
-      const matchJ = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      const strJson = matchJ ? matchJ[1].trim() : rawContent.trim();
-      const parsed = JSON.parse(strJson);
-      return normalizarResultadoIA(parsed, {
-        subject: asignatura,
-        theme: String(tema),
-        subtheme: String(subtema),
-        themeTitle: tituloTema,
-        subthemeTitle: subtemaTitulo,
-      });
-    } catch (_) {}
+  try {
+    const raw = await consultarModeloIA(
+      sistemaApuntes,
+      prompt,
+      [],
+      null,
+      modeloConfigurado
+    );
+    return normalizarResultadoIA(raw, {
+      subject: asignatura,
+      theme: String(tema),
+      subtheme: String(subtema),
+      themeTitle: tituloTema,
+      subthemeTitle: subtemaTitulo,
+    });
+  } catch (e) {
+    console.warn(`Aviso consultando IA para apartado ${subtema}:`, e.message);
+    return null;
   }
-  return null;
 }
 
 async function main() {
