@@ -17,10 +17,16 @@ async function main() {
   console.log(`Tema: ${tema} - ${titulo}`);
   console.log(`Modelo: ${modelo}`);
 
-  let contenidoLatex = "";
+  let contenidoLatex = (process.env.CONTENIDO_LATEX || "").trim();
   let errorNvidia = "";
 
-  if (!apiKey) {
+  if (!contenidoLatex && textoFuente.includes("\\documentclass")) {
+    contenidoLatex = textoFuente.trim();
+  }
+
+  if (contenidoLatex) {
+    console.log("✓ Usando contenido LaTeX aprobado directamente desde el frontend.");
+  } else if (!apiKey) {
     errorNvidia = "No se configuró NVIDIA_API_KEY en los Secrets del repositorio de GitHub (Settings > Secrets and variables > Actions > New repository secret con nombre NVIDIA_API_KEY).";
     console.warn(`⚠️ AVISO: ${errorNvidia}`);
   } else {

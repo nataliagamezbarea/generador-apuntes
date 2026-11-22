@@ -3010,98 +3010,6 @@ async function ejecutarGeneracionGitHubActions({
   progreso.hidden = false;
   botonGenerar.disabled = true;
 
-  mostrarProgresoGeneracion(
-    {
-      fase: "subida",
-      mensaje: "Conectando con GitHub Actions en la nube…",
-      detalle: "Preparando la orden de generación desatendida con NVIDIA NIM y compilación LaTeX.",
-    },
-    false,
-  );
-
-  // 1. Obtener el token de GitHub desde localStorage
-  let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
-  if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
-    token = "";
-    localStorage.removeItem("cache_gh_token");
-    localStorage.removeItem("gh_token");
-  }
-
-  // 2. Si no hay token en memoria local, obtenerlo automáticamente desde Supabase (tabla configuracion_publica)
-  if (!token) {
-    try {
-      const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
-      const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token)`, {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-          Accept: "application/json",
-          "Accept-Profile": "grados-informaticos",
-        },
-      });
-      if (resp.ok) {
-        const filas = await resp.json();
-        if (Array.isArray(filas)) {
-          // gh_token_general tiene prioridad (es el token con permisos de administración y workflow)
-          const rowGeneral = filas.find((r) => r.clave === "gh_token_general" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
-          const rowToken = filas.find((r) => r.clave === "gh_token" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
-          const elegido = rowGeneral || rowToken;
-          if (elegido?.valor) {
-            token = elegido.valor.trim();
-            localStorage.setItem("cache_gh_token", token);
-            console.log(`✓ Token (${elegido.clave}) obtenido automáticamente de Supabase (configuracion_publica)`);
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
-  // El repositorio donde se ejecuta el workflow de generar apuntes es SIEMPRE generador-apuntes
-  const repoDestino = "nataliagamezbarea/generador-apuntes";
-
-  // 3. Si aún no hay token (o si fue borrado por no tener permisos), solicitarlo al usuario
-  if (!token) {
-    token = window.prompt(
-      "Introduce tu Personal Access Token de GitHub con permiso sobre 'generador-apuntes' (ghp_... o github_pat_...):",
-      ""
-    );
-    if (token) {
-      token = token.trim();
-      localStorage.setItem("cache_gh_token", token);
-      // Guardar también en Supabase para que quede sincronizado permanentemente
-      try {
-        const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
-        const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-        fetch(`${supabaseUrl}/rest/v1/configuracion_publica`, {
-          method: "POST",
-          headers: {
-            apikey: anonKey,
-            Authorization: `Bearer ${anonKey}`,
-            "Accept-Profile": "grados-informaticos",
-            "Content-Profile": "grados-informaticos",
-            "Content-Type": "application/json",
-            Prefer: "resolution=merge-duplicates",
-          },
-          body: JSON.stringify([
-            { clave: "gh_token_general", valor: token },
-            { clave: "gh_token", valor: token },
-          ]),
-        }).catch(() => {});
-      } catch (_) {}
-    } else {
-      botonGenerar.disabled = false;
-      progreso.hidden = false;
-      panelError.textContent = "Se requiere un Personal Access Token de GitHub para activar la generación en la nube.";
-      panelError.hidden = false;
-      return;
-    }
-  }
-
-  const tokenVista = token ? `${token.slice(0, 10)}...${token.slice(-4)}` : "(vacío)";
-  console.log(`[GitHub Actions] Token leído: ${tokenVista}`);
-  console.log(`[GitHub Actions] Tipo de token: ${token.startsWith("github_pat_") ? "Fine-grained PAT" : token.startsWith("ghp_") ? "Classic PAT" : "Otro"}`);
-
   // Procesar archivos subidos si los hay
   let contenidoArchivos = "";
   if (Array.isArray(archivosElegidos) && archivosElegidos.length > 0) {
@@ -3119,13 +3027,273 @@ async function ejecutarGeneracionGitHubActions({
 
   const textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
 
+  // PASO 1: Generar el borrador con la IA y mostrarlo en el frontend para revisión
+  registrarEventoConsola(`📝 Paso 1: Generando borrador para ${asignatura} - Tema ${tema}: ${titulo}`);
+  mostrarProgresoGeneracion(
+    {
+      fase: "ia",
+      mensaje: "Generando borrador con la IA en el frontend…",
+      detalle: "La IA está redactando el contenido. Lo verás en pantalla antes de compilar.",
+    },
+    false,
+  );
+
+  let borradorLatex = "";
   try {
-    registrarEventoConsola(`🚀 Solicitando generación en GitHub Actions para ${asignatura} - Tema ${tema}: ${titulo}`);
+    borradorLatex = await generarBorradorIAEnFrontend({
+      asignatura,
+      tema,
+      titulo,
+      instrucciones,
+      textoFinal,
+    });
+  } catch (err) {
+    registrarEventoConsola(`⚠️ Error en borrador: ${err.message}`);
+  }
+
+  // Mostrar el borrador en el frontend para revisión
+  mostrarBorradorParaAprobacion({
+    asignatura,
+    tema,
+    titulo,
+    subtema,
+    instrucciones,
+    borradorLatex,
+    textoFinal,
+  });
+}
+
+async function generarBorradorIAEnFrontend({ asignatura, tema, titulo, instrucciones, textoFinal }) {
+  let nvKey = localStorage.getItem("preparar_tests_nvidia_key") || localStorage.getItem("nvidia_api_key") || "";
+
+  if (!nvKey) {
+    const clave = window.prompt(
+      "Introduce tu API Key de NVIDIA NIM (nvapi-...) para que la IA redacte los apuntes en pantalla antes de compilar con LaTeX:\n\n(Si pulsas Cancelar, se preparará una plantilla base con tus fuentes para que la revises)",
+      ""
+    );
+    if (clave && clave.trim()) {
+      nvKey = clave.trim();
+      localStorage.setItem("nvidia_api_key", nvKey);
+      localStorage.setItem("preparar_tests_nvidia_key", nvKey);
+    }
+  }
+
+  if (nvKey) {
+    registrarEventoConsola("🤖 Conectando con NVIDIA NIM API (Llama 3.1) desde el navegador...");
+    const prompt = `Eres un profesor experto en informática y redactor de apuntes universitarios en LaTeX.
+Genera unos apuntes completos, rigurosos y perfectamente estructurados en formato LaTeX para la asignatura "${asignatura}", Tema ${tema}: "${titulo}".
+
+Instrucciones:
+${instrucciones || "Apuntes detallados, con explicaciones claras, código y formato impecable."}
+
+Material de partida:
+${textoFinal || "Elabora el temario estándar oficial para esta asignatura y tema."}
+
+FORMATO DE SALIDA OBLIGATORIO:
+Devuelve un documento LaTeX completo y válido que compile directamente, empezando por \\documentclass[a4paper,11pt]{article} y terminando con \\end{document}.
+Usa los paquetes babel [spanish], inputenc [utf8], amsmath, hyperref, listings y geometry.
+No incluyas explicaciones antes o después; entrega solo el código LaTeX entre triples comillas invertidas.`;
+
+    try {
+      const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${nvKey}`,
+        },
+        body: JSON.stringify({
+          model: "meta/llama-3.1-8b-instruct",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.3,
+          max_tokens: 4096,
+        }),
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const raw = data.choices?.[0]?.message?.content || "";
+        const m = raw.match(/```(?:latex|tex)?([\s\S]*?)```/i);
+        const latex = m ? m[1].trim() : raw.trim();
+        if (latex && latex.includes("\\documentclass")) {
+          registrarEventoConsola("✓ Borrador redactado con éxito por la IA.");
+          return latex;
+        }
+      } else {
+        const errTxt = await resp.text();
+        registrarEventoConsola(`⚠️ NVIDIA respondió ${resp.status}: ${errTxt.slice(0, 120)}`);
+      }
+    } catch (e) {
+      registrarEventoConsola(`⚠️ Conexión con NVIDIA fallida: ${e.message}`);
+    }
+  }
+
+  return `\\documentclass[a4paper,11pt]{article}
+\\usepackage[utf8]{inputenc}
+\\usepackage[spanish]{babel}
+\\usepackage{amsmath,amssymb}
+\\usepackage{geometry}
+\\usepackage{hyperref}
+\\usepackage{listings}
+\\usepackage{xcolor}
+
+\\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+
+\\title{\\textbf{${asignatura}}\\\\ \\large Tema ${tema}: ${titulo}}
+\\author{Generador Automático de Apuntes}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+\\tableofcontents
+\\newpage
+
+\\section{Introducción y Objetivos}
+Estos apuntes corresponden al Tema ${tema} de la asignatura \\textbf{${asignatura}}.
+
+\\section{Contenido del Tema}
+${textoFinal ? textoFinal.slice(0, 10000).replace(/[\\$%&#_{}~^]/g, "\\$&") : "Contenido a desarrollar en este apartado."}
+
+\\section{Resumen y Conclusiones}
+Resumen pedagógico y puntos clave tratados.
+
+\\end{document}`;
+}
+
+function mostrarBorradorParaAprobacion({
+  asignatura,
+  tema,
+  titulo,
+  subtema,
+  instrucciones,
+  borradorLatex,
+  textoFinal,
+}) {
+  mostrarProgresoGeneracion(
+    {
+      fase: "confirmacion",
+      mensaje: "Borrador listo en el frontend",
+      detalle: "Revisa el contenido. Solo si estás conforme, pulsa «Compilar con LaTeX» para generar el PDF.",
+    },
+    false,
+  );
+
+  botonGenerar.disabled = false;
+  panelResultados.hidden = false;
+  panelResultados.innerHTML = `
+    <div style="background:#1e293b; border:1px solid #3b82f6; border-radius:12px; padding:20px; color:#fff;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <h3 style="margin:0; font-size:18px; color:#60a5fa;">
+          <i class="fa-solid fa-file-pen"></i> Contenido generado para revisión (${asignatura} - Tema ${tema}: ${titulo})
+        </h3>
+        <span style="background:#2563eb; color:#fff; font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px;">
+          Paso 1: Localizado y enseñado
+        </span>
+      </div>
+      <p style="margin:0 0 12px; color:#cbd5e1; font-size:13px;">
+        Revisa aquí abajo el contenido generado por la IA. Puedes modificar o retocar cualquier parte. <strong>Solo si eso vale</strong>, pulsa el botón verde para compilar el PDF con LaTeX en GitHub Actions:
+      </p>
+      <textarea id="editor-latex-revision" style="width:100%; height:320px; background:#0f172a; color:#f8fafc; font-family:monospace; font-size:13px; line-height:1.5; padding:12px; border:1px solid #475569; border-radius:8px; box-sizing:border-box; resize:vertical;">${borradorLatex}</textarea>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:12px;">
+        <button id="btn-cancelar-revision" class="secondary-button" type="button" style="padding:10px 16px;">
+          <i class="fa-solid fa-arrow-left"></i> Descartar y volver
+        </button>
+        <button id="btn-aprobar-compilar" type="button" style="display:inline-flex; align-items:center; gap:8px; background:#10b981; color:#fff; border:none; padding:12px 24px; border-radius:8px; font-weight:700; font-size:15px; cursor:pointer; box-shadow:0 4px 14px rgba(16,185,129,0.35);">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span>El contenido es válido: Compilar PDF con LaTeX</span>
+        </button>
+      </div>
+    </div>
+  `;
+  panelResultados.scrollIntoView({ behavior: "smooth" });
+
+  document.querySelector("#btn-cancelar-revision")?.addEventListener("click", () => {
+    panelResultados.hidden = true;
+    progreso.hidden = true;
+    registrarEventoConsola("Borrador descartado por el usuario.");
+  });
+
+  document.querySelector("#btn-aprobar-compilar")?.addEventListener("click", async () => {
+    const textoAprobado = document.querySelector("#editor-latex-revision")?.value || borradorLatex;
+    await ejecutarCompilacionGitHubActions({
+      asignatura,
+      tema,
+      titulo,
+      subtema,
+      instrucciones,
+      contenidoLatex: textoAprobado,
+      textoFuente: textoFinal,
+    });
+  });
+}
+
+async function ejecutarCompilacionGitHubActions({
+  asignatura,
+  tema,
+  titulo,
+  subtema,
+  instrucciones,
+  contenidoLatex,
+  textoFuente,
+}) {
+  botonGenerar.disabled = true;
+
+  // 1. Obtener el token de GitHub desde localStorage
+  let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
+  if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
+    token = "";
+    localStorage.removeItem("cache_gh_token");
+    localStorage.removeItem("gh_token");
+  }
+
+  // 2. Si no hay token en memoria local, obtenerlo automáticamente desde Supabase
+  if (!token) {
+    try {
+      const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
+      const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+      const resp = await fetch(`${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token)`, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          Accept: "application/json",
+          "Accept-Profile": "grados-informaticos",
+        },
+      });
+      if (resp.ok) {
+        const filas = await resp.json();
+        if (Array.isArray(filas)) {
+          const rowGeneral = filas.find((r) => r.clave === "gh_token_general" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
+          const rowToken = filas.find((r) => r.clave === "gh_token" && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
+          const elegido = rowGeneral || rowToken;
+          if (elegido?.valor) {
+            token = elegido.valor.trim();
+            localStorage.setItem("cache_gh_token", token);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  const repoDestino = "nataliagamezbarea/generador-apuntes";
+
+  if (!token) {
+    token = window.prompt("Introduce tu Personal Access Token de GitHub con permiso sobre 'generador-apuntes':", "");
+    if (token) {
+      token = token.trim();
+      localStorage.setItem("cache_gh_token", token);
+    } else {
+      botonGenerar.disabled = false;
+      return;
+    }
+  }
+
+  try {
+    registrarEventoConsola(`🚀 Contenido aprobado. Enviando a compilar con LaTeX a GitHub Actions...`);
     mostrarProgresoGeneracion(
       {
-        fase: "subida",
-        mensaje: `Iniciando GitHub Actions para ${asignatura} - Tema ${tema}`,
-        detalle: "Enviando workflow_dispatch a la nube de GitHub…",
+        fase: "guardado",
+        mensaje: `Compilando LaTeX en GitHub Actions para ${asignatura} - Tema ${tema}`,
+        detalle: "Enviando documento aprobado al compilador LaTeX de la nube…",
       },
       false,
     );
@@ -3147,82 +3315,25 @@ async function ejecutarGeneracionGitHubActions({
           titulo: String(titulo),
           subtema: String(subtema),
           instrucciones: String(instrucciones || ""),
-          texto_fuente: textoFinal.slice(0, 60000), // límite seguro de payload
+          texto_fuente: (textoFuente || "").slice(0, 60000),
+          contenido_latex: (contenidoLatex || "").slice(0, 60000),
         },
       }),
     });
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
-      // Si el token de Supabase no tiene permisos o es inválido, pedirlo al usuario de inmediato para reintentar
-      if (res.status === 401 || res.status === 403) {
-        localStorage.removeItem("cache_gh_token");
-        localStorage.removeItem("gh_token");
-
-        const nuevoToken = window.prompt(
-          `El token de GitHub (${tokenVista}) no tiene permiso sobre 'generador-apuntes' (${res.status} ${errJson.message || 'Forbidden'}).\n\nIntroduce tu Personal Access Token con permiso sobre este repositorio (o marca 'All repositories' en GitHub):`,
-          ""
-        );
-
-        if (nuevoToken && nuevoToken.trim()) {
-          const tLimpio = nuevoToken.trim();
-          localStorage.setItem("cache_gh_token", tLimpio);
-
-          // Reintentar inmediatamente el dispatch con el nuevo token
-          const reintento = await fetch(urlDispatch, {
-            method: "POST",
-            headers: {
-              Accept: "application/vnd.github+json",
-              Authorization: `Bearer ${tLimpio}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              ref: "main",
-              inputs: {
-                asignatura,
-                tema: String(tema),
-                titulo: String(titulo),
-                subtema: String(subtema),
-                instrucciones: String(instrucciones || ""),
-                texto_fuente: textoFinal.slice(0, 60000),
-              },
-            }),
-          });
-
-          if (reintento.ok) {
-            token = tLimpio;
-            res = reintento;
-          } else {
-            const reintentoJson = await reintento.json().catch(() => ({}));
-            throw new Error(`El nuevo token tampoco tiene permisos (${reintento.status}): ${reintentoJson.message || 'Forbidden'}. En GitHub -> Developer Settings -> Personal access tokens, asegúrate de añadir 'nataliagamezbarea/generador-apuntes' a tu token.`);
-          }
-        } else {
-          throw new Error("Se canceló la introducción del token de GitHub.");
-        }
-      } else {
-        throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
-      }
+      throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
     }
 
-    registrarEventoConsola("✓ Orden recibida con éxito por GitHub Actions.");
-    registrarEventoConsola("Pipeline en marcha: 1. IA redacta contenido en LaTeX -> 2. Compilación a PDF con biblioteca.");
+    registrarEventoConsola("✓ Documento recibido por GitHub Actions. LaTeX está compilando el PDF...");
 
-    mostrarProgresoGeneracion(
-      {
-        fase: "ia",
-        mensaje: "¡Generación iniciada en GitHub Actions!",
-        detalle: `Fase 1: La IA redacta los apuntes en LaTeX. Fase 2: LaTeX compila el PDF final. Siguiendo estado en vivo…`,
-      },
-      false,
-    );
-
-    panelResultados.hidden = false;
     panelResultados.innerHTML = `
       <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
         <div style="font-size:36px; margin-bottom:8px;">🚀</div>
-        <h3 style="margin:0 0 8px; font-size:18px;">Trabajo en curso en la nube</h3>
+        <h3 style="margin:0 0 8px; font-size:18px;">Compilando documento en la nube</h3>
         <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
-          Se está generando el documento LaTeX y compilando el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
+          Se está compilando el PDF con LaTeX y biblioteca de estilos para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
         </p>
         <div style="display:inline-flex; align-items:center; gap:8px; margin-bottom:12px; color:#93c5fd; font-size:13px;">
           <i class="fa-solid fa-spinner fa-spin"></i>
@@ -3231,13 +3342,12 @@ async function ejecutarGeneracionGitHubActions({
         <br/>
         <a href="https://github.com/${repoDestino}/actions" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#2563eb; color:#fff; padding:10px 18px; border-radius:8px; text-decoration:none; font-weight:600; font-size:14px;">
           <i class="fa-brands fa-github"></i>
-          <span>Ver ejecución en tiempo real en GitHub Actions</span>
+          <span>Ver compilación en tiempo real en GitHub Actions</span>
         </a>
       </div>
     `;
     panelResultados.scrollIntoView({ behavior: "smooth" });
 
-    // Iniciar monitorización en segundo plano para actualizar consola y ofrecer descarga directa
     iniciarMonitoreoGitHubActions({
       repoDestino,
       token,
@@ -3247,9 +3357,9 @@ async function ejecutarGeneracionGitHubActions({
       tiempoInicio: Date.now(),
     });
   } catch (error) {
-    panelError.textContent = `Error al activar GitHub Actions: ${error.message}`;
+    panelError.textContent = `Error al compilar en GitHub Actions: ${error.message}`;
     panelError.hidden = false;
-    registrarEventoConsola(`❌ Error al conectar con GitHub Actions: ${error.message}`);
+    registrarEventoConsola(`❌ Error: ${error.message}`);
   } finally {
     botonGenerar.disabled = false;
   }

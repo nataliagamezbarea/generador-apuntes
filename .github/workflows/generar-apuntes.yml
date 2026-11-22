@@ -27,6 +27,10 @@ on:
         description: "Texto o resumen fuente para generar"
         required: false
         default: ""
+      contenido_latex:
+        description: "Código LaTeX ya generado y aprobado desde el frontend"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -63,6 +67,7 @@ jobs:
           SUBTEMA: ${{ inputs.subtema }}
           INSTRUCCIONES: ${{ inputs.instrucciones }}
           TEXTO_FUENTE: ${{ inputs.texto_fuente }}
+          CONTENIDO_LATEX: ${{ inputs.contenido_latex }}
         run: |
           node scripts/generar-desde-ci.js
 
