@@ -3142,7 +3142,18 @@ async function ejecutarGeneracionGitHubActions({
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
+      // Si el token es erróneo o no tiene permisos, borrarlo de caché para permitir introducir uno nuevo
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem("cache_gh_token");
+        localStorage.removeItem("gh_token");
+      }
+      let explicacion = errJson.message || `HTTP ${res.status}`;
+      if (explicacion.includes("Bad credentials") || res.status === 401) {
+        explicacion = "El token de GitHub es incorrecto o ha caducado (Bad credentials). Se ha eliminado de la caché. Pulsa de nuevo en «Generar apuntes» para introducir tu Personal Access Token con permiso 'workflow'.";
+      } else if (explicacion.includes("Resource not accessible") || res.status === 403) {
+        explicacion = "El token no tiene permisos de Actions sobre este repositorio ('Actions: Read and write' o 'workflow'). Se ha eliminado de la caché. Pulsa de nuevo en «Generar apuntes» e introduce un Personal Access Token con permiso 'workflow'.";
+      }
+      throw new Error(explicacion);
     }
 
     mostrarProgresoGeneracion(
