@@ -387,7 +387,7 @@ export function analizarJson(text, motivoFinal = "") {
     }
     const detalleFinal =
       motivoFinal === "length"
-        ? " La respuesta se truncó al alcanzar el límite de salida de Ollama."
+        ? " La respuesta se truncó al alcanzar el límite máximo de tokens de salida del modelo."
         : "";
     throw Object.assign(
       new Error(
