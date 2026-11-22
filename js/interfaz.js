@@ -2900,7 +2900,6 @@ async function abrirModalEnviados() {
     listaTrabajosEnviados.innerHTML = `<p style="color:#f87171; font-size:12px;">Error al cargar trabajos: ${err.message}</p>`;
   }
 }
-}
 
 botonVerEnviados?.addEventListener("click", abrirModalEnviados);
 botonEnviadosInline?.addEventListener("click", abrirModalEnviados);
