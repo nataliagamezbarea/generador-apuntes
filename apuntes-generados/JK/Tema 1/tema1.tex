@@ -1,0 +1,16 @@
+\documentclass[11pt,a4paper]{extarticle}
+\input{carga.tex}
+\usepackage[hidelinks]{hyperref}
+\IfFileExists{../preambulo.tex}{\input{../preambulo.tex}}{\input{preambulo.tex}}
+\input{generador-estilos.tex}
+\begin{document}
+\paletaAzul
+\titulo{TEMA 1}{Tema 1}
+\usarfondo
+\renewcommand{\contentsname}{Índice}
+\setcounter{tocdepth}{2}
+\pdfbookmark[0]{Índice}{jk-tema1}
+{\color{black}\tableofcontents}
+\clearpage
+\inputcarpeta{Tema 1.1}
+\end{document}

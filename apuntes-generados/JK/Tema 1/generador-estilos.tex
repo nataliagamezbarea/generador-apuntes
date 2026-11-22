@@ -1,0 +1,99 @@
+% Generador de apuntes: integración con la biblioteca oficial WEC.
+% La paleta y las macros visuales (titulo, secciongrande, seccion,
+% subtituloA/B, resumen, lista, pasos, definicion, nota, tabla...) proceden
+% de bibliotecas_latex/cabecera.tex. Aquí se sincronizan los colores
+% del resaltado de código y el índice automático clicable con hyperref.
+\providecommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\providecommand{\subnota}[2]{\nota{#1}{#2}}
+\providecommand{\subnotasin}[2]{\nota{#1}{#2}}
+\AtBeginDocument{\spanishdeactivate{<>}}
+\providecommand{\subt}[1]{\par\Needspace{4\baselineskip}\vspace{2mm}\noindent{\bfseries\color{primary}#1}\par\vspace{1mm}}
+\providecolor{codeForeground}{HTML}{243247}
+\providecolor{codeString}{HTML}{8A4B08}
+\providecolor{codeComment}{HTML}{58745C}
+\providecolor{codeBackground}{HTML}{F1F7FF}
+\providecolor{codeKeyword}{HTML}{2457A6}
+\providecolor{consoleBackground}{HTML}{F1F4F8}
+\newcommand{\actualizarColoresCodigo}{%
+  \colorlet{codeBackground}{\coloractual!7!white}%
+  \colorlet{codeKeyword}{\coloractual!80!black}%
+}
+\newcommand{\iniciarPaletaSecciones}{\pickcolor{\coloractual}}
+\AddToHook{cmd/titulo/after}{\iniciarPaletaSecciones\actualizarColoresCodigo}
+\AddToHook{cmd/secciongrande/after}{\actualizarColoresCodigo}
+
+% --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF Y CONTROL ANTI-HUÉRFANAS ---
+% Se envuelven \secciongrande, \seccion, \subtituloA y \subtituloB usando
+% \RenewDocumentCommand para mantener compatibilidad total con hyperref,
+% evitar que queden solos al final de página (\Needspace) y garantizar
+% que el contenido empiece en la misma página que el título (\nopagebreak).
+\makeatletter
+\let\orig@secciongrande\secciongrande
+\RenewDocumentCommand{\secciongrande}{o m}{%
+  \par\Needspace{8\baselineskip}%
+  \phantomsection
+  \IfValueTF{#1}{\orig@secciongrande[#1]{#2}}{\orig@secciongrande[]{#2}}%
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\let\orig@seccion\seccion
+\RenewDocumentCommand{\seccion}{o m}{%
+  \par\Needspace{6\baselineskip}%
+  \phantomsection
+  \IfValueTF{#1}{\orig@seccion[#1]{#2}}{\orig@seccion[]{#2}}%
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\RenewDocumentCommand{\subtituloA}{m}{%
+  \par\Needspace{6\baselineskip}%
+  \vspace{4mm}%
+  \noindent
+  \edef\subtituloreal{\subtitulocolor}%
+  \raisebox{0.6ex}{\tikz\fill[\subtituloreal] (0,0) circle (2.2pt);}%
+  \hspace{3mm}{\headingfontxb\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\RenewDocumentCommand{\subtituloB}{m}{%
+  \par\Needspace{5\baselineskip}%
+  \vspace{4mm}%
+  \noindent
+  \edef\subtituloreal{\subtitulocolor}%
+  {\headingfont\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\makeatother
+
+\lstdefinelanguage{JavaScript}{
+  sensitive=true,
+  morekeywords={const,let,var,of,async,await,undefined,null,true,false,function,return,if,else,for,while,switch,case,break,continue,new,class,extends,import,export,default,try,catch,throw},
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+  morestring=[b]'
+}
+\ifcsname codigo\endcsname\else
+\newtcblisting{codigo}[1][Java]{listing only,breakable,colback=codeBackground,colframe=\coloractual!28!white,boxrule=0pt,arc=3pt,left=6pt,right=6pt,top=4pt,bottom=4pt,listing options={language=#1,basicstyle=\ttfamily\footnotesize\color{codeForeground},keywordstyle=\color{codeKeyword}\bfseries,morekeywords={const,let,var,of,async,await,undefined,null,true,false,console,document,window,localStorage,fetch,Promise,script,html,head,body,noscript,div,span,p,ul,li,input,form,button,type,src,id,class},stringstyle=\color{codeString},commentstyle=\color{codeComment}\itshape,showstringspaces=false,breaklines=true,columns=fullflexible,keepspaces=true,tabsize=4,upquote=true}}
+\fi
+\ifcsname consola\endcsname\else
+\newtcblisting{consola}{listing only,breakable,colback=consoleBackground,colframe=primary!22!white,boxrule=0pt,arc=3pt,left=6pt,right=6pt,top=4pt,bottom=4pt,listing options={basicstyle=\ttfamily\footnotesize\color{codeForeground},breaklines=true,columns=fullflexible,keepspaces=true,upquote=true}}
+\fi
+
+% --- Fallbacks para macros oficiales de la biblioteca en entornos mínimos ---
+\providecommand{\paletaAzul}{}
+\providecommand{\usarfondo}{}
+\providecommand{\titulo}[2]{\begin{center}{\LARGE\bfseries #1}\\[3mm]{\large\bfseries #2}\end{center}\vspace{4mm}}
+\providecommand{\coloractual}{blue}
+\providecommand{\primary}{blue}
+\providecommand{\headingfont}{\bfseries}
+\providecommand{\headingfontxb}{\bfseries}
+\providecommand{\resumen}[1]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Resumen:} #1}}\par\vspace{2mm}}
+\providecommand{\definicion}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
+\providecommand{\definicionpar}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
+\providecommand{\nota}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
+\providecommand{\alertas}[1]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Alerta:}\ #1}}\par\vspace{2mm}}
+\providecommand{\rectangulos}[1]{#1}
+\providecommand{\lista}[1]{\begin{itemize}#1\end{itemize}}
+\providecommand{\pasos}[1]{\begin{enumerate}#1\end{enumerate}}
+\providecommand{\tabla}[2][]{#2}
+\providecommand{\inputcarpeta}[1]{%
+  \immediate\write18{find "#1" -name "*.tex" 2>/dev/null | sort -V | sed 's/.*/\\input{&}/' > "/tmp/in-#1.tex"}%
+  \IfFileExists{/tmp/in-#1.tex}{\input{/tmp/in-#1.tex}}{}%
+}
