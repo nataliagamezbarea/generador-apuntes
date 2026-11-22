@@ -325,6 +325,24 @@ export function convertirMarkdownALatexWec(contenido = "") {
     return `\n\\lista{\n  ${items.join(" |\n  ")}\n}\n`;
   });
 
+  // Convertir secuencias de **Término:** Descripción a \lista oficial WEC
+  texto = texto.replace(/(?:(?:^|\n|\n\n)\s*\*\*([^*:\n]{2,60}):\*\*[\s\S]+?)(?=(?:\n\n(?!\s*\*\*)|\\(?:seccion|subtitulo|resumen|definicion|nota|begin)|$))/g, (bloque) => {
+    const items = [];
+    const regex = /\*\*([^*:\n]{2,60}):\*\*\s*([\s\S]+?)(?=(?:\s*\*\*([^*:\n]{2,60}):\*\*)|$)/g;
+    let m;
+    while ((m = regex.exec(bloque)) !== null) {
+      const term = m[1].trim();
+      const desc = m[2].trim().replace(/\s*\n\s*/g, " ");
+      if (term && desc && !/^(?:nota|definici[oó]n|resumen|ejemplo)$/i.test(term)) {
+        items.push(`**${term}:** ${desc}`);
+      }
+    }
+    if (items.length >= 2) {
+      return `\n\\lista{\n  ${items.join(" |\n  ")}\n}\n`;
+    }
+    return bloque;
+  });
+
   texto = texto.replace(/`([^`\n]+)`/g, (_m, code) => `\\cmd{${code}}`);
   texto = texto.replace(/(?<!\\cmd\{)<(\/?[a-zA-Z0-9_-]+(?: [^>]*)?)>(?!\})/g, "\\cmd{<$1>}");
 
@@ -568,6 +586,28 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(^|\s)\]\]+(?=\s|[.,;:]|$)/g, "$1");
 
   resultado = resultado.replace(/(^|[\n|])\s*([A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][^:\n|]{1,60}):\*\*/g, "$1**$2:**");
+
+  // Detectar y convertir secuencias sueltas de **Término:** Descripción a \lista oficial WEC
+  resultado = resultado.replace(/(?:(?:^|\n|\n\n)\s*\*\*([^*:\n]{2,60}):\*\*[\s\S]+?)(?=(?:\n\n(?!\s*\*\*)|\\(?:seccion|subtitulo|resumen|definicion|nota|begin)|$))/g, (bloque) => {
+    const items = [];
+    const regex = /\*\*([^*:\n]{2,60}):\*\*\s*([\s\S]+?)(?=(?:\s*\*\*([^*:\n]{2,60}):\*\*)|$)/g;
+    let m;
+    while ((m = regex.exec(bloque)) !== null) {
+      const term = m[1].trim();
+      const desc = m[2].trim().replace(/\s*\n\s*/g, " ");
+      if (term && desc && !/^(?:nota|definici[oó]n|resumen|ejemplo)$/i.test(term)) {
+        items.push(`**${term}:** ${desc}`);
+      }
+    }
+    if (items.length >= 2) {
+      return `\n\\lista{\n  ${items.join(" |\n  ")}\n}\n`;
+    }
+    return bloque;
+  });
+
+  resultado = resultado
+    .replace(/\\b?end\{codigo\}/gi, "\\end{codigo}")
+    .replace(/\\bend\b/gi, "\\end");
 
   resultado = normalizarNotas(resultado);
 

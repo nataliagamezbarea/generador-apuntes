@@ -13,7 +13,7 @@ import {
   deducirTituloRealista,
   normalizarMayusculasTitulo,
   esTextoDeRazonamiento,
-} from "./modulos/apuntes/utilidades-nombres.js?v=20261122_v43";
+} from "./modulos/apuntes/utilidades-nombres.js?v=20261122_v44";
 
 const formulario = document.querySelector("#formulario-generacion");
 const selectorAsignatura = document.querySelector("#selector-asignatura");
@@ -119,38 +119,52 @@ function inicializarModelos() {
   if (esEntornoEstatico) {
     // En la nube (GitHub Pages): modelos funcionales y verificados de NVIDIA NIM
     const modelosNvidia = [
-      { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Ultra rápido (4s) / Recomendado" },
-      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Máxima calidad pedagógica" },
-      { id: "nvidia/nemotron-3-ultra-550b-a55b", nombre: "NVIDIA Nemotron 3 Ultra (550B) · Modelo gigante" },
-      { id: "poolside/laguna-xs-2.1", nombre: "Laguna XS 2.1 · Rápido y conciso" },
-      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo" },
-      { id: "stepfun-ai/step-5-preview", nombre: "StepFun Step-5 · Alternativa" },
-      { id: "bigcode/starcoder2-15b", nombre: "StarCoder2 (15B) · Especializado en código" },
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo (Recomendado)", disponible: true },
+      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Calidad docente WEC", disponible: true },
+      { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Rápido", disponible: true },
+      { id: "nvidia/nemotron-3-ultra-550b-a55b", nombre: "NVIDIA Nemotron 3 Ultra (550B) · Modelo gigante", disponible: true },
+      { id: "poolside/laguna-xs-2.1", nombre: "Laguna XS 2.1 · Rápido y conciso", disponible: true },
+      { id: "stepfun-ai/step-5-preview", nombre: "StepFun Step-5 · Alternativa", disponible: true },
+      { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) (No disponible)", disponible: false },
     ];
 
-    modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado)
+    const modelosCodigoNvidia = [
+      { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", nombre: "NVIDIA Nemotron 3 (30B Reasoning) · Razonamiento profundo código (Recomendado)", disponible: true },
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Algoritmos y lógica", disponible: true },
+      { id: "bigcode/starcoder2-15b", nombre: "StarCoder2 (15B) · Especializado en código", disponible: true },
+      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large · Código multilingüe avanzado", disponible: true },
+      { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) (No disponible)", disponible: false },
+    ];
+
+    modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado && m.disponible)
       ? modeloIAGuardado
-      : "nvidia/nemotron-3.5-bolt-e4b";
+      : "nvidia/nemotron-3.5-lightning-30b-a3b";
 
     selectorModeloIA.replaceChildren();
     modelosNvidia.forEach((m) => {
       const opcion = document.createElement("option");
       opcion.value = m.id;
       opcion.textContent = m.nombre;
+      if (!m.disponible) {
+        opcion.disabled = true;
+      }
       selectorModeloIA.append(opcion);
     });
     selectorModeloIA.value = modeloIASeleccionado;
     actualizarEstadoModeloIA();
 
-    modeloCodigoSeleccionado = modeloCodigoGuardado && modelosNvidia.some((m) => m.id === modeloCodigoGuardado)
+    modeloCodigoSeleccionado = modeloCodigoGuardado && modelosCodigoNvidia.some((m) => m.id === modeloCodigoGuardado && m.disponible)
       ? modeloCodigoGuardado
-      : "nvidia/nemotron-3.5-bolt-e4b";
+      : "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 
     selectorModeloCodigo.replaceChildren();
-    modelosNvidia.forEach((m) => {
+    modelosCodigoNvidia.forEach((m) => {
       const opcion = document.createElement("option");
       opcion.value = m.id;
       opcion.textContent = m.nombre;
+      if (!m.disponible) {
+        opcion.disabled = true;
+      }
       selectorModeloCodigo.append(opcion);
     });
     selectorModeloCodigo.value = modeloCodigoSeleccionado;
@@ -3268,20 +3282,22 @@ async function traducirTextoLargoBrowser(texto = "") {
 
 // PDF Extractor para navegador usando PDF.js
 async function extraerTextoPdfBrowser(file) {
-  // 1. Intentar extracción rápida con el backend local (pdftotext nativo de alta precisión)
-  try {
-    const fd = new FormData();
-    fd.append("file", file);
-    const resp = await fetch("/api/extraer-pdf", { method: "POST", body: fd });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.texto && data.texto.trim()) {
-        return data.texto.trim();
+  // 1. Intentar extracción rápida con el backend local (solo en localhost)
+  if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const resp = await fetch("/api/extraer-pdf", { method: "POST", body: fd });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.texto && data.texto.trim()) {
+          return data.texto.trim();
+        }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
 
-  // 2. Fallback con PDF.js en el navegador
+  // 2. Extracción directa y segura con PDF.js en el navegador
   if (!window.pdfjsLib) {
     for (let w = 0; w < 10 && !window.pdfjsLib; w++) {
       await new Promise((r) => setTimeout(r, 200));
@@ -3540,118 +3556,21 @@ async function ejecutarGeneracionGitHubActions({
   }
   titulo = normalizarMayusculasTitulo(titulo);
 
-  // FASE 3: REDACCIÓN DE APARTADOS CON IA (NVIDIA NIM) BLOQUE A BLOQUE
-  let contenidoLatexGenerado = "";
+  // FASE 3: COMPILACIÓN CON LATEX E IA EN LA NUBE (GITHUB ACTIONS)
   const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-bolt-e4b").trim();
 
-  if (cfgSupabase.nvidiaApiKey) {
-    registrarEventoConsola(`🤖 [Fase 3/5] Redacción de apartados con IA (${modelo})...`);
-    try {
-      const apartadosDetectados = detectarApartadosEnTexto(textoFinal);
-      const todosLosArchivos = [];
-
-      if (apartadosDetectados.length >= 2) {
-        registrarEventoConsola(`Detectados ${apartadosDetectados.length} apartados en el temario:`);
-        for (const a of apartadosDetectados) {
-          registrarEventoConsola(`  - Apartado ${a.tema}.${a.subtema}: ${a.titulo}`);
-        }
-        const bloques = dividirTextoPorApartados(textoFinal, [], apartadosDetectados);
-
-        for (let i = 0; i < bloques.length; i++) {
-          const apInfo = apartadosDetectados[i] || { subtema: i + 1, titulo: `Apartado ${i + 1}` };
-          const subtemaId = String(apInfo.subtema || i + 1);
-          const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
-
-          mostrarProgresoGeneracion(
-            {
-              fase: "ia",
-              mensaje: `Redactando apartado ${i + 1} de ${bloques.length}: ${subtemaTitulo}`,
-              detalle: `Conectando con NVIDIA NIM (${modelo})…`,
-              actual: i + 1,
-              total: bloques.length,
-            },
-            false,
-          );
-
-          const resAp = await consultarNvidiaNIMApartadoBrowser({
-            apiKey: cfgSupabase.nvidiaApiKey,
-            modelo,
-            asignatura,
-            tema,
-            tituloTema: titulo,
-            subtema: subtemaId,
-            subtemaTitulo,
-            instrucciones,
-            textoFuente: bloques[i].texto,
-          });
-
-          if (resAp?.archivos?.length) {
-            for (const arch of resAp.archivos) {
-              arch.subtema = subtemaId;
-              todosLosArchivos.push(arch);
-              registrarEventoConsola(`📝 [Bloque ${todosLosArchivos.length}] ${arch.nombre || `seccion`}.tex — ${arch.titulo || subtemaTitulo}`);
-            }
-          }
-        }
-      } else {
-        mostrarProgresoGeneracion(
-          {
-            fase: "ia",
-            mensaje: `Redactando tema completo: ${titulo}`,
-            detalle: `Conectando con NVIDIA NIM (${modelo})…`,
-            actual: 1,
-            total: 1,
-          },
-          false,
-        );
-
-        const resTema = await consultarNvidiaNIMApartadoBrowser({
-          apiKey: cfgSupabase.nvidiaApiKey,
-          modelo,
-          asignatura,
-          tema,
-          tituloTema: titulo,
-          subtema: String(subtema || 1),
-          subtemaTitulo: titulo,
-          instrucciones,
-          textoFuente: textoFinal,
-        });
-
-        if (resTema?.archivos?.length) {
-          todosLosArchivos.push(...resTema.archivos);
-          for (let k = 0; k < resTema.archivos.length; k++) {
-            registrarEventoConsola(`📝 [Bloque ${k + 1}] ${resTema.archivos[k].nombre || `seccion`}.tex — ${resTema.archivos[k].titulo || titulo}`);
-          }
-        }
-      }
-
-      if (todosLosArchivos.length > 0) {
-        contenidoLatexGenerado = JSON.stringify({
-          titulo_tema: titulo,
-          titulo_subtema: titulo,
-          archivos: todosLosArchivos,
-        });
-        registrarEventoConsola(`✓ Total de archivos modulares generados: ${todosLosArchivos.length}`);
-      }
-    } catch (errIA) {
-      console.warn("Aviso en interacción directa con NVIDIA NIM:", errIA.message);
-      registrarEventoConsola(`ℹ️ Generación continuará en GitHub Actions: ${errIA.message}`);
-    }
-  }
-
-  // FASE 4: COMPILACIÓN CON LATEX EN LA NUBE (GITHUB ACTIONS)
   try {
     mostrarProgresoGeneracion(
       {
-        fase: "guardado",
-        mensaje: `Compilando apuntes con LaTeX en la nube para ${asignatura} - Tema ${tema}...`,
-        detalle: "Ejecutando workflow de compilación XeLaTeX en GitHub Actions…",
-        actual: 4,
-        total: 5,
+        fase: "ia",
+        mensaje: `Generando apuntes con IA (${modelo}) y LaTeX en la nube...`,
+        detalle: "Ejecutando workflow en GitHub Actions…",
+        actual: 3,
+        total: 4,
       },
       false,
     );
-    registrarEventoConsola(`🚀 [Fase 4/5] Disparando GitHub Actions para compilar LaTeX y subir a GRADOS_INFORMATICOS...`);
+    registrarEventoConsola(`🚀 [Fase 3/4] Disparando GitHub Actions para redacción con NVIDIA NIM y compilación XeLaTeX...`);
 
     const urlDispatch = `https://api.github.com/repos/${repoDestino}/actions/workflows/generar-apuntes.yml/dispatches`;
 
@@ -3671,7 +3590,7 @@ async function ejecutarGeneracionGitHubActions({
           subtema: String(subtema),
           instrucciones: String(instrucciones || ""),
           texto_fuente: textoFinal.slice(0, 60000),
-          contenido_latex: contenidoLatexGenerado || "",
+          contenido_latex: "",
           nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
           nvidia_modelo: modelo,
           gh_token: token,

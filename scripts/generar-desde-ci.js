@@ -141,7 +141,7 @@ async function main() {
   let textoFuente = process.env.TEXTO_FUENTE || "";
   const apiKey = process.env.NVIDIA_API_KEY || "";
   const modeloConfigurado =
-    process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-bolt-e4b";
+    process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-lightning-30b-a3b";
 
   console.log(`=== Generando apuntes modulares en GitHub Actions ===`);
   console.log(`Asignatura: ${asignatura}`);
@@ -327,11 +327,11 @@ REGLAS CRÍTICAS DE CALIDAD:
     const modelosAIntentar = Array.from(
       new Set([
         modeloConfigurado,
-        "nvidia/nemotron-3.5-bolt-e4b",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
         "mistralai/mistral-large-4-1t-a52b",
+        "nvidia/nemotron-3.5-bolt-e4b",
         "nvidia/nemotron-3-ultra-550b-a55b",
         "poolside/laguna-xs-2.1",
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
       ])
     ).filter(Boolean);
 
