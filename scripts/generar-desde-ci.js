@@ -142,12 +142,15 @@ async function main() {
   const apiKey = process.env.NVIDIA_API_KEY || "";
   const modeloConfigurado =
     process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-lightning-30b-a3b";
+  const modeloCodigoConfigurado =
+    process.env.NVIDIA_MODELO_CODIGO || "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
 
   console.log(`=== Generando apuntes modulares en GitHub Actions ===`);
   console.log(`Asignatura: ${asignatura}`);
   console.log(`Tema: ${tema} - ${titulo}`);
   console.log(`Subtema inicial: ${subtema}`);
-  console.log(`Modelo preferido: ${modeloConfigurado}`);
+  console.log(`Modelo teoría (IA): ${modeloConfigurado}`);
+  console.log(`Modelo código/razonamiento: ${modeloCodigoConfigurado}`);
 
   // Configurar las rutas de apuntes para que apunten a apuntes-generados
   const dirSalidaAsignatura = path.join(process.cwd(), "apuntes-generados", asignatura);
@@ -255,7 +258,11 @@ async function main() {
         const subtemaId = String(apInfo.subtema || i + 1);
         const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
 
-        console.log(`\n🤖 Redactando con IA Apartado ${tema}.${subtemaId}: "${subtemaTitulo}"...`);
+        const esApartadoCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
+          `${subtemaTitulo} ${blq.texto}`
+        );
+        const modeloAEjecutar = esApartadoCodigo ? modeloCodigoConfigurado : modeloConfigurado;
+        console.log(`\n🤖 Redactando con IA Apartado ${tema}.${subtemaId}: "${subtemaTitulo}" (usando ${modeloAEjecutar})...`);
         const resApartado = await consultarIAApartado({
           asignatura,
           tema,
@@ -265,7 +272,7 @@ async function main() {
           instrucciones,
           textoFuente: blq.texto,
           apiKey,
-          modeloConfigurado,
+          modeloConfigurado: modeloAEjecutar,
         });
 
         if (resApartado?.archivos?.length) {

@@ -199,6 +199,7 @@ function normalizarSegmentoMayusculas(seg = "") {
         if (ACRONYMS_SET.has(limpia)) return limpia;
         if (limpia === "JAVASCRIPT") return "JavaScript";
         if (limpia === "NODEJS" || limpia === "NODE.JS") return "Node.js";
+        if (limpia === "W3C") return "W3C";
         if (idx === 0) return p.charAt(0).toUpperCase() + p.slice(1);
         return p;
       })

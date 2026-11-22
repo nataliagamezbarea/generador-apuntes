@@ -97,12 +97,11 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
       modelo,
       config.nvidiaModel,
       "nvidia/nemotron-3.5-bolt-e4b",
-      "nvidia/nemotron-3.5-lightning-30b-a3b",  // Nemotron 3.5 30B - modelo recomendado
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "minimaxai/minimax-m3.1-flash",
       "mistralai/mistral-large-4-1t-a52b",
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
       "nvidia/nemotron-3-ultra-550b-a55b",
-      "poolside/laguna-xs-2.1",
-      "nvidia/nemotron-3.5-lightning-30b-a3b",  // Nemotron 3.5 30B - modelo con razonamiento profundo
-      "nvidia/nemotron-3.5-lightning-30b-a3b-recomendado",
     ])
   ).filter(Boolean);
 
@@ -143,8 +142,35 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
       }
       const json = await res.json();
       let content = (json.choices?.[0]?.message?.content || "").trim();
-      if (!content || esTextoDeRazonamiento(content) || /^let me\b|^i need to\b|^thinking\b/i.test(content)) {
-        console.warn(`⚠️ Modelo ${mod} devolvió razonamiento/pensamiento en inglés, probando siguiente modelo...`);
+      const reasoning = (json.choices?.[0]?.message?.reasoning_content || "").trim();
+
+      // Si el contenido viene vacío pero reasoning_content contiene el JSON
+      if (!content && reasoning) {
+        const matchJson = reasoning.match(/```(?:json)?\s*([\s\S]*?)\s*```/i) ||
+                          reasoning.match(/(\{[\s\S]*"archivos"[\s\S]*\})/i) ||
+                          reasoning.match(/(\{[\s\S]*\})/i);
+        if (matchJson) {
+          content = matchJson[1].trim();
+        }
+      }
+
+      // Eliminar bloques de pensamiento <think>...</think> si existen
+      if (content.includes("<think>")) {
+        content = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+      }
+
+      // Si el contenido inicia con razonamiento pero luego tiene un JSON
+      if (esTextoDeRazonamiento(content) || /^let me\b|^i need to\b|^thinking\b/i.test(content)) {
+        const matchJson = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i) ||
+                          content.match(/(\{[\s\S]*"archivos"[\s\S]*\})/i) ||
+                          content.match(/(\{[\s\S]*\})/i);
+        if (matchJson) {
+          content = matchJson[1].trim();
+        }
+      }
+
+      if (!content || (esTextoDeRazonamiento(content) && !content.includes("{"))) {
+        console.warn(`⚠️ Modelo ${mod} devolvió razonamiento/pensamiento en inglés sin JSON utilizable, probando siguiente modelo...`);
         continue;
       }
       return {
@@ -315,17 +341,7 @@ export function preRepararJsonLatex(jsonStr) {
       "\\\\$1",
     )
     .replace(/(?<!\\)\\([a-zA-Z]+)(?=[^a-zA-Z"\\\/bfnrtu]|$)/g, "\\\\$1")
-    // Convertir negrita markdown **texto** a macros LaTeX \subtituloA{} o \subtituloB{}
-    .replace(/\*\*(.*?)\*\*/g, (match, text) => {
-      // Si el texto parece un título principal, usar \subtituloA, si es un subtítulo usar \subtituloB
-      // Por defecto, convertir a \subtituloB para subtítulos internos
-      const textoLimpio = text.trim();
-      if (textoLimpio.length > 0) {
-        // Convertir a macro LaTeX - usar \subtituloB para subtítulos de segundo nivel
-        return `\\subtituloB{${textoLimpio}}`;
-      }
-      return match;
-    });
+    .replace(/\*\*([^*\n]+?)\*\*/g, "\\\\textbf{$1}");
 }
 
 export function analizarJson(text, motivoFinal = "") {

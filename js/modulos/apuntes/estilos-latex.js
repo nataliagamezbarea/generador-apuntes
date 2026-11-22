@@ -95,7 +95,23 @@ export function limpiarLatex(value) {
     .replace(/\\(?:openout|read|catcode)[^\n]*/gi, "")
     .replace(/\\(?:input|include)\s*\{(?:carga|generador-estilos|preambulo)[^{}]*\}/gi, "")
     .replace(/^\s*\\end\s*\{\s*document\s*\}\s*$/gim, "")
+    .replace(/\/\/--><!\]\]>/g, "")
+    .replace(/<!\[CDATA\[\/\/><!--/g, "")
+    .replace(/<!\[CDATA\[/g, "")
+    .replace(/\]\]>/g, "")
+    .replace(/<!--\/\/-->/g, "")
     .trim();
+
+  latex = latex.replace(/\\begin\{(codigo|consola)\}([\s\S]*?)\\end\{\1\}/g, (_m, env, code) => {
+    const clean = code
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\]\]>/g, "");
+    return `\\begin{${env}}${clean}\\end{${env}}`;
+  });
 
   if (envolturaWecMalformada) latex = latex.replace(/}\s*$/, "").trim();
 
@@ -470,6 +486,7 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/\\definitionpar\b/g, "\\definicionpar")
     .replace(/\\definition\b/g, "\\definicion")
     .replace(/\\sectiongrande\b/g, "\\secciongrande")
+    .replace(/\\rista\b/g, "\\lista")
     .replace(/\\subtitulo\b/g, "\\subtituloA");
 
   resultado = resultado.replace(/\\n(?!(?:ota|ode|abla|ewcommand|ewenvironment|ewlist|ewline|ormalsize|oindent|umber|egrita)\b)/g, "\n");
@@ -488,7 +505,9 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(?:[\x00-\x1f\s]|\b)eginconsola/g, "\\begin{consola}")
     .replace(/(?:[\x00-\x1f\s]|\b)eginhtml/g, "\\begin{codigo}")
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "")
-    .replace(/^[><]{2,4}\s*/gm, "");
+    .replace(/^[><]{2,4}\s*/gm, "")
+    .replace(/(?:^|\n)\s*[.•·]\s*([A-Za-zÁÉÍÓÚÑáéíóúñ][^:\n]{1,60}:)/g, "\n\n**$1**")
+    .replace(/(?:^|\n)\s*[•·]\s*$/gm, "");
 
   resultado = resultado.replace(
     /(?:\\begin\{codigo\}|```[a-z]*)\s*[\s\S]*?(?:def\s+visual|def\s+tecnologia|def\s+distribucio)[\s\S]*?(?:\\end\{codigo\}|```)/gi,
@@ -936,6 +955,17 @@ export function aplicarEstilosLatex(value, subject = "") {
     (_m, macro, tit) => `\\${macro}{${normalizarMayusculasTitulo(tit)}}`
   );
 
+  const bloquesCod = [];
+  resultado = resultado.replace(/\\begin\{(codigo|consola)\}[\s\S]*?\\end\{\1\}/g, (m) => {
+    const placeholder = `%%COD_PROTEGIDO_${bloquesCod.length}%%`;
+    bloquesCod.push(m);
+    return placeholder;
+  });
+  resultado = resultado.replace(/\*\*([^*\n]+?)\*\*/g, "\\textbf{$1}");
+  for (let i = 0; i < bloquesCod.length; i++) {
+    resultado = resultado.replace(`%%COD_PROTEGIDO_${i}%%`, bloquesCod[i]);
+  }
+
   return resultado;
 }
 
@@ -1326,6 +1356,9 @@ export function normalizarCuerpoLista(cuerpoOriginal, tipo = "lista") {
   const itemsLimpios = [];
   for (let item of items) {
     item = item.trim().replace(/\s+/g, " ");
+    item = item.replace(/^[.•·]\s*/, "");
+    item = item.replace(/\]\]>/g, "").replace(/<!\[CDATA\[/g, "");
+    item = item.replace(/\*\*([^*\n]+?)\*\*/g, "\\textbf{$1}");
     if (tipo === "pasos") {
       item = item.replace(/^(?:\*{0,2}(?:Paso\s+)?\d+[\.:\)\-–—]?\*{0,2}\s*)+/i, "").trim();
     }

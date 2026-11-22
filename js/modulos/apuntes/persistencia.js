@@ -724,19 +724,55 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
         new RegExp(`^Tema ${theme}\\.\\d+$`, "i").test(item.name),
     );
 
+  const recolectarInputsDeCarpetas = async (carpetas) => {
+    const lineas = [];
+    for (const c of carpetas) {
+      const subDir = path.join(themeDir, c);
+      try {
+        const archivos = (await readdir(subDir, { withFileTypes: true }))
+          .filter((f) => f.isFile() && f.name.endsWith(".tex"))
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        if (archivos.length > 0) {
+          for (const arch of archivos) {
+            lineas.push(`\\input{${c}/${arch.name}}`);
+          }
+        } else {
+          lineas.push(`\\inputcarpeta{${c}}`);
+        }
+      } catch {
+        lineas.push(`\\inputcarpeta{${c}}`);
+      }
+    }
+    return lineas;
+  };
+
+  const paquetesRequeridos = [
+    "\\documentclass[11pt,a4paper]{extarticle}",
+    "\\usepackage[spanish,es-tabla]{babel}",
+    "\\usepackage[table]{xcolor}",
+    "\\usepackage{needspace}",
+    "\\usepackage{amsmath,amssymb}",
+    "\\usepackage{array,booktabs}",
+    "\\usepackage{tikz}",
+    "\\usepackage[most]{tcolorbox}",
+    "\\tcbuselibrary{listings,skins,breakable}",
+    "\\usepackage{listings}",
+    "\\usepackage[hidelinks]{hyperref}",
+    "\\input{carga.tex}",
+    "\\IfFileExists{../preambulo.tex}{\\input{../preambulo.tex}}{\\input{preambulo.tex}}",
+    styleInput,
+  ];
+
   if (!(await existeArchivo(target))) {
     const sortedChildren = children.sort(
       (a, b) =>
         Number(a.name.split(".").at(-1)) - Number(b.name.split(".").at(-1)),
     );
-    const inputLines = sortedChildren.map((item) => `\\inputcarpeta{${item.name}}`);
+    const carpetasNombres = sortedChildren.map((item) => item.name);
+    const inputLines = await recolectarInputsDeCarpetas(carpetasNombres);
     const bookmark = crearNombreArchivo(`${subject}-tema${theme}`, 80);
     const content = [
-      "\\documentclass[11pt,a4paper]{extarticle}",
-      "\\input{carga.tex}",
-      "\\usepackage[hidelinks]{hyperref}",
-      "\\IfFileExists{../preambulo.tex}{\\input{../preambulo.tex}}{\\input{preambulo.tex}}",
-      styleInput,
+      ...paquetesRequeridos,
       "\\begin{document}",
       "\\paletaAzul",
       `\\titulo{TEMA ${theme}}{${escaparLatex(title)}}`,
@@ -766,8 +802,11 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
     );
 
     const carpetasEnDoc = [
-      ...original.matchAll(/\\inputcarpeta\{([^}]+)\}/g),
-    ].map((m) => m[1]);
+      ...original.matchAll(/\\input(?:carpeta)?\{([^}]+)\}/g),
+    ].map((m) => {
+      const p = m[1];
+      return p.includes("/") ? p.split("/")[0] : p;
+    }).filter((c) => new RegExp(`^Tema ${theme}\\.\\d+$`, "i").test(c));
 
     const carpetasEnDisco = children.map((item) => item.name);
     const todasLasCarpetas = Array.from(
@@ -778,21 +817,21 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
       return numA - numB;
     });
 
-    const inputLines = todasLasCarpetas.map((c) => `\\inputcarpeta{${c}}`);
+    const inputLines = await recolectarInputsDeCarpetas(todasLasCarpetas);
 
     const preambleLines = preamble
       .split("\n")
       .filter(
         (line) =>
           line.trim() !== styleInput &&
-          !/^\\inputcarpeta\{[^{}]+\}$/.test(line.trim()),
+          !/^\\input(?:carpeta)?\{[^{}]+\}$/.test(line.trim()),
       );
     const normalizedBody = body
       .split("\n")
       .filter(
         (line) =>
           line.trim() !== styleInput &&
-          !/^\\inputcarpeta\{[^{}]+\}$/.test(line.trim()),
+          !/^\\input(?:carpeta)?\{[^{}]+\}$/.test(line.trim()),
       )
       .join("\n")
       .replace(
@@ -824,7 +863,16 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
         ? clearPageIndex + 1
         : bodyLines.findIndex((line) => line.trim()) + 1;
     bodyLines.splice(insertionIndex, 0, ...inputLines);
-    const updatedPreamble = `${preambleLines.join("\n").trimEnd()}\n${styleInput}\n`;
+
+    // Asegurar paquetes esenciales en preámbulo si faltan
+    let finalPreamble = preambleLines.join("\n").trimEnd();
+    if (!finalPreamble.includes("xcolor")) {
+      finalPreamble = finalPreamble.replace(
+        /\\documentclass[^\n]*/,
+        "\\documentclass[11pt,a4paper]{extarticle}\n\\usepackage[spanish,es-tabla]{babel}\n\\usepackage[table]{xcolor}\n\\usepackage{needspace}\n\\usepackage{amsmath,amssymb}\n\\usepackage{array,booktabs}\n\\usepackage{tikz}\n\\usepackage[most]{tcolorbox}\n\\tcbuselibrary{listings,skins,breakable}\n\\usepackage{listings}\n\\usepackage[hidelinks]{hyperref}",
+      );
+    }
+    const updatedPreamble = `${finalPreamble}\n${styleInput}\n`;
     const updated = `${updatedPreamble}\\begin{document}${bodyLines.join("\n")}${
       endDocument < 0 ? "" : `\\end{document}${original.slice(endDocument + "\\end{document}".length)}`
     }`;

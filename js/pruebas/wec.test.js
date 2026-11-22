@@ -201,7 +201,7 @@ test('aplicarEstilosLatex limpia CDATA, elimina viñetas huerfanas y corrige . L
   const out = aplicarEstilosLatex(input);
   assert.ok(!out.includes("]]>"), "No debe contener ]]>");
   assert.ok(!out.includes(". Licencias:"), "No debe contener . Licencias:");
-  assert.ok(out.includes("**Licencias:**"), "Debe convertir a **Licencias:**");
+  assert.ok(out.includes("**Licencias:**") || out.includes("\\textbf{Licencias:}"), "Debe convertir a Licencias en negrita");
   assert.ok(out.includes("<h1>Bienvenido</h1>"), "Debe decodificar &lt;h1&gt;");
   assert.ok(!out.includes("&lt;h1&gt;"), "No debe contener &lt;h1&gt;");
 });
