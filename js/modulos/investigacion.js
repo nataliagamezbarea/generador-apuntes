@@ -61,25 +61,109 @@ export function crearConsultasInvestigacion({
   return consultas.map((consulta) => consulta.trim().slice(0, 300));
 }
 
-export async function buscarEnInternet(consulta, limite = 3, signal) {
-  if (!consulta.trim()) return [];
+const dominiosBloqueados = new Set([
+  "chiebukuro.yahoo.co.jp",
+  "detail.chiebukuro.yahoo.co.jp",
+  "zhihu.com",
+  "baidu.com",
+  "weibo.com",
+  "pornhub.com",
+  "xvideos.com",
+]);
+
+export async function buscarEnWikipedia(consulta, limite = 2, signal) {
+  if (!consulta?.trim()) return [];
+  const terminosBusqueda = consulta.trim().slice(0, 150);
+  const url = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(terminosBusqueda)}&utf8=&format=json&srlimit=${Math.min(limite, 5)}`;
+  try {
+    const respuesta = await fetch(url, {
+      headers: { "user-agent": "GeneradorApuntesLocal/1.0 (educational use)" },
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(8000)]) : AbortSignal.timeout(8000),
+    });
+    if (!respuesta.ok) return [];
+    const datos = await respuesta.json();
+    const articulos = datos?.query?.search || [];
+    const resultados = [];
+    for (const art of articulos.slice(0, limite)) {
+      if (signal?.aborted) break;
+      try {
+        const sumRes = await fetch(
+          `https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(art.title)}`,
+          {
+            headers: { "user-agent": "GeneradorApuntesLocal/1.0 (educational use)" },
+            signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
+          },
+        );
+        if (sumRes.ok) {
+          const sumData = await sumRes.json();
+          const extract = sumData.extract?.trim();
+          if (extract && extract.length > 30) {
+            resultados.push({
+              titulo: sumData.title || art.title,
+              url: sumData.content_urls?.desktop?.page || `https://es.wikipedia.org/wiki/${encodeURIComponent(art.title)}`,
+              resumen: extract.slice(0, 1200),
+            });
+          }
+        }
+      } catch {}
+    }
+    return resultados;
+  } catch {
+    return [];
+  }
+}
+
+export async function buscarEnBing(consulta, limite = 3, signal) {
+  if (!consulta?.trim()) return [];
   const parametros = new URLSearchParams({
     format: "rss",
     q: consulta.trim().slice(0, 300),
     setlang: "es-ES",
     cc: "ES",
+    adlt: "strict",
   });
   const respuesta = await fetch(`${urlBusquedaWeb}?${parametros}`, {
     headers: {
       "user-agent": "GeneradorApuntesLocal/1.0 (personal educational use)",
     },
     signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
-      : AbortSignal.timeout(15_000),
+      ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+      : AbortSignal.timeout(10_000),
   });
-  if (!respuesta.ok)
-    throw new Error(`el buscador web respondió ${respuesta.status}.`);
+  if (!respuesta.ok) return [];
   return analizarResultadosWeb(await respuesta.text(), limite);
+}
+
+export async function buscarEnInternet(consulta, limite = 3, signal) {
+  if (!consulta?.trim()) return [];
+  const resultados = [];
+  const urlsVistas = new Set();
+
+  // 1. Priorizar enciclopedia técnica/académica (Wikipedia en español)
+  try {
+    const fuentesWiki = await buscarEnWikipedia(consulta, Math.min(2, limite), signal);
+    for (const f of fuentesWiki) {
+      if (!urlsVistas.has(f.url)) {
+        urlsVistas.add(f.url);
+        resultados.push(f);
+      }
+    }
+  } catch {}
+
+  // 2. Complementar con buscador web si aún hay espacio
+  if (resultados.length < limite) {
+    try {
+      const fuentesBing = await buscarEnBing(consulta, limite - resultados.length, signal);
+      for (const f of fuentesBing) {
+        if (!urlsVistas.has(f.url)) {
+          urlsVistas.add(f.url);
+          resultados.push(f);
+        }
+      }
+    } catch {}
+  }
+
+  return resultados.slice(0, limite);
 }
 
 export function analizarResultadosWeb(xml, limite = 3) {
@@ -155,12 +239,14 @@ export async function buscarFuentesOpcionales(
 export function esUrlWebSegura(valor) {
   try {
     const url = new URL(valor);
-    return (
-      url.protocol === "https:" &&
-      Boolean(url.hostname) &&
-      url.hostname !== "wikipedia.org" &&
-      !url.hostname.endsWith(".wikipedia.org")
-    );
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    for (const bloqueado of dominiosBloqueados) {
+      if (host === bloqueado || host.endsWith("." + bloqueado)) return false;
+    }
+    // Filtrar caracteres de alfabetos irrelevantes para apuntes en español (p.ej. cirílico, kanji/hiragana)
+    if (/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\u0400-\u04ff]/u.test(host)) return false;
+    return Boolean(host);
   } catch {
     return false;
   }

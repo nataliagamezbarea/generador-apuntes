@@ -1974,21 +1974,31 @@ async function comprobarEstadoModelo(modeloAComprobar = null) {
     const estaDisponible = Boolean(estadoSalud.modelAvailable);
 
     estadoModelo.classList.toggle("ready", estaConectado && estaDisponible);
+    estadoModelo.classList.toggle("pending-download", estaConectado && !estaDisponible);
     estadoModelo.classList.toggle("failed", !estaConectado);
 
+    const spanTexto = estadoModelo.querySelector("span:last-child");
     if (!estaConectado) {
-      estadoModelo.querySelector("span:last-child").textContent = "IA local sin conexión";
+      spanTexto.textContent = "IA local sin conexión";
     } else if (estaDisponible) {
-      estadoModelo.querySelector("span:last-child").textContent = `IA local lista · ${modelo}`;
+      spanTexto.textContent = `IA local lista · ${modelo}`;
     } else {
-      estadoModelo.querySelector("span:last-child").textContent = `Modelo ${modelo} (se descargará al iniciar)`;
+      spanTexto.textContent = `${modelo} (se descargará al iniciar)`;
+    }
+
+    if (selectorModeloIA && Array.isArray(estadoSalud.models)) {
+      for (const opt of selectorModeloIA.options) {
+        const estaEnLocal = estadoSalud.models.includes(opt.value);
+        const base = opt.value === "qwen2.5:14b" ? "qwen2.5:14b (recomendado)" : opt.value;
+        opt.textContent = estaEnLocal ? `${base} · ✓ instalado` : `${base} · ⬇ se descargará`;
+      }
     }
 
     if (estadoModeloSeleccionado) {
       estadoModeloSeleccionado.textContent = estaDisponible
-        ? `Modelo IA: ${modelo} (listo)`
-        : `Modelo IA: ${modelo} (se descargará al iniciar)`;
-      estadoModeloSeleccionado.style.color = estaDisponible ? "#c3e88d" : "#ffce54";
+        ? `✓ Modelo ${modelo} listo en local`
+        : `⬇ El modelo ${modelo} no está instalado; se descargará automáticamente al iniciar`;
+      estadoModeloSeleccionado.style.color = estaDisponible ? "#86efac" : "#fde047";
     }
   } catch {
     estadoModelo.classList.add("failed");

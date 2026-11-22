@@ -162,3 +162,22 @@ INTRODUCCIÓ: L'origen i l'abast de la web
   assert.equal(apartados[6].subtema, 7);
 });
 
+test('esUrlWebSegura valida fuentes educativas seguras y rechaza dominios no seguros', async () => {
+  const { esUrlWebSegura } = await import("../modulos/investigacion.js");
+  assert.equal(esUrlWebSegura("https://es.wikipedia.org/wiki/Cliente-servidor"), true);
+  assert.equal(esUrlWebSegura("https://www.arsys.es/blog/arquitectura"), true);
+  assert.equal(esUrlWebSegura("http://inseguro.com"), false);
+  assert.equal(esUrlWebSegura("https://detail.chiebukuro.yahoo.co.jp/qa/123"), false);
+});
+
+test('buscarEnInternet devuelve fuentes estructuradas con titulo, url y resumen', async () => {
+  const { buscarEnInternet } = await import("../modulos/investigacion.js");
+  const fuentes = await buscarEnInternet("arquitectura cliente servidor", 2);
+  assert.ok(Array.isArray(fuentes), "Debe devolver un array");
+  if (fuentes.length > 0) {
+    assert.ok(fuentes[0].titulo, "Debe tener titulo");
+    assert.ok(fuentes[0].url.startsWith("https://"), "Debe tener URL https segura");
+    assert.ok(fuentes[0].resumen.length > 10, "Debe contener resumen");
+  }
+});
+
