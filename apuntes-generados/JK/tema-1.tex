@@ -1,38 +1,75 @@
-\documentclass[a4paper,11pt]{article}
-\usepackage[utf8]{inputenc}
+```latex
+\documentclass{article}
 \usepackage[spanish]{babel}
-\usepackage{amsmath,amssymb}
-\usepackage{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
 \usepackage{hyperref}
 \usepackage{listings}
-\usepackage{xcolor}
-\usepackage{tcolorbox}
+\usepackage[margin=2.5cm]{geometry}
 
-\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
-
-\title{\textbf{JK}\\ \large Tema 1: Tema 1}
-\author{Generador Automático de Apuntes}
-\date{\today}
+\title{Apuntes de la Asignatura JK \\ Tema 1: Introducció a les Arquitectures i les Eines}
+\author{Profesor Experto en Informática}
+\date{}
 
 \begin{document}
 \maketitle
 
-\begin{tcolorbox}[colback=red!5!white,colframe=red!75!black,title=Aviso sobre la IA de NVIDIA]
-NVIDIA NIM respondió con código HTTP 410: \{"type":"about:blank","title":"Gone","status":410,"detail":"The model 'meta/llama-3.1-8b-instruct' has reached its end of life on 2026-08-26T09:00:00Z and is no longer available."\}
+\section{Arquitectures Bàsiques}
 
-\\ \small Para resolverlo, añade o renueva el secreto \textbf{NVIDIA\_API\_KEY} en la configuración de GitHub (Settings $\rightarrow$ Secrets and variables $\rightarrow$ Actions).
-\end{tcolorbox}
+Una arquitectura de computadora define la organisació dels seus components principals: unitat aritmético-lògica (UAL), unitat de control (UC), memoria i canals d'entrada/sortida. El model von Neumann és el més habitual, on les instruccions i les dades comparten la mateixa memòria.
 
-\tableofcontents
-\newpage
+\subsection{Arquitectura von Neumann}
 
-\section{Introducción y Objetivos}
-Estos apuntes han sido generados automáticamente para la asignatura \textbf{JK}.
+\begin{itemize}
+    \item \textbf{Memòria unificada}: Almacena tanto datos como instrucciones.
+    \item \textbf{Contador de programa (PC):} Apunta a la instrucció actual.
+    \item \textbf{Ciclo de búsqueda-ejecución}: Fetch $\rightarrow$ Decode $\rightarrow$ Execute.
+\end{itemize}
 
-\section{Contenido del Tema}
-[Archivo adjunto: Tema1\_Arquitectures\_i\_Eines.pdf (1318 KB)]
+\subsection{Conjuntos de Instrucciones (ISA)}
+El ISA defineix el llenguatge màxim que un processador entén. Inclou:
+\begin{itemize}
+    \item Tipus de dades (enter, real, booleà).
+    \item Conjunt d'instruccions (aritmètiques, de control, de memòria).
+    \item Format de les instruccions (longitud, tipus de direccionament).
+\end{itemize}
 
-\section{Resumen y Conclusiones}
-Resumen clave de los conceptos estudiados en este tema.
+\subsection{Exemple pas a pas: Codi ensamblador MIPS}
 
-\end{document}
+Considerem la instrucció que suma dos nombres i emmagatzema el resultat:
+
+\begin{lstlisting}[language=Assembler, caption={Suma simple en MIPS}, label=code:mips_sum]
+.data
+a: .word 5
+b: .word 3
+result: .word ?
+
+.text
+main:
+    lw  $t0, a      # Cargar a en t0
+    lw  $t1, b      # Cargar b en t1
+    add $t2, $t0, $t1  # t0 + t1 -> t2
+    sw  $t2, result # Almacenar resultat en result
+    li  $v0, 10     # Exit system call
+    syscall
+\end{lstlisting}
+
+\subsection{Paso a paso de la ejecución}
+
+1. \textbf{Fetch}: El processador busca la instrucció a la memòria utilitzant el PC.
+2. \textbf{Decode}: El unitat de control interpreta l'instrucció, identifica l'operació i els operandis.
+3. \textbf{Execute}: La UAL realitza l'operació (en aquest cas, la suma).
+4. \textbf{Memory access} (si cal): Accedeix a la memòria per carregar/emmagatzemar.
+5. \textbf{Write-back}: El resultat es desa en el registre destí.
+
+\section{Eines de Desenvolupament}
+
+Per treballar ambarquitectures de baix nivell, necessitem un conjunt d'eines.
+
+\subsection{Compiladors i Assembladors}
+
+El \textit{compilador} tradueix codi d'alt nivell a codi objecte o executable. L'\textit{assemblador} fa el mateix però amb llenguatge ensamblador.
+
+\begin{lstlisting}[language=Bash, caption={Compilació i ejecució en GNU/Linux}, label=bash:compile]
+$ gcc programa.c -o programa
+$
