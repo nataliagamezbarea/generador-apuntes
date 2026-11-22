@@ -3141,6 +3141,7 @@ async function obtenerConfiguracionSupabase() {
         .select("*");
       if (!error && Array.isArray(data) && data.length > 0) {
         procesarFilas(data);
+        console.log("✓ configuracion_privada leída con éxito de Supabase:", data);
       } else if (error) {
         console.warn("Aviso c.schema grados-informaticos configuracion_privada:", error.message || error);
       }
