@@ -7,6 +7,10 @@
 \usepackage{listings}
 \usepackage[margin=1in]{geometry}
 
+\title{Notas de la Asignatura JK: Tema 1 --- Arquitecturas y Herramientas}
+\author{Profesor Experto}
+\date{\today}
+
 \hypersetup{
     colorlinks=true,
     urlcolor=blue,
@@ -15,69 +19,160 @@
 }
 
 \lstset{
-    language=[ANSI]C,
     basicstyle=\ttfamily\small,
-    keywordstyle=\color{blue},
-    commentstyle=\color{gray},
-    stringstyle=\color{red},
     breaklines=true,
     frame=single,
     captionpos=b,
-    columns=fullflexible,
-    keepspaces=true
+    language=[x86masm]Assembler,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{orange},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    showstringspaces=false
 }
-
-\makeatletter
-\def\lstlistingname{Código}
-\makeatother
-
-\title{Apuntes de la Asignatura JK: Tema 1 --- Arquitectures i Eines}
-\author{Profesor Experto en Informática}
-\date{\today}
 
 \begin{document}
 \maketitle
 
-\section{Introducció al disseny d'arquestures computing}
-El Tema 1 de la assignatura JK s'adentra en els conceptes fonamentals que subyacen al disseny i la comprensió d'arquestures de computadors modernes. Aquest capítol proporciona una base rigurosa per a comprendre com es organitzen els sistemes informàtics des del nivell de hardware fins a les eines de desenvolupament software.
+\section*{Introducción}
+Las presentes notas corresponden al \textbf{Tema 1} de la asignatura JK, centrado en los fundamentos de las arquitecturas de computador y las herramientas de bajo nivel necesarias para la programación sistemática. Se parte de una visión teórica rigoureuse, complementada con ejemplos prácticos y descripciones paso a paso de los mecanismos internos.
 
-\subsection{Arquestura de Von Neumann i Princeton}
-La arquestura de Von Neumann, proposta l'any 1945, és el model bàsic sobre el qual es construeixen la majoria dels ordinadors generals d'actualdia. El seu principi és l'emmagatzematge conjoint de dades i instruccions en una memòria unificada, accessiblevia mitjançant una adreça comú.
+\section{1. Arquitectura de Von Neumann}
+La arquitectura de Von Neumann es el modelo fundamental que sustenta la mayoría de los ordenadores modernos. Se caracteriza por cuatro elementos principales:
 
 \begin{itemize}
-    \item \textbf{Memòria unificada:} Tant les instruccions com els dades residen en la mateixa memòria RAM.
-    \item \textbf{Adreçament:} El processador utilitza un contador de programa (Program Counter, PC) per a obtenir la següent instrucció des de la memòria.
-    \item \textbf{Bus de von Neumann:} El mateix bus s'utilitza per a transferir instruccions i dades, el que pot crear un "coll de botella" (von Neumann bottleneck).
+    \item \textbf{Unidad de Memoria (Memory):} Almacena tanto datos como instrucciones en un espacio de direcciones único.
+    \item \textbf{Unidad de Procesamiento (Processing Unit):} Realiza operaciones aritmético-lógicas y controla el flujo de instrucciones.
+    \item \textbf{Buses de direcciones, datos y control:} Medios de comunicación entre los componentes.
+    \item \textbf{E/S (Entrada/Salida):} Interfaz entre el sistema y dispositivos periféricos.
 \end{itemize}
 
-En contraposició, l'arquestura de Princeton separa físicament la memòria d'instruccions i la memòria de dades, permetent accesos simultànies (fetch i read/write), però és menys flexible en termes de gestió dinàmica de memòria.
+Matemáticamente, el ciclo de ejecución se puede modelar como una función iterativa:
+\[
+I_{t+1} = f(I_t, M_t, P_t)
+\]
+donde $I_t$ es el estado de instrucciones en el tiempo $t$, $M_t$ el contenido de memoria y $P_t$ el estado del procesador.
 
-\subsection{Components principals d'un sistema}
-Tots els sistemes computing, independentment de la seva mida, comparten un conjunt de components bàsics:
+\subsection{1.1 Estructura Organizada}
+La organización clásica divide el procesador en:
+\begin{itemize}
+    \item \textbf{ALU (Arithmetic Logic Unit):} Realiza operaciones aritméticas ($+, -, \times, \div$) y lógicas ($\land, \lor, \neg, \oplus$).
+    \item \textbf{UC (Control Unit):} Decodifica instrucciones y genera las señales de control necesarias para la ALU, registros y buses.
+    \item \textbf{Registros de propósito general:} Almacenamiento rápido de datos operando (ej. $AX, BX, CX, DX$ en arquitectura x86).
+    \item \textbf{Program Counter (PC):} Apunta a la siguiente instrucción a ejecutar.
+    \item \textbf{Stack Pointer (SP) y Base Pointer (BP):} Para gestión de pila y memoria dinámica.
+\end{itemize}
+
+\subsection{1.2 El Ciclo de Instrucción}
+El ciclo de instrucción básico consta de los siguientes pasos fase a fase:
+
+\begin{enumerate}
+    \item \textbf{Fetch (Obtención):} El PC indica la dirección de la instrucción; la memoria la lee y la envía al registro de instrucción (IR).
+    \begin{lstlisting}[caption=Pseudocódigo del paso Fetch]
+        MAR <- PC
+        MDR <- Memoria[MAR]
+        IR <- MDR
+        PC <- PC + 1   // o salto condicional
+    \end{lstlisting}
+    \item \textbf{Decode (Decodificación):} La UC interpreta el campo de operación (opcode) de la IR y determina las operaciones necesarias.
+    \item \textbf{Execute (Ejecución):} Se realizan las operaciones aritmético-lógicas en la ALU, se accede a memoria si es necesario, o se modifican registros.
+    \item \textbf{Write-back (Escritura):} Los resultados se guardan en el registro de destino o en memoria.
+\end{enumerate}
+
+El tiempo de ciclo ($T_{cycle}$) depende de la tecnología del hardware y suele ser el tiempo máximo necesario para completar cualquiera de las fases anteriores.
+
+\subsection{1.3 Ejemplo de Secuencia de Machine Code}
+Consideremos la operación de sumar dos números almacenados en memoria y guardar el resultado. En un conjunto de instrucciones hipotético:
+
+\begin{lstlisting}[caption=Secuencia de instrucciones en lenguaje ensamblador]
+    LOAD  R1, direccion_A
+    LOAD  R2, direccion_B
+    ADD   R3, R1, R2
+    STORE direccion_R, R3
+\end{lstlisting}
+
+Cada instrucción sigue el ciclo fetch-decode-execute descrito anteriormente.
+
+\section{2. Herramientas de Programación de Bajo Nivel}
+Más allá de la arquitectura, es esencial dominar las herramientas que permiten interactuar directamente con el hardware.
+
+\subsection{2.1 Ensamblador y Sintaxis}
+El lenguaje ensamblador mapea mnemotecnicamente las instrucciones de máquina. Cada arquitectura tiene su propia sintaxis; en x86-32 es común usar la sintaxis Intel, mientras que ARM suele usar la sintaxis AT\&T.
+
+\begin{lstlisting}[caption=Comparación de sintaxis para MOV]
+    ; Sintaxis Intel
+    MOV EAX, 0x1F
+    ; Sintaxis AT&T
+    movl \$0x1F, %eax
+\end{lstlisting}
+
+\subsection{2.2 Directivas y Pseudo-instrucciones}
+Los ensambladores utilizan directivas (prefijadas con punto) para configurar el ensamblaje:
+\begin{itemize}
+    \item \texttt{.model small} : Define el modelo de memoria.
+    \item \texttt{.stack 100h} : Asigna espacio de pila.
+    \item \texttt{.data} : Sección de datos estáticos.
+    \item \texttt{.code} : Sección de código ejecutable.
+\end{itemize}
+
+\subsection{2.3 Depuración y Herramientas Auxiliares}
+Herramientas como \texttt{gdb}, \texttt{objdump} y \texttt{strace} son indispensables para inspeccionar el comportamiento en tiempo de ejecución, traducir código objeto a ensamblador y rastrear llamadas de sistema, respectivamente.
+
+\section{3. Memoria y Direccionamiento}
+La jerarquía de memoria busca equilibrar velocidad y capacidad. Los niveles principales son:
 
 \begin{center}
-\begin{tabular}{lll}
-\textbf{Component} & \textbf{Funció} & \textbf{Detall} \\
-CPU (Central Processing Unit) & Executar instruccions & ALU i Unitat de Control \\
-Memòria Principal (RAM) & Almacenament temporal & Accés aleatori, volatil \\
-Memòria Secundària (HDD/SSD) & Almacenament persistent & No volàtil, major capacitat \\
-Units d'E/S (Input/Output) & Interfície amb el món exterior & Teclat, ratolí, xarxa, gràfiques \\
-\end{tabular}
+    \begin{tabular}{|c|c|c|}
+    \hline
+    Nivel & Tecnología & Acceso típico \\
+    \hline
+    Registro & SRAM & 1 ciclo de reloj \\
+    L1 Cache & SRAM & 3-4 ciclos \\
+    L2 Cache & SRAM & 10-15 ciclos \\
+    L3 Cache & SRAM/DDR & 20-50 ciclos \\
+    Mem Principal & DRAM & ~100 ns \\
+    Disco SSD & NAND Flash & ~25 $\mu$s \\
+    Disco HDD & Magnetismo & ~5-10 ms \\
+    \hline
+    \end{tabular}
 \end{center}
 
-\subsection{Conjunts d'instruccions (ISA)}
-L'ISA defineix el vocablar màxim que un processador entén. Inclou:
-\begin{itemize}
-    \item Tipus de dades (enter senzill, enter senzill no signat, de pla, etc.).
-    \item Formats d'instrucció (R-type, I-type, S-type en MIPS).
-    \item Registres visibles per al programador.
-    \item Sistemes d'adreçament.
-\end{itemize}
+El \textbf{principio de localidad} (temporal y espacial) justifica la efectividad de las caches.
 
-\subsection{Eines de desenvolupament}
-Per a treballar ambarquitectures de baix nivell, disposem d'un conjunt d'eines:
-\begin{itemize}
-    \item \textbf{Assemblers:} Traduixen llenguatge ensamblador a codi màquina. Exemples: \texttt{nasm}, \texttt{mips-as}.
-    \item \textbf{Simuladors d'arquitectura:} Permeten executar codi màquina en un entorn controlat per estudiar comportament. Exemple: \texttt{simplesim}, \texttt{gem5}.
-    \item \textbf{Debuggers:} Faciliten la inspecció i modificació del flux d'execució pas a pas. Exemple: \texttt{gdb}.
-    \item \textbf{Compiladors:} Traduixen llenguatges de alt nivell a codi màquina o ensamb
+\section{4. Consideraciones de Rendimiento}
+Una métrica clave es el CPI (Cycles Per Instruction):
+\[
+CPI = \frac{\text{Ciclos totales de ejecución}}{\text{Número de instrucciones ejecutadas}}
+\]
+Un CPI cercano a 1 indica un pipeline ideal; valores mayores reflejan hazards (de datos, de control, estructurales) y ineficiencias de diseño.
+
+Otra métrica es el \textit{MIPS} (Million Instructions Per Second):
+\[
+MIPS = \frac{\text{Tasa de reloj (Hz)}}{10^6 \times CPI}
+\]
+
+\section{5. Ejemplo Práctico Completo}
+A continuación, se muestra un programa en ensamblador x86 que calcula el factorial de un número pequeño usando recursión, ilustrando el uso de la pila, llamadas a funciones y gestión de registros.
+
+\begin{lstlisting}[caption=Programa ensamblador: factorial recursivo]
+    .model small
+    .stack 100h
+    .data
+        msg1 db "Introduce un número (0-9): $"
+        msg2 db 10, 13, "Factorial: $"
+        num  db ?
+    .code
+    start:
+        mov ax, @data
+        mov ds, ax
+        
+        ; Mostrar mensaje de entrada
+        mov ah, 09h
+        lea dx, msg1
+        int 21h
+        
+        ; Leer carácter numérico
+        mov ah, 01h
+        int 21
