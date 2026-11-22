@@ -163,12 +163,25 @@ async function main() {
   const modeloCodigoConfigurado =
     process.env.NVIDIA_MODELO_CODIGO || "nvidia/nemotron-3.5-bolt-e4b";
 
-  console.log(`=== Generando apuntes modulares en GitHub Actions ===`);
-  console.log(`Asignatura: ${asignatura}`);
-  console.log(`Tema: ${tema} - ${titulo}`);
-  console.log(`Subtema inicial: ${subtema}`);
-  console.log(`Modelo teoría (IA): ${modeloConfigurado}`);
-  console.log(`Modelo código/razonamiento: ${modeloCodigoConfigurado}`);
+  const contenidoLatexDirecto = (process.env.CONTENIDO_LATEX || "").trim();
+  const tieneLatexDirecto = Boolean(
+    contenidoLatexDirecto &&
+    (contenidoLatexDirecto.startsWith("{") || contenidoLatexDirecto.startsWith("```json") || contenidoLatexDirecto.includes("\\documentclass"))
+  );
+
+  if (tieneLatexDirecto) {
+    console.log(`=== Compilando apuntes con XeLaTeX en GitHub Actions ===`);
+    console.log(`Asignatura: ${asignatura}`);
+    console.log(`Tema: ${tema} - ${titulo}`);
+    console.log(`✓ Recibido LaTeX terminado desde la interfaz web. Modo compilación directa sin llamadas a la IA.`);
+  } else {
+    console.log(`=== Generando apuntes modulares en GitHub Actions ===`);
+    console.log(`Asignatura: ${asignatura}`);
+    console.log(`Tema: ${tema} - ${titulo}`);
+    console.log(`Subtema inicial: ${subtema}`);
+    console.log(`Modelo teoría (IA): ${modeloConfigurado}`);
+    console.log(`Modelo código/razonamiento: ${modeloCodigoConfigurado}`);
+  }
 
   // Configurar las rutas de apuntes para que apunten a apuntes-generados
   const dirSalidaAsignatura = path.join(process.cwd(), "apuntes-generados", asignatura);
@@ -269,43 +282,36 @@ async function main() {
       }
       const bloques = dividirTextoPorApartados(textoFuente, [], apartadosDetectados);
       const todosLosArchivos = [];
-      const tamanoLote = 3;
 
-      for (let i = 0; i < bloques.length; i += tamanoLote) {
-        const lote = bloques.slice(i, i + tamanoLote);
-        const promesasLote = lote.map((blq, idxRelativo) => {
-          const idx = i + idxRelativo;
-          const apInfo = apartadosDetectados[idx] || { subtema: idx + 1, titulo: `Apartado ${idx + 1}` };
-          const subtemaId = String(apInfo.subtema || idx + 1);
-          const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
+      for (let idx = 0; idx < bloques.length; idx += 1) {
+        const blq = bloques[idx];
+        const apInfo = apartadosDetectados[idx] || { subtema: idx + 1, titulo: `Apartado ${idx + 1}` };
+        const subtemaId = String(apInfo.subtema || idx + 1);
+        const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
 
-          const esApartadoCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
-            `${subtemaTitulo} ${blq.texto}`
-          );
-          const modeloAEjecutar = esApartadoCodigo ? modeloCodigoConfigurado : modeloConfigurado;
-          console.log(`🤖 Redactando en paralelo Apartado ${tema}.${subtemaId}: "${subtemaTitulo}" (usando ${modeloAEjecutar})...`);
+        const esApartadoCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
+          `${subtemaTitulo} ${blq.texto}`
+        );
+        const modeloAEjecutar = esApartadoCodigo ? modeloCodigoConfigurado : modeloConfigurado;
+        console.log(`🤖 Redactando Apartado ${tema}.${subtemaId}: "${subtemaTitulo}" (usando ${modeloAEjecutar})...`);
 
-          return consultarIAApartado({
-            asignatura,
-            tema,
-            tituloTema: titulo,
-            subtema: subtemaId,
-            subtemaTitulo,
-            instrucciones,
-            textoFuente: blq.texto,
-            apiKey,
-            modeloConfigurado: modeloAEjecutar,
-          }).then((resApartado) => ({ subtemaId, resApartado }));
+        const resApartado = await consultarIAApartado({
+          asignatura,
+          tema,
+          tituloTema: titulo,
+          subtema: subtemaId,
+          subtemaTitulo,
+          instrucciones,
+          textoFuente: blq.texto,
+          apiKey,
+          modeloConfigurado: modeloAEjecutar,
         });
 
-        const resultadosLote = await Promise.all(promesasLote);
-        for (const { subtemaId, resApartado } of resultadosLote) {
-          if (resApartado?.archivos?.length) {
-            for (const arch of resApartado.archivos) {
-              arch.subtema = subtemaId;
-              todosLosArchivos.push(arch);
-              console.log(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
-            }
+        if (resApartado?.archivos?.length) {
+          for (const arch of resApartado.archivos) {
+            arch.subtema = subtemaId;
+            todosLosArchivos.push(arch);
+            console.log(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
           }
         }
       }

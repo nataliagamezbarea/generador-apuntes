@@ -176,7 +176,11 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
 
       if (formatoJson) {
         try {
-          analizarJson(content, json.choices?.[0]?.finish_reason === "length" ? "length" : "");
+          const parsed = analizarJson(content, json.choices?.[0]?.finish_reason === "length" ? "length" : "");
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length === 0) {
+            console.warn(`⚠️ Modelo ${mod} devolvió un objeto JSON vacío {}, probando siguiente modelo...`);
+            continue;
+          }
         } catch (errJson) {
           console.warn(`⚠️ Modelo ${mod} devolvió respuesta truncada o JSON incompleto (${errJson.message.slice(0, 120)}), probando siguiente modelo...`);
           continue;
@@ -371,7 +375,11 @@ export function analizarJson(text, motivoFinal = "") {
       const end = cleaned.lastIndexOf(close);
       if (start >= 0 && end > start) {
         try {
-          return JSON.parse(cleaned.slice(start, end + 1));
+          const parsed = JSON.parse(cleaned.slice(start, end + 1));
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length === 0) {
+            continue;
+          }
+          return parsed;
         } catch {
           continue;
         }
