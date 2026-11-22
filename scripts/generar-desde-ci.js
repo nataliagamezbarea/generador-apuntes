@@ -133,7 +133,7 @@ async function main() {
   let textoFuente = process.env.TEXTO_FUENTE || "";
   const apiKey = process.env.NVIDIA_API_KEY || "";
   const modeloConfigurado =
-    process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-lightning-30b-a3b";
+    process.env.NVIDIA_MODELO || "mistralai/mistral-large-4-1t-a52b";
 
   console.log(`=== Generando apuntes modulares en GitHub Actions ===`);
   console.log(`Asignatura: ${asignatura}`);

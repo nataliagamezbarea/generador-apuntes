@@ -92,7 +92,7 @@ jobs:
         env:
           PROVEEDOR_IA: "nvidia"
           NVIDIA_API_KEY: ${{ inputs.nvidia_api_key || secrets.NVIDIA_API_KEY || vars.NVIDIA_API_KEY }}
-          NVIDIA_MODELO: ${{ inputs.nvidia_modelo || vars.NVIDIA_MODELO || 'nvidia/nemotron-3.5-lightning-30b-a3b' }}
+          NVIDIA_MODELO: ${{ inputs.nvidia_modelo || vars.NVIDIA_MODELO || 'mistralai/mistral-large-4-1t-a52b' }}
           ASIGNATURA: ${{ inputs.asignatura }}
           TEMA: ${{ inputs.tema }}
           TITULO: ${{ inputs.titulo }}

@@ -3260,6 +3260,11 @@ async function traducirTextoLargoBrowser(texto = "") {
 
 // PDF Extractor para navegador usando PDF.js
 async function extraerTextoPdfBrowser(file) {
+  if (!window.pdfjsLib) {
+    for (let w = 0; w < 10 && !window.pdfjsLib; w++) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
   if (!window.pdfjsLib) return "";
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -3359,13 +3364,18 @@ REGLAS CRÍTICAS:
       if (!resp.ok) continue;
 
       const data = await resp.json();
-      const rawContent = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || "";
-      const matchJ = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      const strJson = matchJ ? matchJ[1].trim() : rawContent.trim();
-      const parsed = JSON.parse(strJson);
-      if (parsed && (parsed.archivos || parsed.latex)) {
-        return parsed;
+      const rawContent = (data.choices?.[0]?.message?.content || "").trim();
+      if (!rawContent || /^let me\b|^i need to\b|^thinking\b|^here's a thinking\b/i.test(rawContent)) {
+        continue;
       }
+      const matchJ = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      const strJson = matchJ ? matchJ[1].trim() : rawContent;
+      try {
+        const parsed = JSON.parse(strJson);
+        if (parsed && (parsed.archivos || parsed.latex)) {
+          return parsed;
+        }
+      } catch (_) {}
     } catch (_) {}
   }
   return null;
@@ -3492,7 +3502,7 @@ async function ejecutarGeneracionGitHubActions({
 
   // FASE 3: REDACCIÓN DE APARTADOS CON IA (NVIDIA NIM) BLOQUE A BLOQUE
   let contenidoLatexGenerado = "";
-  const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-lightning-30b-a3b").trim();
+  const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "mistralai/mistral-large-4-1t-a52b").trim();
 
   if (cfgSupabase.nvidiaApiKey) {
     registrarEventoConsola(`🤖 [Fase 3/5] Redacción de apartados con IA (${modelo})...`);
