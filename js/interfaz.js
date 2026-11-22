@@ -60,11 +60,14 @@ const esEntornoEstatico =
     window.location.hostname.endsWith("github.io") ||
     window.location.hostname.endsWith("pages.dev"));
 
-// Configurar enlace "Ir a los tests" dinámicamente según entorno
+// Configurar enlace "Ir a los tests" dinámicamente según entorno o config
 document.querySelectorAll(".nav-tests").forEach((el) => {
-  if (esEntornoEstatico) {
+  if (window.APP_CONFIG?.urlTests) {
+    el.href = window.APP_CONFIG.urlTests;
+  } else if (esEntornoEstatico) {
     el.href = "https://nataliagamezbarea.github.io/PREPARAR-ASIGNATURAS/";
-  } else {
+  }
+  if (!esEntornoEstatico) {
     // Si estamos en local, consultar /api/configuracion para usar URL_TESTS del .env
     fetch("/api/configuracion")
       .then((r) => r.json())

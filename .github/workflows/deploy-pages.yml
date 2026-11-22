@@ -1,0 +1,53 @@
+name: Desplegar en GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Inyectar variables de entorno en config-publica.js
+        run: |
+          URL_TESTS_VAL="${{ vars.URL_TESTS || secrets.URL_TESTS || 'https://nataliagamezbarea.github.io/PREPARAR-ASIGNATURAS/' }}"
+          SUPABASE_URL_VAL="${{ vars.SUPABASE_URL || secrets.SUPABASE_URL || 'https://lztatgnlplpduiatmlrv.supabase.co' }}"
+          SUPABASE_KEY_VAL="${{ vars.SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY || 'sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ' }}"
+
+          cat <<EOF > js/config-publica.js
+          // Generado automáticamente por GitHub Actions durante el despliegue
+          window.APP_CONFIG = {
+            supabaseUrl: "${SUPABASE_URL_VAL}",
+            supabaseAnonKey: "${SUPABASE_KEY_VAL}",
+            urlTests: "${URL_TESTS_VAL}",
+          };
+          EOF
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Subir artefacto de Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+
+      - name: Desplegar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

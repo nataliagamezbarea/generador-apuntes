@@ -10,4 +10,5 @@
 window.APP_CONFIG = {
   supabaseUrl: "https://lztatgnlplpduiatmlrv.supabase.co",
   supabaseAnonKey: "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ",
+  urlTests: "https://nataliagamezbarea.github.io/PREPARAR-ASIGNATURAS/",
 };
