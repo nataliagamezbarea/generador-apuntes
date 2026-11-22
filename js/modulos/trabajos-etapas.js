@@ -175,10 +175,14 @@ export async function listarTrabajosEtapas(
       if (error.code === "ENOENT") continue;
       throw error;
     }
+    if (trabajo.fase === "cancelado" && trabajo.estado === "procesando") {
+      trabajo.estado = "cancelado";
+      void guardarTrabajoEtapas(trabajo).catch(() => {});
+    }
     if (
       (!subject || trabajo.asignatura === subject) &&
       (incluirCompletados || trabajo.estado !== "completado") &&
-      (incluirCancelados || trabajo.estado !== "cancelado")
+      (incluirCancelados || (trabajo.estado !== "cancelado" && trabajo.fase !== "cancelado"))
     )
       trabajos.push({
         id: trabajo.id,
@@ -201,7 +205,7 @@ export async function listarTrabajosEtapas(
 
 export async function buscarTrabajoEtapasReutilizable(subject, archivos) {
   const huellaMaterial = huellaFuentes(archivos);
-  const trabajos = await listarTrabajosEtapas(subject, true);
+  const trabajos = await listarTrabajosEtapas(subject, false);
   for (const resumen of trabajos) {
     const trabajo = await cargarTrabajoEtapas(resumen.id);
     if ((await huellaFuentesTrabajo(trabajo)) === huellaMaterial) return trabajo;

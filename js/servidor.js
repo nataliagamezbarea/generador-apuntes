@@ -132,6 +132,25 @@ aplicacion.get("/mejorar", (_request, respuesta) =>
   respuesta.sendFile(path.join(directorioActual, "..", "interfaz", "revisar.html")),
 );
 
+aplicacion.post("/api/reiniciar-servidor", async (_request, respuesta) => {
+  respuesta.json({ ok: true, mensaje: "Reiniciando servidor..." });
+  setTimeout(async () => {
+    try {
+      const { spawn } = await import("node:child_process");
+      const rutaLanzar = path.join(directorioActual, "..", "lanzar.sh");
+      const hijo = spawn("bash", [rutaLanzar], {
+        detached: true,
+        stdio: "ignore",
+      });
+      hijo.unref();
+      setTimeout(() => process.exit(0), 400);
+    } catch (e) {
+      console.error("Error al reiniciar servidor:", e);
+      process.exit(1);
+    }
+  }, 200);
+});
+
 aplicacion.get("/api/health", async (_request, respuesta) => {
   let model = { connected: false, modelAvailable: false };
   let error;
@@ -194,7 +213,11 @@ aplicacion.post(
       detalle:
         "Se ha detenido la generación. La caché de extracciones se ha conservado.",
     });
-    if (trabajoEtapas) await pausarTrabajoEtapas(id);
+    if (trabajoEtapas) {
+      trabajoEtapas.fase = "cancelado";
+      trabajoEtapas.estado = "cancelado";
+      await guardarTrabajoEtapas(trabajoEtapas);
+    }
     respuesta.json({ cancelado: true });
   }),
 );
@@ -716,6 +739,15 @@ aplicacion.post(
       throw errorHttp(409, "Esta generación ya está completada.");
     trabajo.estado = "pendiente";
     trabajo.error = "";
+    if (trabajo.fase === "cancelado") {
+      trabajo.fase = !trabajo.unidadesPreparadas
+        ? "extraccion"
+        : trabajo.unidadActual < (trabajo.unidadesPdf?.length || 0)
+          ? "pdf"
+          : trabajo.unidadActual < ((trabajo.unidadesPdf?.length || 0) + (trabajo.unidadesCodigo?.length || 0))
+            ? "codigo"
+            : "guardado";
+    }
     await guardarTrabajoEtapas(trabajo);
     iniciarTrabajoEtapas(trabajo.id);
     respuesta.status(202).json({ id: trabajo.id, estado: "pendiente" });
@@ -1001,7 +1033,7 @@ aplicacion.post(
             referenciaBiblioteca,
             parteMaterial: [
               bloquesMaterial.length > 1
-                ? `PARTE ${indiceBloque + 1} DE ${bloquesMaterial.length}: APARTADO ${subtemaEfectivo} (${tituloApartadoEfectivo}). OBLIGATORIO: traduce el título del tema, del apartado y todas las secciones al ESPAÑOL ESTÁNDAR en el JSON ("titulo_tema", "titulo_subtema", "archivos[].titulo", "archivos[].nombre", y en cada macro LaTeX \\secciongrande, \\subtituloA, \\subtituloB, \\resumen, \\definicion). NUNCA dejes palabras en catalán ni en otro idioma en los títulos, slugs o secciones. Explica todos los conceptos, arquitecturas, códigos y preguntas de examen con profundidad didáctica en español, sin omitir nada y sin resumir en esquemas telegráficos de 2 líneas.`
+                ? `PARTE ${indiceBloque + 1} DE ${bloquesMaterial.length}: APARTADO ${subtemaEfectivo} (${tituloApartadoEfectivo}). OBLIGATORIO: traduce el título del tema, del apartado y todas las secciones al ESPAÑOL ESTÁNDAR en el JSON ("titulo_tema", "titulo_subtema", "archivos[].titulo", "archivos[].nombre", y en cada macro LaTeX \\secciongrande, \\subtituloA, \\subtituloB, \\resumen, \\definicion). NUNCA dejes palabras en catalán ni en otro idioma en los títulos, slugs o secciones. PARÁFRASIS EXHAUSTIVA PÁRRAFO A PÁRRAFO: transcribe y desarrolla cada párrafo y punto del material en tus propias palabras en español estándar (decir lo mismo con rigor docente para no vulnerar derechos de autor ni hacer copia literal). PROHIBIDO RESUMIR: no omitas ningún detalle, arquitectura, código ni pregunta de autoevaluación.`
                 : "",
               crearGuiaMaterialBreve(bloque.texto, bloque.imagenes),
             ]
@@ -1529,6 +1561,7 @@ async function reanudarTrabajosEtapasAlArrancar() {
     if (
       trabajo.estado === "confirmacion" ||
       trabajo.estado === "cancelado" ||
+      trabajo.fase === "cancelado" ||
       /aborted|cancelad|detenido por el usuario/i.test(trabajo.error)
     )
       continue;
@@ -1550,7 +1583,8 @@ function iniciarTrabajoEtapas(id) {
       console.error(`Falló el trabajo por etapas ${id}:`, error);
       try {
         const trabajo = await cargarTrabajoEtapas(id);
-        trabajo.estado = "pendiente";
+        trabajo.estado = pausado ? "cancelado" : "pendiente";
+        if (pausado) trabajo.fase = "cancelado";
         trabajo.error = pausado
           ? ""
           : error.message || "Error inesperado durante la generación.";
@@ -1577,6 +1611,15 @@ async function ejecutarTrabajoEtapas(id, controlador) {
   if (trabajo.estado === "completado" || trabajo.estado === "confirmacion") return;
   trabajo.estado = "procesando";
   trabajo.error = "";
+  if (trabajo.fase === "cancelado") {
+    trabajo.fase = !trabajo.unidadesPreparadas
+      ? "extraccion"
+      : trabajo.unidadActual < (trabajo.unidadesPdf?.length || 0)
+        ? "pdf"
+        : trabajo.unidadActual < ((trabajo.unidadesPdf?.length || 0) + (trabajo.unidadesCodigo?.length || 0))
+          ? "codigo"
+          : "guardado";
+  }
   await guardarTrabajoEtapas(trabajo);
   const fuentes = await Promise.all(
     trabajo.fuentes.map(async (fuente) => ({
@@ -1676,23 +1719,43 @@ async function ejecutarTrabajoEtapas(id, controlador) {
           apartadosDetectados,
         );
         for (const [indiceBloque, bloque] of bloquesApartados.entries()) {
-          unidadesPdf.push({
-            id: `pdf-${indiceDocumento}-apartado-${bloque.temaNumero}_${bloque.apartadoNumero}`,
-            documento,
-            texto: bloque.texto,
-            imagenes: bloque.imagenes,
-            apartadoNumero: bloque.apartadoNumero,
-            apartadoTitulo: bloque.apartadoTitulo,
-            temaNumero: bloque.temaNumero,
-          });
+          const maxCaracteresApartado = 8000;
+          if (bloque.texto.length > maxCaracteresApartado) {
+            const fragmentos = dividirMaterial(bloque.texto, maxCaracteresApartado);
+            for (const [indiceFrag, textoFrag] of fragmentos.entries()) {
+              unidadesPdf.push({
+                id: `pdf-${indiceDocumento}-apartado-${bloque.temaNumero}_${bloque.apartadoNumero}-p${indiceFrag + 1}`,
+                documento,
+                texto: textoFrag,
+                imagenes: indiceFrag === 0 ? bloque.imagenes : [],
+                apartadoNumero: bloque.apartadoNumero,
+                indiceApartado: indiceBloque + 1,
+                orden: indiceBloque + 1,
+                apartadoTitulo: fragmentos.length > 1 ? `${bloque.apartadoTitulo} (Parte ${indiceFrag + 1})` : bloque.apartadoTitulo,
+                temaNumero: bloque.temaNumero,
+              });
+            }
+          } else {
+            unidadesPdf.push({
+              id: `pdf-${indiceDocumento}-apartado-${bloque.temaNumero}_${bloque.apartadoNumero}`,
+              documento,
+              texto: bloque.texto,
+              imagenes: bloque.imagenes,
+              apartadoNumero: bloque.apartadoNumero,
+              indiceApartado: indiceBloque + 1,
+              orden: indiceBloque + 1,
+              apartadoTitulo: bloque.apartadoTitulo,
+              temaNumero: bloque.temaNumero,
+            });
+          }
         }
       } else {
         const visualesRelevantes =
           textoDocumento.length > 1000 && visualesDocumento.length > 4
             ? visualesDocumento.filter((img) => (img.ancho >= 400 && img.alto >= 250) || !img.ancho).slice(0, 4)
             : visualesDocumento;
-        const tamanoBloque = config.contextSize >= 24000 ? 18000 : 8000;
-        const maxImagenesBloque = config.contextSize >= 24000 ? 4 : 2;
+        const tamanoBloque = 8000;
+        const maxImagenesBloque = 2;
         const bloques = dividirMaterialConImagenes(
           textoDocumento,
           visualesRelevantes,
@@ -1705,6 +1768,9 @@ async function ejecutarTrabajoEtapas(id, controlador) {
             documento,
             texto: bloque.texto,
             imagenes: bloque.imagenes,
+            apartadoNumero: indiceBloque + 1,
+            indiceApartado: indiceBloque + 1,
+            orden: indiceBloque + 1,
           });
         }
       }
@@ -1712,7 +1778,7 @@ async function ejecutarTrabajoEtapas(id, controlador) {
       // Procesar siempre los archivos de código y ZIPs aportados por el usuario
       const bloques = dividirCodigoEnBloques(
         textoDocumento,
-        18000,
+        8000,
         documento.language === "JSON",
       );
       for (const [indiceBloque, texto] of bloques.entries()) {
@@ -1733,7 +1799,7 @@ async function ejecutarTrabajoEtapas(id, controlador) {
         }
       }
     } else {
-      const tamanoBloque = config.contextSize >= 24000 ? 18000 : 6000;
+      const tamanoBloque = 8000;
       const bloques = dividirMaterial(textoDocumento, tamanoBloque);
       for (const [indiceBloque, texto] of bloques.entries()) {
         if (agruparCodigo) {
@@ -1814,16 +1880,26 @@ async function ejecutarTrabajoEtapas(id, controlador) {
     trabajo.fase = unidadesPdf.length ? "pdf" : "codigo";
     trabajo.unidadActual = 0;
     await guardarTrabajoEtapas(trabajo);
-  } else if (
-    trabajo.fase === "pdf" ||
-    (trabajo.unidadActual === 0 &&
-      !(trabajo.resultadosPreparados ?? []).some((item) =>
-        item.unidad.startsWith("codigo-"),
-      ) &&
-      !trabajo.bloquePendiente)
-  ) {
-    trabajo.unidadesPdf = unidadesPdf.map((unidad) => unidad.id);
-    trabajo.unidadesCodigo = unidadesCodigo.map((unidad) => unidad.id);
+  } else {
+    if (trabajo.fase === "extraccion" || trabajo.fase === "cancelado") {
+      trabajo.fase =
+        trabajo.unidadActual < unidadesPdf.length
+          ? "pdf"
+          : trabajo.unidadActual < (unidadesPdf.length + unidadesCodigo.length)
+            ? "codigo"
+            : "guardado";
+    }
+    if (
+      trabajo.fase === "pdf" ||
+      (trabajo.unidadActual === 0 &&
+        !(trabajo.resultadosPreparados ?? []).some((item) =>
+          item.unidad.startsWith("codigo-"),
+        ) &&
+        !trabajo.bloquePendiente)
+    ) {
+      trabajo.unidadesPdf = unidadesPdf.map((unidad) => unidad.id);
+      trabajo.unidadesCodigo = unidadesCodigo.map((unidad) => unidad.id);
+    }
     await guardarTrabajoEtapas(trabajo);
   }
 
@@ -2126,19 +2202,19 @@ async function generarUnidadEtapasConDivision(
           ? deducirSlugConceptual("", archivo.titulo) ||
             crearNombreArchivo(archivo.nombre)
           : crearNombreArchivo(archivo.nombre);
-        archivo.nombre = sufijo ? base : deducirSlugConceptual("", archivo.titulo) || crearNombreArchivo(archivo.nombre);
+        archivo.nombre = sufijo ? `${base}-fragmento-${sufijo}` : base;
       }
     }
     return resultados;
   } catch (error) {
     const profundidad = (opciones.unidad.id.match(/-p\d+/g) || []).length;
     const esDivisible =
-      /token repeat limit reached|prediction aborted|límite de salida de Ollama|se truncó|no pudo procesar esta parte|exceeds the available context size|JSON|apartados LaTeX utilizables|objeto con apartados/i.test(
+      /Multimodal data provided|token repeat limit reached|prediction aborted|límite de salida de Ollama|se truncó|no pudo procesar esta parte|exceeds the available context size|JSON|apartados LaTeX utilizables|objeto con apartados/i.test(
         `${error?.message ?? ""} ${error?.cause?.message ?? ""}`,
       );
-    if (opciones.esPdf && opciones.unidad.imagenes?.length > 0 && esDivisible) {
+    if (opciones.unidad.imagenes?.length > 0) {
       console.warn(
-        `Ajustando ${opciones.unidad.id}: reintentando sin imágenes para evitar desbordar el contexto de Ollama (${error.message}).`,
+        `Ajustando ${opciones.unidad.id}: reintentando sin imágenes para evitar desbordar Ollama (${error.message}).`,
       );
       return await generarUnidadEtapasConDivision({
         ...opciones,
@@ -2150,8 +2226,7 @@ async function generarUnidadEtapasConDivision(
     }
 
     const sePuedeDividir =
-      opciones.esPdf &&
-      profundidad < 2 &&
+      profundidad < 3 &&
       opciones.unidad.texto.length > 1000 &&
       esDivisible;
     if (!sePuedeDividir) {
@@ -2259,7 +2334,7 @@ async function generarUnidadEtapas({
       referenciaBiblioteca,
       parteMaterial:
         [
-          `ETAPA_PDF: APARTADO ${apartadoEfectivo}: ${tituloApartadoEfectivo}. OBLIGATORIO: traduce el título del tema, del apartado y todas las secciones al ESPAÑOL ESTÁNDAR en el JSON ("titulo_tema", "titulo_subtema", "archivos[].titulo", "archivos[].nombre", y en cada macro LaTeX \\secciongrande, \\subtituloA, \\subtituloB, \\resumen, \\definicion). NUNCA dejes palabras en catalán ni en otro idioma en los títulos, slugs o secciones. Desarrolla este apartado con explicaciones docentes rigurosas y completas en español. Prohibido hacer resúmenes telegráficos de 2 líneas; explica cada concepto, arquitectura, código y pregunta de autoevaluación («Posa't a prova»).`,
+          `ETAPA_PDF: APARTADO ${apartadoEfectivo}: ${tituloApartadoEfectivo}. OBLIGATORIO: traduce el título del tema, del apartado y todas las secciones al ESPAÑOL ESTÁNDAR en el JSON ("titulo_tema", "titulo_subtema", "archivos[].titulo", "archivos[].nombre", y en cada macro LaTeX \\secciongrande, \\subtituloA, \\subtituloB, \\resumen, \\definicion). NUNCA dejes palabras en catalán ni en otro idioma en los títulos, slugs o secciones. PARÁFRASIS EXHAUSTIVA PÁRRAFO A PÁRRAFO: transcribe y desarrolla cada párrafo y punto del material en tus propias palabras en español estándar (decir exactamente lo mismo pero formulado para no vulnerar derechos de autor ni cometer plagio literal). PROHIBIDO RESUMIR: no hagas esquemas telegráficos ni omitas nada; explica cada concepto, arquitectura, código y pregunta de autoevaluación («Posa't a prova») con rigor universitario.`,
           crearGuiaMaterialBreve(unidad.texto, unidad.imagenes),
         ]
           .filter(Boolean)
@@ -2283,6 +2358,9 @@ async function generarUnidadEtapas({
         for (const arch of norm.archivos) {
           arch.subtema = unidad.apartadoNumero;
           arch.apartado = unidad.apartadoNumero;
+          arch.apartadoNumero = unidad.apartadoNumero;
+          arch.orden = unidad.orden || unidad.indiceApartado || unidad.apartadoNumero;
+          arch.indiceApartado = unidad.orden || unidad.indiceApartado || unidad.apartadoNumero;
         }
         norm.subtema = unidad.apartadoNumero;
       }
@@ -2297,10 +2375,13 @@ async function generarUnidadEtapas({
       validar: (resultadoIA) =>
         evaluarCoberturaMaterial(resultadoIA, unidad.texto),
     });
-    // Convertir markdown a LaTeX usando el conversor del sistema
+    // Convertir markdown a LaTeX usando el conversor del sistema si es necesario
     if (resultado.archivos && resultado.archivos.length > 0) {
       for (const archivo of resultado.archivos) {
-        if (archivo.latex) {
+        if (archivo.markdown && !archivo.latex) {
+          archivo.latex = archivo.markdown;
+        }
+        if (archivo.latex && !/\\(?:secciongrande|subtituloA|subtituloB|resumen|definicion|lista|pasos|rectangulos)/i.test(archivo.latex)) {
           archivo.latex = convertirMarkdownALatexWec(archivo.latex);
         }
       }
@@ -2321,6 +2402,11 @@ async function generarUnidadEtapas({
         if (apartadoEfectivo) {
           archivo.subtema = apartadoEfectivo;
           archivo.apartado = apartadoEfectivo;
+          archivo.apartadoNumero = apartadoEfectivo;
+        }
+        if (unidad.orden || unidad.indiceApartado) {
+          archivo.orden = unidad.orden || unidad.indiceApartado;
+          archivo.indiceApartado = unidad.orden || unidad.indiceApartado;
         }
         archivo.titulo = String(archivo.titulo || "")
           .replace(/\\textbf\{([^}]+)\}/g, "$1")

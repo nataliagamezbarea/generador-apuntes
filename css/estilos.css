@@ -477,12 +477,14 @@ textarea {
   position: static;
   width: 100%;
   height: auto;
-  padding: 0;
+  opacity: 1;
+  padding: 6px 0;
   border: 0;
   background: transparent;
   color: #aab4c6;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
+  z-index: 1;
 }
 
 .upload-card input[type="file"]::file-selector-button {

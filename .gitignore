@@ -6,6 +6,10 @@ informes-generacion/
 apuntes-privados/
 bibliotecas_latex/
 *.bak
+*.bak*
 *.current
 *.modificado
 *.restaurado
+temp_test.*
+test_*.mjs
+practicar*.cjs

@@ -66,6 +66,10 @@ REGLAS:
 - NUNCA incluyas nombres de centros educativos (como "Col·legi Sant Josep Obrer"), nombres de profesores, cursos ("2n DAW"), marcas de agua ni cabeceras institucionales.
 Cada concepto del material debe explicarse en detalle:
   * Comienza con \secciongrande{Título descriptivo en español} y un \resumen{Síntesis directa de la teoría en 2 a 4 líneas, explicando el fundamento técnico esencial de partida con pegada conceptual}.
+  * REGLA ESTRICTA DE RESUMEN: El \resumen es EXCLUSIVAMENTE una síntesis en prosa (un solo párrafo). PROHIBIDO colocar listas (\lista, \pasos), definiciones (\definicion, \definicionpar), subtítulos o cajas dentro de \resumen. Las listas y definiciones van SIEMPRE FUERA del resumen, como bloques independientes a continuación.
+  * PROHIBIDO EL TEXTO PLANO O SOSO: divide y estructura SIEMPRE el texto con las macros visuales oficiales (\rectangulos, \definicion, \lista, \pasos, \tabla, \nota). No dejes jamás párrafos largos sin maquetar.
+  * DEJA SIEMPRE ESPACIO después de cada título (PROHIBIDO usar \vspace negativo).
+  * En listas y pasos, escribe el texto continuo. NUNCA pongas números como "1." seguidos de un salto de línea dentro de \lista o \pasos.
   * PROHIBICIÓN ABSOLUTA DE METALENGUAJE EN \resumen{...} Y EXIGENCIA DE RESUMEN CONCEPTUAL DIRECTO:
     El comando \resumen{...} debe contener ÚNICAMENTE LA SÍNTESIS DIRECTA DE LA REALIDAD TÉCNICA E HISTÓRICA DE PARTIDA, con redacción directa, rotunda y con pegada (punchy) que fije de qué trata el tema desde la primera línea.
     ESTÁ TERMINANTEMENTE PROHIBIDO hablar sobre el documento o sobre lo que se va a explicar.
@@ -127,7 +131,7 @@ El formato MARKDOWN es ALTAMENTE RECOMENDADO porque permite centrarse en la prof
   * Código en línea y términos técnicos: Escribe identificadores, nombres de funciones, variables o comandos en línea con \cmd{...}.
 
 Si decides redactar directamente en LaTeX:
-No escribas preámbulo, documentclass, begin/end document, TikZ, figuras, dibujos, colores explícitos, \section, \subsection, \subsubsection ni comandos inventados. Sigue como referencia visual los apuntes existentes de WEC y DAW Tema 1: diseño limpio, estructurado, explicaciones organizadas, cajas/avisos solo cuando aporten, bloques de código legibles y tablas comparativas como las de sus temas 2 y 4. Divide el contenido en secciones principales por concepto grande y diferenciado; cada una debe empezar con \secciongrande, que hace avanzar la paleta y cambia el color como en WEC. La primera sección debe quedar en un color distinto al título del tema; cada nueva sección utiliza el siguiente color de la paleta. No metas todo el apartado bajo una única sección genérica cuando el material contiene varias ideas principales distintas. Dentro de cada sección usa \subtituloA y \subtituloB para los niveles inferiores, o \seccion para subtítulos con barra. Los subtítulos, las viñetas y las cajas heredan el color de su sección principal, igual que en la biblioteca WEC; el texto normal se mantiene legible. Cada archivo de salida debe comenzar por \secciongrande y llevar su propio título descriptivo; nunca devuelvas un archivo de texto suelto sin sección ni un bloque informe. Abre cada sección principal con \resumen{Idea central} para fijar de qué trata antes de desarrollarla.
+No escribas preámbulo, documentclass, begin/end document, TikZ, figuras, dibujos, colores explícitos, \section, \subsection, \subsubsection ni comandos inventados. Sigue como referencia visual los apuntes existentes de WEC y DAW Tema 1: diseño limpio, estructurado, explicaciones organizadas, cajas/avisos solo cuando aporten, bloques de código legibles y tablas comparativas como las de sus temas 2 y 4. ESTRUCTURA DE SECCIONES Y SUBTÍTULOS: Debe haber UNA única \secciongrande con su \resumen al principio de cada tema/subtema. Los distintos apartados y bloques de contenido se dividen EXCLUSIVAMENTE con \subtituloA (y \subtituloB para niveles inferiores). ESTÁ TOTALMENTE PROHIBIDO añadir otra \secciongrande o más de un \resumen en el mismo tema o subtema. Si el material se divide en varios archivos, el primer archivo contiene la \secciongrande y su \resumen, y los archivos siguientes empiezan directamente con \subtituloA{Título del bloque} sin añadir otra sección grande ni otro resumen. Los subtítulos, las viñetas y las cajas heredan el color de su sección principal, igual que en la biblioteca WEC; el texto normal se mantiene legible. Abre la sección principal con \resumen{Idea central} para fijar de qué trata antes de desarrollarla.
 - Definiciones y tarjetas destacadas (REFERENCIA WEC Y DAW TEMA 1): Usa SIEMPRE \definicion{Término}{Definición} cuando merezca una tarjeta propia. Usa \definicionpar{Término}{Definición} repetido para agrupar definiciones paralelas de varias opciones o conceptos.
 - Bloques de código: Usa \begin{codigo}...\end{codigo} sin corchetes de argumentos (sin [lenguaje]).
 - Terminal y consola: Para comandos usa \begin{consola}...\end{consola}.
@@ -156,6 +160,34 @@ NUNCA pongas oraciones largas en "nombre", nunca sufijos técnicos como "fragmen
 PROHIBICIÓN ESTRICTA DE TÍTULOS REPETIDOS O GENÉRICOS ("Apartado 1", "Apartado 2"):
 NUNCA titules un apartado ni pongas en "titulo" o \secciongrande nombres genéricos como "Apartado 1", "Apartado 2", "Sección 1" o "Concepto principal".
 Cada apartado debe titularse obligatoriamente con el nombre conceptual y técnico específico en español (por ejemplo: "Modelo cliente-servidor", "Arquitectura del navegador web", "Capacidades y limitaciones de JavaScript", "Integración de scripts en HTML").
+El título de la sección grande (\secciongrande) es el encabezado principal del apartado y debe ser ÚNICO por apartado para no duplicar entradas en el índice.
+En cambio, los subapartados (\subtituloA o \subtituloB) SÍ se pueden repetir tantas veces como sea necesario para cubrir todas las diapositivas (por ejemplo partes 1 y 2, características, ejemplos, etc.). NUNCA omitas ni saltes contenido de ninguna diapositiva: todo el material debe quedar explicado a fondo.
+NUNCA pongas títulos en MAYÚSCULAS FIJAS ("MECANISMOS DE EJECUCION...") ni en minúsculas descuidadas: usa siempre mayúscula inicial estándar (Title/Sentence Case) conservando acrónimos técnicos (HTML, CSS, JS, DOM, HTTP, HTTPS, JIT, SQL, API).
+
+PROHIBICIÓN ROTUNDA DE INVENTAR CÓDIGO FICTICIO PARA CONCEPTOS TEÓRICOS O CAMPOS DE DISEÑO:
+ESTÁ TERMINANTEMENTE PROHIBIDO crear bloques de código (\begin{codigo}...\end{codigo}) inventando funciones como "def visual():", "def tecnologia():", "def distribucion():" o clases ficticias para explicar conceptos teóricos, pilares arquitectónicos o dimensiones de diseño.
+Para "Los cuatro campos del diseño web" o conceptos análogos de 4 pilares, usa OBLIGATORIAMENTE la macro \rectangulos:
+\rectangulos{
+  {Visual}{Aspecto visual atractivo y comunicativo, centrado en la experiencia del usuario y su retención.}
+  {Tecnología}{Decisiones sobre la implementación del sitio (estático o dinámico), lenguajes y bases de datos a emplear.}
+  {Distribución}{Velocidad y fiabilidad para transmitir datos al cliente final sin interrupciones mediante protocolos eficientes.}
+  {Propósito}{Objetivo fundamental del sitio web: modelo de negocio, comercio electrónico o difusión informativa.}
+}
+Los bloques \begin{codigo}...\end{codigo} son EXCLUSIVAMENTE para código de programación real del material fuente o prácticas.
+
+REDACCIÓN EN PROSA NARRATIVA PARA LA INTRODUCCIÓN HISTÓRICA (NUNCA EN VIÑETAS):
+La contextualización y el origen de la materia ("El origen y alcance de la web", "En sus inicios, solo era necesario HTML...", etc.) debe redactarse OBLIGATORIAMENTE como párrafos de texto corrido (prosa), NUNCA convertida en viñetas ni dentro de \lista. Las viñetas (\lista) se reservan ÚNICAMENTE para enumeraciones de componentes técnicos, capas o propiedades, NUNCA para la narración introductoria.
+
+PROHIBICIÓN ESTRICTA DE BLOQUES DE TEXTO MONOLÍTICOS («TEXTACOS»):
+Está terminantemente prohibido volcar o generar bloques densos de texto plano («textacos») de más de 3 o 4 líneas continuas sin maquetar.
+Divide SIEMPRE las explicaciones en párrafos breves y digeribles (de 2 a 3 oraciones máximo), e intercala de forma activa componentes visuales y pedagógicos de la biblioteca oficial WEC:
+- Tarjetas de concepto técnico: \definicion{Término}{Definición formal y clara}
+- Componentes y listas destacadas: \lista{ **Elemento 1:** ... | **Elemento 2:** ... }
+- Cuatro dimensiones o pilares: \rectangulos{ {Pilar 1}{...} {Pilar 2}{...} ... }
+- Procedimientos secuenciales: \pasos{ 1. **Paso 1:** ... | 2. **Paso 2:** ... }
+- Tablas comparativas: \tabla[...]
+- Preguntas de autoevaluación: \nota{Para el examen}{Pregunta con respuesta razonada}
+Haz que cada página sea visualmente atractiva, estructurada y fácil de asimilar para el estudiante.
 
 PROHIBICIÓN ESTRICTA DE VOLCAR DIAPOSITIVAS CRUDAS O CABECERAS DEL CENTRO EDUCATIVO:
 NUNCA incluyas nombres de colegios o institutos (como "Col·legi Sant Josep Obrer"), cursos ("2n DAW"), marcas de diapositivas ni textos de control como "[CONTEXTO GENERAL DEL TEMA]" o "[CONTENIDO COMPLETO]". Explica los conceptos técnicos con redacción docente original y profesional.
@@ -345,7 +377,7 @@ export function evaluarCoberturaMaterial(normalizado, material = "") {
     ? normalizado.archivos
     : [];
   const latex = archivos
-    .map((archivo) => String(archivo?.latex || ""))
+    .map((archivo) => String(archivo?.latex || archivo?.markdown || ""))
     .join("\n\n");
   const plano = textoPlanoDeLatex(latex);
   const materialPlano = String(material).replace(/\s+/g, " ").trim();
@@ -360,7 +392,7 @@ export function evaluarCoberturaMaterial(normalizado, material = "") {
     );
   }
 
-  if (!/\\resumen\s*\{/.test(latex)) {
+  if (!/\\resumen\s*\{|> \*\*Resumen:?\*\*/i.test(latex)) {
     problemas.push(
       "Falta el bloque \\resumen inicial con la síntesis del apartado.",
     );
@@ -400,12 +432,21 @@ export function evaluarCoberturaMaterial(normalizado, material = "") {
   }
 
   const titulos = extraerTitulosDiapositiva(material);
-  const encabezados = (
+  const encabezadosLatex = (
     latex.match(/\\(?:secciongrande|seccion|subtituloA|subtituloB)\s*\{/g) || []
   ).length;
-  if (titulos.length >= 2 && encabezados < titulos.length) {
+  const encabezadosMd = (
+    latex.match(/^#{1,4}\s+[^\n]+/gm) || []
+  ).length;
+  const encabezados = Math.max(encabezadosLatex, encabezadosMd, encabezadosLatex + encabezadosMd);
+
+  const titulosUnicos = new Set(
+    titulos.map((t) => t.replace(/\s*\(\d+\/\d+\)|\s*parte\s*\d+/i, "").trim().toLowerCase()),
+  );
+  const minEncabezados = Math.max(1, Math.min(titulosUnicos.size, Math.ceil(titulos.length * 0.5)));
+  if (titulos.length >= 2 && encabezados < minEncabezados) {
     problemas.push(
-      `El material contiene ${titulos.length} títulos de diapositiva (${titulos.join("; ")}) y el LaTeX solo tiene ${encabezados} encabezados. Cada título debe conservarse como \\subtituloA, \\subtituloB o \\seccion propio, en su orden y sin fusionarlo con otro.`,
+      `El material contiene ${titulos.length} títulos de diapositiva (${titulos.join("; ")}) y solo se detectaron ${encabezados} encabezados. Cada bloque temático principal debe desarrollarse con su encabezado correspondiente.`,
     );
   }
 
@@ -519,6 +560,13 @@ ${investigacion || "(no se solicitó búsqueda web)"}
 
 DIRECTIVA OBLIGATORIA DE TRADUCCIÓN AL ESPAÑOL ESTÁNDAR:
 El material original puede estar redactado en catalán, inglés u otra lengua. Como profesor universitario y redactor riguroso, debes TRADUCIR EL 100% AL ESPAÑOL ESTÁNDAR. No dejes palabras, títulos ni resúmenes en el idioma original. Solo conserva términos técnicos universales de la disciplina y palabras clave de sintaxis de programación.
+
+SELECCIÓN DE BLOQUES DE CÓDIGO (Obligatorio para apartados individuales):
+- El sistema generará un solo \begin{codigo}...\end{codigo} por apartado si el código es directamente relevante para el concepto o arquitectura que se está explicando.
+- SI EL CÓDIGO ES RELEVANTE: inclúyelo exactamente tal como aparece en el material, conservando su funcionamiento y comentarios.
+- SI EL CÓDIGO NO ES RELEVANTE para este apartado en concreto: omítelo del LaTeX final y añade la nota literal: "[Código omitido: relevante en el global pero no en este apartado específico]". NUNCA incluyas bloques de código sin traducir si la IA no los considera relevantes para este apartado.
+- Si el material tiene varios bloques de código idénticos repetidos, incluye solo una copia.
+- El código relevante debe aparecer como máximo una vez por apartado.
 
 INSTRUCCIONES CRÍTICAS DE REDACCIÓN DOCENTE Y ESTRUCTURA:
 0. JERARQUÍA REAL DE LAS DIAPOSITIVAS (OBLIGATORIO):

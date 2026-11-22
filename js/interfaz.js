@@ -38,6 +38,65 @@ const trabajosPendientes = document.querySelector("#trabajos-pendientes");
 const botonGenerar = document.querySelector("#boton-generar");
 const estadoModelo = document.querySelector("#estado-modelo");
 let archivosElegidos = [];
+const selectorModeloIA = document.querySelector("#selector-modelo-ia");
+const selectorModeloCodigo = document.querySelector("#selector-modelo-codigo");
+const estadoModeloSeleccionado = document.querySelector("#estado-modelo-seleccionado");
+const estadoModeloCodigo = document.querySelector("#estado-modelo-codigo");
+
+// Inicializar selectores de modelos al cargar
+function inicializarModelos() {
+  if (!selectorModeloIA || !selectorModeloCodigo) return;
+  // Cargar modelos guardados en .env o localStorage
+  const modeloIAGuardado = localStorage.getItem("generador.modeloIA");
+  const modeloCodigoGuardado = localStorage.getItem("generador.modeloCodigo");
+
+  // Poblar selector IA
+  modeloIASeleccionado = modeloIAGuardado || "qwen2.5:14b";
+  selectorModeloIA.replaceChildren();
+  const opcionDefaultIA = document.createElement("option");
+  opcionDefaultIA.value = "qwen2.5:14b";
+  opcionDefaultIA.textContent = "qwen2.5:14b (recomendado)";
+  selectorModeloIA.append(opcionDefaultIA);
+  modelosDisponibles.ia.forEach((m) => {
+    if (m === "qwen2.5:14b") return;
+    const opcion = document.createElement("option");
+    opcion.value = m;
+    opcion.textContent = m;
+    selectorModeloIA.append(opcion);
+  });
+  selectorModeloIA.value = modeloIASeleccionado;
+  actualizarEstadoModeloIA();
+
+  // Poblar selector Código
+  modeloCodigoSeleccionado = modeloCodigoGuardado || "qwen2.5:14b";
+  selectorModeloCodigo.replaceChildren();
+  const opcionDefaultCodigo = document.createElement("option");
+  opcionDefaultCodigo.value = "qwen2.5:14b";
+  opcionDefaultCodigo.textContent = "qwen2.5:14b (recomendado)";
+  selectorModeloCodigo.append(opcionDefaultCodigo);
+  modelosDisponibles.codigo.forEach((m) => {
+    if (m === "qwen2.5:14b") return;
+    const opcion = document.createElement("option");
+    opcion.value = m;
+    opcion.textContent = m;
+    selectorModeloCodigo.append(opcion);
+  });
+  selectorModeloCodigo.value = modeloCodigoSeleccionado;
+  actualizarEstadoModeloCodigo();
+
+  // Listeners para cambios de modelo
+  selectorModeloIA.addEventListener("change", () => {
+    modeloIASeleccionado = selectorModeloIA.value;
+    localStorage.setItem("generador.modeloIA", modeloIASeleccionado);
+    actualizarEstadoModeloIA();
+  });
+
+  selectorModeloCodigo.addEventListener("change", () => {
+    modeloCodigoSeleccionado = selectorModeloCodigo.value;
+    localStorage.setItem("generador.modeloCodigo", modeloCodigoSeleccionado);
+    actualizarEstadoModeloCodigo();
+  });
+}
 let temporizadorBorrador;
 let asignaturas = [];
 let controladorGeneracion;
@@ -46,6 +105,14 @@ let idProgresoActual;
 let idTrabajoPreparandose;
 let reiniciarAlFinalizar = false;
 let inicioEtapasDisponible = false;
+
+// Modelos de IA disponibles - se cargarán desde el servidor o .env
+let modelosDisponibles = {
+  ia: ["qwen2.5:14b", "qwen2.5:7b", "llama2", "mistral"],
+  codigo: ["qwen2.5:14b", "qwen2.5:7b", "codellama", "mistral"]
+};
+let modeloIASeleccionado = "";
+let modeloCodigoSeleccionado = "";
 let asignaturaGeneracionActiva;
 let monitorGeneracionActivo = 0;
 let generacionDetenida = false;
@@ -65,6 +132,30 @@ let consolaPausada = false;
 let consolaOculta = false;
 let ultimaUnidadDetallada = "";
 let ultimosResultadosMostrados = 0;
+
+function actualizarEstadoModeloIA() {
+  const valor = selectorModeloIA.value || "qwen2.5:14b";
+  estadoModeloSeleccionado.textContent = `Modelo IA: ${valor}`;
+  if (valor === "qwen2.5:14b") {
+    estadoModeloSeleccionado.style.color = "#c3e88d";
+  } else if (valor === "qwen2.5:7b") {
+    estadoModeloSeleccionado.style.color = "#ffce54";
+  } else {
+    estadoModeloSeleccionado.style.color = "#e6ac00";
+  }
+}
+
+function actualizarEstadoModeloCodigo() {
+  const valor = selectorModeloCodigo.value || "qwen2.5:14b";
+  estadoModeloCodigo.textContent = `Modelo Código: ${valor}`;
+  if (valor === "qwen2.5:14b") {
+    estadoModeloCodigo.style.color = "#c3e88d";
+  } else if (valor === "qwen2.5:7b") {
+    estadoModeloCodigo.style.color = "#ffce54";
+  } else {
+    estadoModeloCodigo.style.color = "#e6ac00";
+  }
+}
 
 function registrarEventoConsola(mensaje) {
   const hora = new Date().toLocaleTimeString("es-ES", { hour12: false });
@@ -111,16 +202,19 @@ async function cargarAsignaturas() {
   const trabajoActivo = trabajosActivos.find(
     (trabajo) => trabajo.estado === "procesando" || trabajo.estado === "pendiente",
   );
-  const asignaturaGuardada = localStorage.getItem("generador.asignatura");
+    const asignaturaGuardada = localStorage.getItem("generador.asignatura");
   const asignaturaWec = asignaturas.find(
     (asignatura) => asignatura.nombre.trim().toLocaleUpperCase("es") === "WEC",
   );
+
+  // Check if the stored assignment exists in the current list
+  const storedInList = asignaturas.some((a) => a.nombre === asignaturaGuardada);
   const valorAnterior =
     !interfazInicializada && trabajoActivo?.asignatura
       ? trabajoActivo.asignatura
-      : asignaturas.some((asignatura) => asignatura.nombre === asignaturaGuardada)
+      : storedInList
         ? asignaturaGuardada
-        : asignaturaWec?.nombre ?? selectorAsignatura.value;
+        : asignaturaWec?.nombre ?? (asignaturas.length > 0 ? asignaturas[0].nombre : "__new__");
   selectorAsignatura.replaceChildren();
   for (const asignatura of asignaturas) {
     const opcion = document.createElement("option");
@@ -321,6 +415,8 @@ async function reanudarTrabajoEtapas(id) {
   controladorGeneracion = new AbortController();
   idGeneracionActiva = id;
   generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
   fuentesBloqueadas = true;
   actualizarResumenFuentes();
   botonGenerar.disabled = true;
@@ -403,6 +499,8 @@ async function repetirEtapaTrabajo(id, etapa = "reescribir") {
   controladorGeneracion = new AbortController();
   idGeneracionActiva = id;
   generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
   fuentesBloqueadas = true;
   actualizarResumenFuentes();
   botonGenerar.disabled = true;
@@ -524,6 +622,8 @@ async function vigilarTrabajoEtapas(id, asignaturaTrabajo, monitorId) {
     } else if (trabajo.estado === "completado") {
       mostrarResultadosEtapas(trabajo.resultados ?? []);
       return;
+    } else if (trabajo.estado === "cancelado") {
+      throw new DOMException("Generación detenida.", "AbortError");
     } else if (trabajo.estado === "pendiente" && trabajo.error) {
       throw new Error(
         `Se guardó el progreso y puedes reanudarlo. ${trabajo.error}`,
@@ -987,10 +1087,14 @@ function tituloApartadoSeleccionado() {
 }
 
 function mostrarArchivos(archivos) {
-  estadoSelector.hidden = true;
-  archivosElegidos = combinarArchivos(archivosElegidos, archivos);
+  const lista = Array.from(archivos || []);
+  if (!lista.length) return;
+  archivosElegidos = combinarArchivos(archivosElegidos, lista);
   actualizarResumenFuentes();
-  guardarBorradorFuentes().catch((error) => mostrarErrorBorrador(error));
+  mostrarEstadoSelector(
+    `✓ ${archivosElegidos.length} archivo(s) listo(s): ${archivosElegidos.map((a) => a.name).join(", ")}`,
+  );
+  guardarBorradorFuentes().catch((error) => console.warn("Borrador local:", error));
 }
 
 function detectarAsignaturasEnCarpeta(archivos) {
@@ -1073,6 +1177,12 @@ async function cargarBorradorFuentes() {
 
 function actualizarResumenFuentes() {
   archivosSeleccionados.replaceChildren();
+  const indicadorSueltos = document.querySelector("#indicador-archivos-sueltos");
+  if (indicadorSueltos) {
+    indicadorSueltos.textContent = archivosElegidos.length
+      ? `✓ ${archivosElegidos.length} archivo(s) seleccionado(s)`
+      : "";
+  }
   let tieneFuentes = false;
   if (archivosElegidos.length) {
     tieneFuentes = true;
@@ -1685,13 +1795,9 @@ function mostrarProgresoGeneracion(
     ultimoEstadoProgreso = null;
     tokenEtaServidor = undefined;
   }
+  barraProgreso.dataset.fase = estado.fase || "";
+  generacionDetenida = estado.fase === "cancelado";
   actualizarTiempoEstimado();
-  if (estado.fase === "cancelado")
-    tiempoEstimado.textContent = "Tiempo estimado: detenido por ti.";
-  if (estado.fase === "completado")
-    tiempoEstimado.textContent = "Tiempo estimado: completado.";
-  if (estado.fase === "error")
-    tiempoEstimado.textContent = "Tiempo estimado: no disponible por el error.";
   if (progresoDirecto !== null && Number.isFinite(progresoDirecto)) {
     barraProgreso.value = Math.max(0, Math.min(100, progresoDirecto));
   } else if (estado.total > 0) {
@@ -1720,7 +1826,25 @@ function mostrarProgresoGeneracion(
 }
 
 function actualizarTiempoEstimado() {
+  if (progreso.hidden) {
+    return;
+  }
+  if (generacionDetenida || barraProgreso.dataset.fase === "cancelado") {
+    tiempoEstimado.textContent = "Tiempo estimado: detenido por ti.";
+    return;
+  }
+  if (barraProgreso.dataset.fase === "completado") {
+    tiempoEstimado.textContent = "Tiempo estimado: completado.";
+    return;
+  }
+  if (barraProgreso.dataset.fase === "error") {
+    tiempoEstimado.textContent = "Tiempo estimado: no disponible por el error.";
+    return;
+  }
   if (!ultimoEstadoProgreso) {
+    if (!idGeneracionActiva && !controladorGeneracion) {
+      return;
+    }
     tiempoEstimado.textContent = "Tiempo estimado: calculando la primera etapa…";
     return;
   }
@@ -1786,33 +1910,51 @@ async function consultarProgreso(
 }
 
 async function detenerGeneracion() {
-  if (!idGeneracionActiva || generacionDetenida) return;
+  if (!idGeneracionActiva && !controladorGeneracion) {
+    progreso.hidden = true;
+    generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
+    barraProgreso.dataset.fase = "";
+    tiempoEstimado.textContent = "";
+    botonGenerar.disabled = false;
+    botonDetener.hidden = true;
+    if (botonReiniciar) botonReiniciar.hidden = true;
+    return;
+  }
   botonDetener.disabled = true;
   botonDetener.textContent = "Deteniendo…";
   try {
-    const respuesta = await fetch(
-      `/api/progress/${encodeURIComponent(idGeneracionActiva)}/cancel`,
-      { method: "POST" },
-    );
-    if (respuesta.status === 409) {
-      generacionDetenida = false;
-      const resultado = await respuesta.json();
-      detalleProgreso.textContent = resultado.detail;
-      botonDetener.hidden = true;
-      if (botonReiniciar) botonReiniciar.hidden = true;
-      return;
+    if (idGeneracionActiva) {
+      const respuesta = await fetch(
+        `/api/progress/${encodeURIComponent(idGeneracionActiva)}/cancel`,
+        { method: "POST" },
+      );
+      if (respuesta.status === 409) {
+        generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
+        const resultado = await respuesta.json();
+        detalleProgreso.textContent = resultado.detail;
+        botonDetener.hidden = true;
+        if (botonReiniciar) botonReiniciar.hidden = true;
+        return;
+      }
     }
-    if (!respuesta.ok) {
-      const resultado = await respuesta.json();
-      throw new Error(resultado.detail || "No se pudo detener la generación.");
-    }
-    generacionDetenida = true;
+    generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
+    barraProgreso.dataset.fase = "";
     fuentesBloqueadas = false;
     actualizarResumenFuentes();
     controladorGeneracion?.abort();
     progreso.hidden = true;
+    tiempoEstimado.textContent = "";
     idGeneracionActiva = undefined;
     controladorGeneracion = undefined;
+    botonGenerar.disabled = false;
+    botonDetener.hidden = true;
+    if (botonReiniciar) botonReiniciar.hidden = true;
     try {
       await cargarTrabajosPendientes();
     } catch {
@@ -2059,27 +2201,34 @@ async function reiniciarGeneracionEHistorial() {
     }
   }
 }
-function mostrarEstadoSelector(mensaje) {
-  estadoSelector.textContent = mensaje;
+function mostrarEstadoSelector(mensaje, esError = false) {
+  if (!estadoSelector) return;
+  estadoSelector.innerHTML = mensaje;
   estadoSelector.hidden = false;
+  estadoSelector.style.display = "block";
+  estadoSelector.style.color = esError ? "#ff6b6b" : "#4ade80";
+  estadoSelector.style.borderColor = esError ? "#ef4444" : "#22c55e";
+  estadoSelector.style.background = esError ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)";
 }
 
-for (const selector of [selectorArchivos, selectorCarpeta]) {
-  selector.addEventListener("click", () => {
-    mostrarEstadoSelector(
-      "Se ha activado el selector de archivos de Brave. Elige los archivos en la ventana del sistema o ciérrala para cancelar.",
-    );
-  });
-}
-selectorArchivos.addEventListener("change", () => {
-  mostrarArchivos(selectorArchivos.files);
-  selectorArchivos.value = "";
-});
-selectorCarpeta.addEventListener("change", () => {
-  mostrarAsignaturasDetectadas(selectorCarpeta.files);
-  mostrarArchivos(selectorCarpeta.files);
-  selectorCarpeta.value = "";
-});
+const procesarSeleccionArchivos = (evento) => {
+  const archivos = Array.from(evento.target.files || []);
+  if (archivos.length > 0) {
+    mostrarArchivos(archivos);
+  }
+};
+selectorArchivos.onchange = procesarSeleccionArchivos;
+selectorArchivos.oninput = procesarSeleccionArchivos;
+
+const procesarSeleccionCarpeta = (evento) => {
+  const archivos = Array.from(evento.target.files || []);
+  if (archivos.length > 0) {
+    mostrarAsignaturasDetectadas(archivos);
+    mostrarArchivos(archivos);
+  }
+};
+selectorCarpeta.onchange = procesarSeleccionCarpeta;
+selectorCarpeta.oninput = procesarSeleccionCarpeta;
 zonaArchivos.addEventListener("dragover", (evento) => {
   if (!evento.dataTransfer?.types.includes("Files")) return;
   evento.preventDefault();
@@ -2090,10 +2239,23 @@ zonaArchivos.addEventListener("dragleave", (evento) => {
   zonaArchivos.classList.remove("drag-over");
 });
 zonaArchivos.addEventListener("drop", (evento) => {
-  if (!evento.dataTransfer?.files.length) return;
   evento.preventDefault();
   zonaArchivos.classList.remove("drag-over");
-  mostrarArchivos(evento.dataTransfer.files);
+  if (!evento.dataTransfer?.files?.length) return;
+  mostrarArchivos(Array.from(evento.dataTransfer.files));
+});
+window.addEventListener("dragover", (evento) => {
+  if (evento.dataTransfer?.types?.includes("Files")) {
+    evento.preventDefault();
+  }
+});
+window.addEventListener("drop", (evento) => {
+  if (evento.dataTransfer?.types?.includes("Files")) {
+    evento.preventDefault();
+    if (evento.dataTransfer.files?.length) {
+      mostrarArchivos(Array.from(evento.dataTransfer.files));
+    }
+  }
 });
 textoFuente.addEventListener("input", () => {
   actualizarResumenFuentes();
@@ -2145,6 +2307,8 @@ formulario.addEventListener("submit", async (evento) => {
   inicioEtapasDisponible = false;
   asignaturaGeneracionActiva = asignatura;
   generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
   ultimoEstadoProgreso = null;
   tokenEtaServidor = undefined;
   fuentesBloqueadas = true;
@@ -2321,18 +2485,28 @@ formulario.addEventListener("submit", async (evento) => {
     }
   } finally {
     window.clearInterval(temporizador);
-    if (!generacionDetenida) progreso.hidden = false;
     botonDetener.hidden = true;
     botonDetener.disabled = false;
+    botonGenerar.disabled = false;
     controladorGeneracion = undefined;
     idGeneracionActiva = undefined;
     idProgresoActual = undefined;
     idTrabajoPreparandose = undefined;
     inicioEtapasDisponible = false;
+    if (generacionDetenida) {
+      progreso.hidden = true;
+      generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
+      barraProgreso.dataset.fase = "";
+      tiempoEstimado.textContent = "";
+    }
     await cargarTrabajosPendientes();
     if (reiniciarAlFinalizar) {
       reiniciarAlFinalizar = false;
       generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
       progreso.hidden = true;
       botonGenerar.disabled = false;
       if (botonReiniciar) botonReiniciar.hidden = true;
@@ -2362,7 +2536,11 @@ async function vigilarProgresoStagedGenerations() {
     if (!respuesta.ok) return;
     const { trabajos } = await respuesta.json();
     const trabajoProcesando = (trabajos ?? []).find(
-      (t) => t.estado === "procesando",
+      (t) =>
+        t.estado === "procesando" &&
+        t.fase !== "cancelado" &&
+        t.fase !== "error" &&
+        t.fase !== "completado",
     );
     if (trabajoProcesando) {
       let trabajoDetallado = trabajoProcesando;
@@ -2410,6 +2588,11 @@ async function vigilarProgresoStagedGenerations() {
       idGeneracionActiva = undefined;
       asignaturaGeneracionActiva = undefined;
       progreso.hidden = true;
+      generacionDetenida = false;
+  barraProgreso.dataset.fase = "";
+  tiempoEstimado.textContent = "";
+      barraProgreso.dataset.fase = "";
+      tiempoEstimado.textContent = "";
       botonGenerar.disabled = false;
       botonDetener.hidden = true;
       if (botonReiniciar) {
@@ -2430,5 +2613,37 @@ cargarAsignaturas()
     panelError.hidden = false;
   });
 restaurarBorradorFuentes();
+inicializarModelos();
 comprobarEstadoModelo();
 window.setInterval(comprobarEstadoModelo, 30000);
+
+const botonReiniciarServidor = document.querySelector("#boton-reiniciar-servidor");
+if (botonReiniciarServidor) {
+  botonReiniciarServidor.addEventListener("click", async () => {
+    if (!confirm("¿Deseas reiniciar el servidor y recargar la página?")) return;
+    botonReiniciarServidor.disabled = true;
+    botonReiniciarServidor.innerHTML =
+      '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> <span>Reiniciando...</span>';
+    try {
+      await fetch("/api/reiniciar-servidor", { method: "POST" });
+    } catch {
+      // Ignorar caída de conexión esperada al apagarse el servidor
+    }
+
+    let intentos = 0;
+    const intervalo = setInterval(async () => {
+      intentos++;
+      try {
+        const respuesta = await fetch("/api/health", { cache: "no-store" });
+        if (respuesta.ok) {
+          clearInterval(intervalo);
+          window.location.reload();
+        }
+      } catch {}
+      if (intentos > 30) {
+        clearInterval(intervalo);
+        window.location.reload();
+      }
+    }, 1000);
+  });
+}

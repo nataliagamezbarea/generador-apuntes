@@ -604,15 +604,46 @@ export function inferirSubtemaDeBloque(block, subthemePredeterminado = 1) {
 }
 
 function stemArchivoGenerado(block, theme, subtheme, index) {
-  const base = block.nombre ? block.nombre.replace(/\.tex$/i, "").trim() : "";
+  let orden = null;
+
+  if (Number.isInteger(Number(block?.orden)) && Number(block.orden) > 0) {
+    orden = Number(block.orden);
+  } else if (Number.isInteger(Number(block?.indiceApartado)) && Number(block.indiceApartado) > 0) {
+    orden = Number(block.indiceApartado);
+  } else if (Number.isInteger(Number(block?.apartadoNumero)) && Number(block.apartadoNumero) > 0) {
+    orden = Number(block.apartadoNumero);
+  }
+
+  if (!orden) {
+    const textoAExaminar = `${block?.nombre || ""} ${block?.titulo || ""}`;
+    const matchNum =
+      textoAExaminar.match(/(?:^|\s)(?:(?:tema|apartado|sección|seccion)\s*\d+[.\-]\s*)?(\d+)(?:[.\-]\d+)*\s*[:.\-·\s]/i) ||
+      String(block?.nombre || "").match(/^(\d+)[.\-]/);
+    if (matchNum && Number(matchNum[1]) > 0) {
+      orden = Number(matchNum[1]);
+    }
+  }
+
+  if (!orden) {
+    orden = typeof index === "number" && index >= 0 ? index + 1 : 1;
+  }
+
+  const base = block?.nombre ? block.nombre.replace(/\.tex$/i, "").trim() : "";
+  let slug = "";
   if (base && !/slug-descriptivo|^apartado(?:-\d+)*$/i.test(base)) {
-    return crearNombreArchivo(base);
+    slug = crearNombreArchivo(base);
   }
-  const deducido = deducirSlugConceptual("", block.titulo || base || "seccion");
-  if (deducido && !/slug-descriptivo|^apartado(?:-\d+)*$/i.test(deducido)) {
-    return deducido;
+  if (!slug || /slug-descriptivo|^apartado(?:-\d+)*$/i.test(slug)) {
+    const deducido = deducirSlugConceptual("", block?.titulo || base || "seccion");
+    slug = deducido && !/slug-descriptivo|^apartado(?:-\d+)*$/i.test(deducido)
+      ? deducido
+      : `seccion-${orden}`;
   }
-  return `seccion-${index + 1}`;
+
+  // Quitar cualquier prefijo numérico previo (ej: "1-origen", "1.origen" -> "origen") para no poner 1, 2 en los nombres de archivo
+  slug = slug.replace(/^\d+[.\-]+\s*/, "");
+
+  return slug || "apartado";
 }
 
 export async function inspeccionarReemplazosGeneracion({
@@ -770,7 +801,13 @@ export async function guardarGeneracion({
       sugerenciasUsadas,
     });
     const diagramas = imagenesDelApartado(result.imagenes, stem, block.titulo);
-    const latexLimpio = aplicarEstilosLatex(block.latex.trim(), subject);
+    let latexBloque = block.latex.trim();
+    if (index > 0) {
+      latexBloque = latexBloque
+        .replace(/\\secciongrande\*?(?:\[[^\]]*\])?\{([^}]+)\}/g, "\\subtituloA{$1}")
+        .replace(/\\resumen\*?(?:\[[^\]]*\])?\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*/g, "$1\n\n");
+    }
+    const latexLimpio = aplicarEstilosLatex(latexBloque, subject);
     const latex = `${latexLimpio}${figuraAbierta ? `\n\n${figuraAbierta}` : ""}${diagramas ? `\n\n${diagramas}` : ""}\n`;
     await writeFile(outputPath, latex, "utf8");
     written.push({
@@ -1128,6 +1165,79 @@ export function convertirMarkdownALatexWec(contenido = "") {
     return token;
   });
 
+  // 1b. Extraer macros LaTeX ya existentes para evitar corruptelas o anidamientos indebidos
+  const latexMacroBlocks = [];
+  function protegerMacro(str, macroNombre) {
+    const patron = `\\${macroNombre}{`;
+    let salida = "";
+    let pos = 0;
+    while (pos < str.length) {
+      const idx = str.indexOf(patron, pos);
+      if (idx === -1) {
+        salida += str.slice(pos);
+        break;
+      }
+      salida += str.slice(pos, idx);
+      const apertura = idx + patron.length - 1;
+      let fin = apertura;
+      let prof = 0;
+      for (; fin < str.length; fin++) {
+        const c = str[fin];
+        if (c === "\\") { fin++; continue; }
+        if (c === "{") prof++;
+        else if (c === "}") {
+          prof--;
+          if (prof === 0) break;
+        }
+      }
+      if (fin >= str.length) {
+        salida += str.slice(idx);
+        break;
+      }
+      // Si es una macro de dos argumentos ({arg1}{arg2})
+      let finTotal = fin + 1;
+      if (["definicion", "definicionpar", "nota"].includes(macroNombre)) {
+        let segundoInicio = finTotal;
+        while (segundoInicio < str.length && /\s/.test(str[segundoInicio])) segundoInicio++;
+        if (segundoInicio < str.length && str[segundoInicio] === "{") {
+          let prof2 = 0;
+          let fin2 = segundoInicio;
+          for (; fin2 < str.length; fin2++) {
+            const c = str[fin2];
+            if (c === "\\") { fin2++; continue; }
+            if (c === "{") prof2++;
+            else if (c === "}") {
+              prof2--;
+              if (prof2 === 0) break;
+            }
+          }
+          if (fin2 < str.length) finTotal = fin2 + 1;
+        }
+      }
+      const token = `%%LATEX_MACRO_${latexMacroBlocks.length}%%`;
+      latexMacroBlocks.push(str.slice(idx, finTotal));
+      salida += token;
+      pos = finTotal;
+    }
+    return salida;
+  }
+
+  const macrosAProteger = [
+    "lista",
+    "pasos",
+    "rectangulos",
+    "rectangulosdoble",
+    "definicion",
+    "definicionpar",
+    "nota",
+    "alertas",
+    "resumen",
+    "tabla",
+  ];
+  for (const m of macrosAProteger) {
+    texto = protegerMacro(texto, m);
+  }
+
   // 2. Convertir Tablas Markdown
   texto = texto.replace(/(?:^|\n)((?:\|[^\n]+\|\r?\n)+\|[ \t]*[-:]+[-| :]*\|\r?\n(?:\|[^\n]+\|\r?\n?)+)/g, (match, bloque) => {
     const lineas = bloque.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1146,16 +1256,32 @@ export function convertirMarkdownALatexWec(contenido = "") {
     return `\n\\tabla[${spec}]{\n${cabeceraWec}\n\\midrule\n${filasDatos}\n}\n`;
   });
 
-  // 3. Convertir Encabezados Markdown
-  texto = texto
-    .replace(/^####\s+(?:subt[ií]tulo(?:\s+[a-z0-9]+)?\s*[:.\-–—]\s*)?(.+)$/gmi, "\\subtituloB{$1}")
-    .replace(/^###\s+(?:subt[ií]tulo(?:\s+[a-z0-9]+)?\s*[:.\-–—]\s*)?(.+)$/gmi, "\\subtituloA{$1}")
-    .replace(/^##\s+(?:secci[oó]n(?:\s+[a-z0-9]+)?\s*[:.\-–—]\s*)?(.+)$/gmi, "\\seccion{$1}")
-    .replace(/^#\s+(?:t[ií]tulo\s*[:.\-–—]\s*)?(.+)$/gmi, "\\secciongrande{$1}");
+  // 2b. Unir números o viñetas que quedaron en una línea separada del texto
+  texto = texto.replace(/(^[ \t]*(?:\d+[.)]?|[-*•]))\s*\r?\n+[ \t]*(?=[A-Za-zÁÉÍÓÚáéíóúñÑ`"'\*\<\\\$])/gm, "$1 ");
 
-  // 4. Convertir Cajas y notas
+  // 3. Convertir Encabezados Markdown asegurando separación posterior
+  texto = texto
+    .replace(/^####\s+(?:subt[ií]tulo(?:\s+[a-z0-9]+)?\s*[:.\-–—]\s*)?(.+)$/gmi, "\n\\subtituloB{$1}\n\n")
+    .replace(/^###\s+(?:subt[ií]tulo(?:\s+[a-z0-9]+)?\s*[:.\-–—]\s*)?(.+)$/gmi, "\n\\subtituloA{$1}\n\n")
+    .replace(/^##\s+(?:secci[oó]n(?:\s+[a-z0-9]+)?\s*[:.\-–—]\s*)?(.+)$/gmi, "\n\\seccion{$1}\n\n")
+    .replace(/^#\s+(?:t[ií]tulo\s*[:.\-–—]\s*)?(.+)$/gmi, "\n\\secciongrande{$1}\n\n");
+
+  // 4. Convertir Cajas y notas (garantizando que listas y definiciones queden FUERA de \resumen)
   texto = texto.replace(/^>\s*(?:\*\*Resumen:?\*\*|\[!SUMMARY\])\s*([\s\S]+?)(?=\n\n|\n[^\s>]|$)/gmi, (_m, body) => {
-    return `\\resumen{${body.replace(/^>\s*/gm, "").trim()}}`;
+    let limpio = body.replace(/^>\s*/gm, "").trim();
+    const partesFuera = [];
+    limpio = limpio.replace(/(?:^|\n)((?:[*-]\s+|\d+\.\s+)[^\n]+(?:\n(?:[*-]\s+|\d+\.\s+)[^\n]+)*)/g, (_mList, listBlock) => {
+      partesFuera.push(listBlock.trim());
+      return "";
+    });
+    limpio = limpio.replace(/(?:^|\n)(\*\*Definici[oó]n[^\n]*\n[\s\S]*?)(?=\n\n|\n\*\*|$)/gi, (_mDef, defBlock) => {
+      partesFuera.push(defBlock.trim());
+      return "";
+    });
+    limpio = limpio.trim();
+    const resumenTex = limpio ? `\\resumen{${limpio}}` : "";
+    const fueraTex = partesFuera.length > 0 ? "\n\n" + partesFuera.join("\n\n") : "";
+    return `${resumenTex}${fueraTex}`;
   });
 
   texto = texto.replace(/^>\s*\*\*Definici[oó]n\s*(?:par)?\s*(?:\[([^\]]+)\]:?|:\s*([^:\n]+)[:\-]?)\*\*\s*([\s\S]+?)(?=\n\n|\n[^\s>]|$)/gmi, (_m, t1, t2, desc) => {
@@ -1184,9 +1310,10 @@ export function convertirMarkdownALatexWec(contenido = "") {
     return `\\alertas{${clean}}`;
   });
 
-  // 4b. Separar componentes enumerados o ítems pegados en un mismo párrafo (ej: "1 Servidor: ... Máquina Cliente: ...")
+  // 4b. Separar componentes enumerados explícitos pegados en un mismo párrafo (ej: "1) Servidor: ... 2) Máquina Cliente: ...")
+  // Solo cuando tienen numeración explícita (1., 2., 1), etc.), nunca en prosa ordinaria con dos puntos
   texto = texto.replace(
-    /(?:^|\n|(?<=[.:;]\s+))(?:[1-9]\.?\s*)?([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ -]{1,35}):\s*([\s\S]+?)(?=(?:(?:\.|\;|\n)\s*(?:[1-9]\.?\s*)?[A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ -]{1,35}:\s+)|\n\n|$)/g,
+    /(?:^|\n)\s*(?:\*\*)?(?:[1-9][.)]|\d+\.)(?:\*\*)?\s*([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ -]{1,35}):\s*([\s\S]+?)(?=(?:\n\s*(?:\*\*)?(?:[1-9][.)]|\d+\.)(?:\*\*)?\s*[A-ZÁÉÍÓÚ]|\n\n|$))/g,
     (match, key, val) => {
       const k = key.trim();
       if (/^(https?|nota|definici[oó]n|ejemplo|resumen|c[oó]digo|tabla|figura)$/i.test(k)) {
@@ -1204,7 +1331,7 @@ export function convertirMarkdownALatexWec(contenido = "") {
       .map(linea => linea.replace(/^[ \t]*\d+\.\s*/, "").trim())
       .filter(Boolean);
     if (items.length === 0) return match;
-    return `\n\\pasos{\n  ${items.join("|\n  ")}\n}\n`;
+    return `\n\\pasos{\n  ${items.join(" |\n  ")}\n}\n`;
   });
 
   // 6. Convertir Listas con viñetas
@@ -1215,7 +1342,7 @@ export function convertirMarkdownALatexWec(contenido = "") {
       .map(linea => linea.replace(/^[ \t]*[*-]\s*/, "").replace(/\|\s*$/, "").trim())
       .filter(Boolean);
     if (items.length === 0) return match;
-    return `\n\\lista{\n  ${items.join("|\n  ")}\n}\n`;
+    return `\n\\lista{\n  ${items.join(" |\n  ")}\n}\n`;
   });
 
   // 7. Formato en línea
@@ -1227,7 +1354,18 @@ export function convertirMarkdownALatexWec(contenido = "") {
     texto = texto.replace(`%%VERBATIM_BLOCK_${i}%%`, verbatimBlocks[i]);
   }
 
-  return texto;
+  // 8b. Restaurar macros LaTeX protegidas
+  for (let i = 0; i < latexMacroBlocks.length; i++) {
+    texto = texto.replace(`%%LATEX_MACRO_${i}%%`, latexMacroBlocks[i]);
+  }
+
+  // 9. Eliminar entornos y etiquetas no válidas que rompen LaTeX
+  texto = texto
+    .replace(/\\begin\{narrow\}(?:\[[^\]]*\]|\{[^{}]*\})*\s*/gi, "")
+    .replace(/\\end\{narrow\}\s*/gi, "")
+    .replace(/\\label\{[^{}]*\}\s*/gi, "");
+
+  return texto.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function aplicarEstilosLatex(value, subject = "") {
@@ -1270,6 +1408,24 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "")
     .replace(/^[><]{2,4}\s*/gm, "");
 
+  // Reemplazar código artificial/inventado para campos del diseño web por la macro oficial \rectangulos
+  resultado = resultado.replace(
+    /(?:\\begin\{codigo\}|```[a-z]*)\s*[\s\S]*?(?:def\s+visual|def\s+tecnologia|def\s+distribucio)[\s\S]*?(?:\\end\{codigo\}|```)/gi,
+    () => `\\rectangulos{
+  {Visual}{Aspecto visual atractivo y comunicativo, centrado en la experiencia del usuario y su retención futura.}
+  {Tecnología}{Decisiones sobre cómo implementar la página (estática o dinámica), lenguajes y bases de datos a emplear.}
+  {Distribución}{Velocidad y fiabilidad para transmitir datos al cliente final sin interrupciones mediante protocolos eficientes.}
+  {Propósito}{Objetivo fundamental del sitio web: modelo de negocio, comercio electrónico o difusión informativa.}
+}`
+  );
+
+  // Limpiar marcas residuales de traducción o bloques huérfanos
+  resultado = resultado
+    .replace(/ZZBLOQUECODIGO\w*FINZZ/g, "")
+    .replace(/%%PROTECTED_CODE_\w*%%/g, "")
+    .replace(/\bClient-Servidor\b/gi, "Cliente-Servidor")
+    .replace(/\bClient\s+Servidor\b/gi, "Cliente Servidor");
+
   // Arreglar comandos WEC erróneamente usados como entornos \begin{...} / \end{...}
   resultado = resultado
     .replace(/(?:\\begin|egin)\{secciongrande\}\{([^{}]*)\}/gi, "\\secciongrande{$1}")
@@ -1310,8 +1466,7 @@ export function aplicarEstilosLatex(value, subject = "") {
   resultado = resultado
     .replace(/\\nota\{([^{}]*)\}\{([^{}]*)\}/gs, (_m, tit, cont) => `\\nota{${tit}}{${cont.replace(/\n\s*\n+/g, "\n")}}`)
     .replace(/\\definicion\{([^{}]*)\}\{([^{}]*)\}/gs, (_m, tit, cont) => `\\definicion{${tit}}{${cont.replace(/\n\s*\n+/g, "\n")}}`)
-    .replace(/\\resumen\{([^{}]*)\}/gs, (_m, cont) => `\\resumen{${cont.replace(/\n\s*\n+/g, "\n")}}`)
-    .replace(/\\lista\{([^{}]*)\}/gs, (_m, cont) => `\\lista{${cont.replace(/\n\s*\n+/g, "\n")}}`);
+    .replace(/\\resumen\{([^{}]*)\}/gs, (_m, cont) => `\\resumen{${cont.replace(/\n\s*\n+/g, "\n")}}`);
 
   // Arreglar entornos incorrectos de definicion o subseccion inventados
   resultado = resultado
@@ -1342,6 +1497,12 @@ export function aplicarEstilosLatex(value, subject = "") {
   resultado = resultado
     .replace(/\\begin\{example\}\s*([\s\S]*?)\s*\\end\{example\}/gi, (_match, body) => `\\nota{Ejemplo}{\n${body.trim()}\n}`)
     .replace(/\\begin\{quoting\}\s*([\s\S]*?)\s*\\end\{quoting\}/gi, (_match, body) => `\\alertas{${body.trim()}}`)
+    .replace(/\\begin\{narrow\}(?:\[[^\]]*\]|\{[^{}]*\})*\s*/gi, "")
+    .replace(/\\end\{narrow\}\s*/gi, "")
+    .replace(/\\label\{[^{}]*\}\s*/gi, "")
+    .replace(/(?<!\\)\btextbf\{/g, "\\textbf{")
+    .replace(/(?<!\\)\btextit\{/g, "\\textit{")
+    .replace(/(?<!\\)\btexttt\{/g, "\\texttt{")
     .replace(/\\lstinline(?:\[[^\]]*\])?(?:\|([^|]*)\||\{([^}]*)\})/g, (_match, p1, p2) => `\\cmd{${p1 ?? p2 ?? ""}}`);
 
   // Quitar metalenguaje vacío del resumen ("En este apartado se explica...").
@@ -1372,6 +1533,12 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(\\resumen\{[^{}]*?)(?=\\begin\{(?:codigo|consola)\})/gi, (m) => `${m.trimEnd()}\n}\n\n`)
     .replace(/(\\end\{(?:codigo|consola)\}\s*)\}/g, "$1")
     .replace(/\\resumen\{\s*\}/g, "");
+
+  // Extraer listas, definiciones y macros que hayan quedado atrapadas dentro de \resumen
+  resultado = extraerMacrosDeResumen(resultado);
+
+  // Auto-estructurar texto plano o desestructurado ("texto soso") en macros visuales WEC
+  resultado = estructurarTextoPlano(resultado);
 
   // Limpiar barras de tubería espurias al final de líneas normales.
   // Nunca dentro de \lista{...}: ahí el pipe es el separador oficial de ítems.
@@ -1445,12 +1612,26 @@ export function aplicarEstilosLatex(value, subject = "") {
           .replace(/</g, "\\textless ")
           .replace(/>/g, "\\textgreater ")
           .trim();
+        clean = normalizarMayusculasTitulo(clean);
         if (clean.length > 0) {
           clean = clean.charAt(0).toUpperCase() + clean.slice(1);
         }
         return `\\${m}{${clean}}`;
       },
     );
+
+  // Un solo \secciongrande por apartado; los subsiguientes en el mismo archivo se degradan a \subtituloA
+  let secciongrandeEncontrada = false;
+  resultado = resultado.replace(/\\secciongrande\{([^{}]+)\}/g, (match, title) => {
+    if (!secciongrandeEncontrada) {
+      secciongrandeEncontrada = true;
+      return match;
+    }
+    return `\\subtituloA{${title}}`;
+  });
+
+  // Eliminar subtítulos duplicados consecutivos con el mismo nombre
+  resultado = resultado.replace(/(\\(?:secciongrande|subtituloA|subtituloB)\{([^{}]+)\})\s*\n+\s*\\(?:secciongrande|subtituloA|subtituloB)\{\2\}/g, "$1");
 
   // \seccion dibuja barras de color y añade una subsección al índice. Los
   // subtítulos internos del contenido generado deben ser normales.
@@ -1467,6 +1648,12 @@ export function aplicarEstilosLatex(value, subject = "") {
     /\\subtitulo([AB])\{\s*([^{}]*?)\s*\}/g,
     (match, _nivel, titulo) => (esSubtituloGenerico(titulo) ? "" : match),
   );
+
+  // Espacio adecuado después de títulos: quitar \vspace negativos y asegurar separación vertical natural
+  resultado = resultado
+    .replace(/\\vspace\*?\{-[^}]*\}\s*/gi, "\n\n")
+    .replace(/(\\(?:secciongrande|seccion|subtituloA|subtituloB|titulo)\{[^}]*\})\s*(?:\\vspace\*?\{-[^}]*\}\s*)?/gi, "$1\n\n");
+
   resultado = resultado.replace(/\n{3,}/g, "\n\n");
 
   // Separar ítems pegados dentro de \lista{...} si no contienen |
@@ -1483,15 +1670,15 @@ export function aplicarEstilosLatex(value, subject = "") {
         }
       }
       if (items.length > 1) {
-        return `\\lista{\n  ${items.join("|\n\n  ")}\n}`;
+        return `\\lista{\n  ${items.join(" |\n  ")}\n}`;
       }
       const lineas = limpio.split(/\r?\n/).map(l => l.replace(/^[ \t]*[-*]\s*/, "").trim()).filter(Boolean);
       if (lineas.length > 1) {
-        return `\\lista{\n  ${lineas.join("|\n\n  ")}\n}`;
+        return `\\lista{\n  ${lineas.join(" |\n  ")}\n}`;
       }
       const negritas = [...limpio.matchAll(/\*\*([^*]+)\*\*(?::?\s*([^*]*?))(?=\*\*[^*]+\*\*|$)/g)];
       if (negritas.length > 1) {
-        return `\\lista{\n  ${negritas.map(m => `**${m[1].trim()}:** ${m[2].trim()}`.replace(/:\*\*\s*:?/, ":**")).join("|\n\n  ")}\n}`;
+        return `\\lista{\n  ${negritas.map(m => `**${m[1].trim()}:** ${m[2].trim()}`.replace(/:\*\*\s*:?/, ":**")).join(" |\n  ")}\n}`;
       }
     }
     return match;
@@ -1507,9 +1694,37 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/\\lista\{\s*,\s*/g, "\\lista{\n  ")
     .replace(/\s*,\s*\\nota/g, "\n\n\\nota");
 
-  // Reparar saltos de fila que falten en tablas (evitar Extra alignment tab has been changed to \cr)
-  resultado = resultado.replace(/(\\tabla\[[^\]]*\]\{[\s\S]*?\})/g, (tablaMatch) => {
-    return tablaMatch.replace(/^([^\n&%]*&[^\n%]*?)(?<!\\\\)\s*$/gm, "$1 \\\\");
+  // Reparar saltos de fila que falten en tablas (evitar Extra alignment tab has been changed to \cr y Misplaced \noalign \bottomrule)
+  resultado = resultado.replace(/(\\tabla(?:\[[^\]]*\])?\s*\{[\s\S]*?\})/g, (tablaMatch) => {
+    let arreglada = tablaMatch.replace(/^([^\n&%]*&[^\n%]*?)(?<!\\\\)\s*$/gm, "$1 \\\\");
+    arreglada = arreglada.replace(/([^\\ \t\r\n%])\s*(\}\s*)$/, "$1 \\\\\n$2");
+    return arreglada;
+  });
+
+  // Limpiar \subnota y caracteres de tabulación espurios \t
+  resultado = resultado
+    .replace(/\\subnota\{/g, "\\nota{")
+    .replace(/(?:^|\s)\\t(?=[A-Za-zÁÉÍÓÚáéíóú¿¡])/g, " ")
+    .replace(/\\t(?=\s*[\}\]])/g, "");
+
+  // En un mismo archivo o subtema solo debe haber UNA única \secciongrande con su \resumen al principio.
+  // Cualquier \secciongrande secundaria se convierte en \subtituloA sin añadir otra sección grande.
+  let primeraSeccionGrandeEncontrada = false;
+  resultado = resultado.replace(/\\secciongrande\*?(?:\[[^\]]*\])?\{([^}]+)\}/g, (match, titulo) => {
+    if (!primeraSeccionGrandeEncontrada) {
+      primeraSeccionGrandeEncontrada = true;
+      return match;
+    }
+    return `\\subtituloA{${titulo}}`;
+  });
+
+  let primerResumenEncontrado = false;
+  resultado = resultado.replace(/\\resumen\*?(?:\[[^\]]*\])?\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, (match, cuerpo) => {
+    if (!primerResumenEncontrado) {
+      primerResumenEncontrado = true;
+      return match;
+    }
+    return `\n\n${cuerpo.trim()}\n\n`;
   });
 
   // Limpiar reglas de tabla (midrule) huérfanas dentro de listas y viñetas.
@@ -1574,36 +1789,57 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/([^\n])\s*\\end\{codigo\}/g, "$1\n\\end{codigo}\n\n")
     .replace(/([^\n])\s*\\end\{consola\}/g, "$1\n\\end{consola}\n\n");
 
-  // Asegurar que entornos de código y consola estén perfectamente balanceados sin huérfanos
-  let numBeginCodigo = (resultado.match(/\\begin\{codigo\}/g) || []).length;
-  let numEndCodigo = (resultado.match(/\\end\{codigo\}/g) || []).length;
-  if (numBeginCodigo > numEndCodigo) {
-    resultado += "\n\\end{codigo}\n".repeat(numBeginCodigo - numEndCodigo);
-  } else if (numEndCodigo > numBeginCodigo) {
-    let exceso = numEndCodigo - numBeginCodigo;
-    resultado = resultado.replace(/\\end\{codigo\}(?![\s\S]*\\begin\{codigo\})/g, (match) => {
-      if (exceso > 0) {
-        exceso--;
-        return "";
+  // Asegurar que entornos de código y consola estén perfectamente balanceados secuencialmente sin anidamiento ni huérfanos
+  function balancearEntornoVerbatim(texto, nombreEntorno) {
+    const beginRegex = new RegExp(`\\\\begin\\{${nombreEntorno}\\}(\\[[^\\]]*\\])?`, "g");
+    const endRegex = new RegExp(`\\\\end\\{${nombreEntorno}\\}`, "g");
+    const tokens = [];
+    let m;
+    while ((m = beginRegex.exec(texto)) !== null) {
+      tokens.push({ type: "begin", index: m.index, length: m[0].length, full: m[0] });
+    }
+    while ((m = endRegex.exec(texto)) !== null) {
+      tokens.push({ type: "end", index: m.index, length: m[0].length, full: m[0] });
+    }
+    tokens.sort((a, b) => a.index - b.index);
+
+    if (tokens.length === 0) return texto;
+
+    let abierto = false;
+    let resultadoFinal = "";
+    let lastIndex = 0;
+
+    for (const token of tokens) {
+      resultadoFinal += texto.slice(lastIndex, token.index);
+      lastIndex = token.index + token.length;
+
+      if (token.type === "begin") {
+        if (abierto) {
+          // Si ya había un bloque abierto, cerramos el anterior antes de iniciar el nuevo
+          resultadoFinal += `\\end{${nombreEntorno}}\n\n${token.full}`;
+        } else {
+          resultadoFinal += token.full;
+          abierto = true;
+        }
+      } else if (token.type === "end") {
+        if (abierto) {
+          resultadoFinal += token.full;
+          abierto = false;
+        } else {
+          // Descartar \end huérfano que no tiene ningún \begin abierto
+        }
       }
-      return match;
-    });
+    }
+
+    resultadoFinal += texto.slice(lastIndex);
+    if (abierto) {
+      resultadoFinal += `\n\\end{${nombreEntorno}}\n`;
+    }
+    return resultadoFinal;
   }
 
-  let numBeginConsola = (resultado.match(/\\begin\{consola\}/g) || []).length;
-  let numEndConsola = (resultado.match(/\\end\{consola\}/g) || []).length;
-  if (numBeginConsola > numEndConsola) {
-    resultado += "\n\\end{consola}\n".repeat(numBeginConsola - numEndConsola);
-  } else if (numEndConsola > numBeginConsola) {
-    let exceso = numEndConsola - numBeginConsola;
-    resultado = resultado.replace(/\\end\{consola\}(?![\s\S]*\\begin\{consola\})/g, (match) => {
-      if (exceso > 0) {
-        exceso--;
-        return "";
-      }
-      return match;
-    });
-  }
+  resultado = balancearEntornoVerbatim(resultado, "codigo");
+  resultado = balancearEntornoVerbatim(resultado, "consola");
 
   // Eliminar TikZ no validado: el preámbulo de los apuntes no carga pgf/tikz,
   // así que cualquier dibujo de este tipo impide compilar. Se conserva su
@@ -1688,13 +1924,197 @@ export function corregirCatalanAEspanol(texto = "") {
 }
 
 /**
- * Recorre las macros \lista{...} respetando llaves anidadas (por ejemplo
- * \cmd{<head>} o \textbf{...}) y garantiza que los ítems estén separados por |.
- * El separador oficial de \lista en WEC es la barra vertical; si la IA la omite,
- * todos los ítems se funden en uno.
+ * Extrae macros que nunca deben ir dentro de \resumen{...}
+ * (\lista, \pasos, \definicion, \definicionpar, \subtituloA, \subtituloB, \nota, \alertas, etc.)
+ * y las coloca fuera como bloques independientes a continuación del resumen.
+ */
+function extraerMacrosDeResumen(contenido) {
+  let salida = "";
+  let posicion = 0;
+  while (posicion < contenido.length) {
+    const inicio = contenido.indexOf("\\resumen{", posicion);
+    if (inicio === -1) {
+      salida += contenido.slice(posicion);
+      break;
+    }
+    salida += contenido.slice(posicion, inicio);
+    const apertura = inicio + "\\resumen".length;
+    let fin = apertura;
+    let profundidad = 0;
+    for (; fin < contenido.length; fin++) {
+      const c = contenido[fin];
+      if (c === "\\") {
+        fin++;
+        continue;
+      }
+      if (c === "{") profundidad++;
+      else if (c === "}") {
+        profundidad--;
+        if (profundidad === 0) break;
+      }
+    }
+    if (fin >= contenido.length) {
+      salida += contenido.slice(inicio);
+      break;
+    }
+    const cuerpo = contenido.slice(apertura + 1, fin);
+    const macrosExtraidas = [];
+
+    function extraerMacro(nombreMacro, numArgs = 1) {
+      let pos = 0;
+      let resultado = "";
+      const patron = `\\${nombreMacro}{`;
+      while (pos < cuerpoRestante.length) {
+        const idx = cuerpoRestante.indexOf(patron, pos);
+        if (idx === -1) {
+          resultado += cuerpoRestante.slice(pos);
+          break;
+        }
+        resultado += cuerpoRestante.slice(pos, idx);
+        let cur = idx + patron.length - 1;
+        let bloqueCompleto = `\\${nombreMacro}`;
+        let valido = true;
+        for (let arg = 0; arg < numArgs; arg++) {
+          if (cuerpoRestante[cur] !== "{") {
+            valido = false;
+            break;
+          }
+          let f = cur;
+          let prof = 0;
+          for (; f < cuerpoRestante.length; f++) {
+            const ch = cuerpoRestante[f];
+            if (ch === "\\") { f++; continue; }
+            if (ch === "{") prof++;
+            else if (ch === "}") {
+              prof--;
+              if (prof === 0) break;
+            }
+          }
+          if (f >= cuerpoRestante.length) {
+            valido = false;
+            break;
+          }
+          bloqueCompleto += cuerpoRestante.slice(cur, f + 1);
+          cur = f + 1;
+          while (cur < cuerpoRestante.length && /\s/.test(cuerpoRestante[cur])) cur++;
+        }
+        if (valido) {
+          macrosExtraidas.push(bloqueCompleto.trim());
+          pos = cur;
+        } else {
+          resultado += cuerpoRestante.slice(idx, idx + patron.length);
+          pos = idx + patron.length;
+        }
+      }
+      cuerpoRestante = resultado;
+    }
+
+    let cuerpoRestante = cuerpo;
+    extraerMacro("definicionpar", 2);
+    extraerMacro("definicion", 2);
+    extraerMacro("nota", 2);
+    extraerMacro("alertas", 1);
+    extraerMacro("lista", 1);
+    extraerMacro("pasos", 1);
+    extraerMacro("subtituloA", 1);
+    extraerMacro("subtituloB", 1);
+    extraerMacro("rectangulos", 1);
+
+    const resumenLimpio = cuerpoRestante.replace(/\r?\n\s*\r?\n+/g, " ").replace(/\s+/g, " ").trim();
+    if (resumenLimpio) {
+      salida += `\\resumen{\n  ${resumenLimpio}\n}\n\n`;
+    }
+    if (macrosExtraidas.length > 0) {
+      salida += macrosExtraidas.join("\n\n") + "\n\n";
+    }
+    posicion = fin + 1;
+  }
+  return salida;
+}
+
+/**
+ * Detecta párrafos planos o desestructurados que la IA entrega sin macros ("texto soso")
+ * y los estructura en macros visuales WEC (\definicion, \nota, \alertas).
+ */
+function estructurarTextoPlano(texto) {
+  const bloques = [];
+  let protegido = texto.replace(/(\\begin\{(?:codigo|consola)\}[\s\S]*?\\end\{(?:codigo|consola)\})/g, (m) => {
+    // Si es un bloque de código vacío o simulado que solo dice "No hay código..."
+    if (/\\begin\{codigo\}\s*(?:\/\/|#|<!--)?\s*No hay c[oó]digo[^\n]*\s*\\end\{codigo\}/i.test(m)) {
+      return "";
+    }
+    const token = `@@@ESTRUC_VERBATIM_${bloques.length}@@@`;
+    bloques.push(m);
+    return token;
+  });
+
+  // 1. Definiciones en texto plano: "**Definición de X:** ..." o "Definición de X: ..."
+  protegido = protegido.replace(/(?:^|\n)\s*(?:\*\*(?:Definici[oó]n(?:\s+de)?|Concepto):\s*([^*\n]+)\*\*|Definici[oó]n(?:\s+de\s+|\s*:\s*)([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ -]{1,40}):?)\s*([^\n]+(?:\n[^\n\\]+)*)/gi, (_m, t1, t2, desc) => {
+    const termino = (t1 || t2).trim();
+    return `\n\n\\definicion{${termino}}{${desc.trim()}}\n\n`;
+  });
+
+  // 2. Avisos de examen sueltos en texto plano
+  protegido = protegido.replace(/(?:^|\n)\s*(?:\*\*(?:Para el examen|Ojo para el examen|Examen):\*\*|(?:Para el examen|Ojo para el examen|Examen):)\s*([^\n]+(?:\n[^\n\\]+)*)/gi, (_m, desc) => {
+    return `\n\n\\nota{Para el examen}{${desc.trim()}}\n\n`;
+  });
+
+  // 3. Alertas o advertencias sueltas en texto plano
+  protegido = protegido.replace(/(?:^|\n)\s*(?:\*\*(?:Alerta|Advertencia|Importante|Seguridad):\*\*|(?:Alerta|Advertencia|Importante|Seguridad):)\s*([^\n]+(?:\n[^\n\\]+)*)/gi, (_m, desc) => {
+    return `\n\n\\alertas{${desc.trim()}}\n\n`;
+  });
+
+  // 4. Dividir «textacos» densos y largos en párrafos cortos y digeribles (de 2 a 3 oraciones)
+  const parrafos = protegido.split(/\n\s*\n/);
+  const parrafosDivididos = [];
+  for (const p of parrafos) {
+    const trimP = p.trim();
+    // No tocar macros de LaTeX, comentarios ni bloques verbatim
+    if (trimP.startsWith("\\") || trimP.startsWith("%") || trimP.startsWith("@@@ESTRUC_VERBATIM") || trimP.length < 350) {
+      parrafosDivididos.push(p);
+      continue;
+    }
+    // Si contiene una enumeración tipo 1. ... 2. ... 3. ... convertirla a \lista
+    const itemsNumerados = [...trimP.matchAll(/(?:^|\s)(?:[1-9]\.|\([1-9]\))\s*([A-ZÁÉÍÓÚ][^.\n]+[.!?])/g)];
+    if (itemsNumerados.length >= 2) {
+      const itemsLista = itemsNumerados.map(m => m[1].trim());
+      parrafosDivididos.push(`\\lista{\n  ${itemsLista.join(" |\n  ")}\n}`);
+      continue;
+    }
+
+    // Dividir textaco largo por oraciones terminadas en punto
+    const oraciones = trimP.match(/[^.!?]+[.!?]+(?:\s+|$)/g);
+    if (oraciones && oraciones.length >= 3) {
+      let acumulado = "";
+      let oracionesLote = [];
+      for (const o of oraciones) {
+        acumulado += o;
+        oracionesLote.push(o.trim());
+        if (acumulado.length >= 200 && oracionesLote.length >= 2) {
+          parrafosDivididos.push(oracionesLote.join(" "));
+          acumulado = "";
+          oracionesLote = [];
+        }
+      }
+      if (oracionesLote.length > 0) {
+        parrafosDivididos.push(oracionesLote.join(" "));
+      }
+    } else {
+      parrafosDivididos.push(p);
+    }
+  }
+  protegido = parrafosDivididos.join("\n\n");
+
+  return protegido.replace(/@@@ESTRUC_VERBATIM_(\d+)@@@/g, (_m, i) => bloques[Number(i)]);
+}
+
+/**
+ * Recorre las macros \lista{...} y \pasos{...} respetando llaves anidadas (por ejemplo
+ * \cmd{<head>} o \textbf{...}) y garantiza que los ítems estén separados por |,
+ * sin números sueltos con salto de línea ni divisiones espurias por \par.
  */
 function normalizarListasWec(value) {
-  // Los bloques de código pueden contener \lista como texto literal: no se tocan.
+  // Los bloques de código pueden contener \lista o \pasos como texto literal: no se tocan.
   const bloques = [];
   const protegido = value.replace(
     /(\\begin\{(?:codigo|consola)\}[\s\S]*?\\end\{(?:codigo|consola)\})/g,
@@ -1704,30 +2124,31 @@ function normalizarListasWec(value) {
       return marca;
     },
   );
-  const normalizado = normalizarListasPlano(protegido);
+  let normalizado = normalizarEntornoListaOPasos(protegido, "lista");
+  normalizado = normalizarEntornoListaOPasos(normalizado, "pasos");
   return normalizado.replace(
     /@@@LISTA_CODIGO_(\d+)@@@/g,
     (_match, indice) => bloques[Number(indice)],
   );
 }
 
-function normalizarListasPlano(value) {
+function normalizarEntornoListaOPasos(value, macroNombre) {
+  const patron = `\\${macroNombre}{`;
   let salida = "";
   let posicion = 0;
   while (posicion < value.length) {
-    const inicio = value.indexOf("\\lista{", posicion);
+    const inicio = value.indexOf(patron, posicion);
     if (inicio === -1) {
       salida += value.slice(posicion);
       break;
     }
     salida += value.slice(posicion, inicio);
-    const apertura = inicio + "\\lista".length;
+    const apertura = inicio + patron.length - 1;
     let fin = apertura;
     let profundidad = 0;
     for (; fin < value.length; fin++) {
       const caracter = value[fin];
       if (caracter === "\\") {
-        // Saltar \{ y \} para no contarlos como llaves reales.
         fin++;
         continue;
       }
@@ -1742,7 +2163,7 @@ function normalizarListasPlano(value) {
       break;
     }
     const cuerpo = value.slice(apertura + 1, fin);
-    salida += `\\lista{${normalizarCuerpoLista(cuerpo)}}`;
+    salida += `\\${macroNombre}{${normalizarCuerpoLista(cuerpo, macroNombre)}}`;
     posicion = fin + 1;
   }
   return salida;
@@ -1774,10 +2195,25 @@ function dividirPorPipe(cuerpo) {
 
 const INICIO_ITEM = /^(?:\*\*[^*\n]+\*\*|\\textbf\{|[-*]\s+|\d+[.)]\s+)/;
 
-function normalizarCuerpoLista(cuerpoOriginal) {
-  const cuerpo = cuerpoOriginal
+function normalizarCuerpoLista(cuerpoOriginal, tipo = "lista") {
+  let cuerpo = cuerpoOriginal
     .replace(/\\(?:midrule|toprule|bottomrule)\b/g, "")
     .replace(/(?:^|\n|\s)\*([a-zA-ZÁÉÍÓÚáéíóú0-9_ -]+:\*\*)/g, "\n  **$1");
+
+  // Reemplazar saltos de línea forzados (\\ o \newline) tras números o viñetas al inicio
+  cuerpo = cuerpo.replace(/(^|[|\n])\s*(\d+[.)]?|[-*•])\s*(?:\\\\|\s*\\newline)\s*/g, "$1$2 ");
+
+  // Si una línea consiste solo de un número (ej. "1." o "1") o viñeta, unirla inmediatamente con la siguiente línea
+  cuerpo = cuerpo.replace(/(^|[|\n])\s*(\d+[.)]?|[-*•])\s*\r?\n+\s*/g, "$1$2 ");
+
+  // Quitar líneas en blanco internas (\par) para que \itemsnuevos no divida items
+  cuerpo = cuerpo.replace(/\r?\n\s*\r?\n+/g, "\n  ");
+
+  // En pasos: quitar la numeración manual redundante ("1.", "**1:**", "Paso 1:", "**Paso 1:**", etc.)
+  // ya que la macro \pasos numera automáticamente con círculos del 1 al N
+  if (tipo === "pasos") {
+    cuerpo = cuerpo.replace(/(^|[|\n])\s*(?:\*{0,2}(?:Paso\s+)?\d+[\.:\)\-–—]?\*{0,2}\s*)+/gi, "$1 ");
+  }
 
   const items = [];
   for (const segmento of dividirPorPipe(cuerpo)) {
@@ -1810,8 +2246,23 @@ function normalizarCuerpoLista(cuerpoOriginal) {
     }
   }
 
-  if (items.length <= 1) return cuerpoOriginal;
-  return `\n  ${items.join("|\n  ")}\n`;
+  // Post-procesado final de cada item
+  const itemsLimpios = [];
+  for (let item of items) {
+    item = item.trim().replace(/\s+/g, " ");
+    if (tipo === "pasos") {
+      item = item.replace(/^(?:\*{0,2}(?:Paso\s+)?\d+[\.:\)\-–—]?\*{0,2}\s*)+/i, "").trim();
+    }
+    // Si en lista quedó un número solo (ej: "1" o "1.") como item completo, descartarlo
+    if (/^\d+[.)]?$/.test(item)) continue;
+
+    // Quitar saltos de línea forzados residuales al principio o final del item
+    item = item.replace(/^(?:\\\\|\s*\\newline)+\s*/, "").replace(/(?:\\\\|\s*\\newline)+\s*$/, "");
+    if (item) itemsLimpios.push(item);
+  }
+
+  if (itemsLimpios.length === 0) return cuerpoOriginal;
+  return `\n  ${itemsLimpios.join(" |\n  ")}\n`;
 }
 
 function convertirListasWec(value) {
@@ -1824,7 +2275,7 @@ function convertirListasWec(value) {
           .map((item) => item.trim())
           .filter(Boolean);
         if (!items.length) return "";
-        return `\\lista{\n  ${items.join("|\n\n  ")}\n}`;
+        return `\\lista{\n  ${items.join(" |\n  ")}\n}`;
       },
     )
     .replace(
@@ -2209,6 +2660,8 @@ async function asegurarEstilosGenerador(themeDir) {
 % de bibliotecas_latex/cabecera.tex. Aquí se sincronizan los colores
 % del resaltado de código y el índice automático clicable con hyperref.
 \providecommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\providecommand{\subnota}[2]{\nota{#1}{#2}}
+\providecommand{\subnotasin}[2]{\nota{#1}{#2}}
 \AtBeginDocument{\spanishdeactivate{<>}}
 \providecommand{\subt}[1]{\par\Needspace{4\baselineskip}\vspace{2mm}\noindent{\bfseries\color{primary}#1}\par\vspace{1mm}}
 \providecolor{codeForeground}{HTML}{243247}
@@ -2228,18 +2681,16 @@ async function asegurarEstilosGenerador(themeDir) {
 % --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF ---
 % Se envuelven \secciongrande (sección) y \seccion (subsección) usando
 % \RenewDocumentCommand para mantener compatibilidad total con los hooks
-% de LaTeX y con hyperref sin romper la sintaxis ni desbordar argumentos.
+% de LaTeX y con hyperref sin romper la sintaxis ni duplicar entradas en el índice.
 \makeatletter
 \let\orig@secciongrande\secciongrande
 \RenewDocumentCommand{\secciongrande}{o m}{%
   \phantomsection
-  \addcontentsline{toc}{section}{#2}%
   \IfValueTF{#1}{\orig@secciongrande[#1]{#2}}{\orig@secciongrande[]{#2}}%
 }
 \let\orig@seccion\seccion
 \RenewDocumentCommand{\seccion}{o m}{%
   \phantomsection
-  \addcontentsline{toc}{subsection}{#2}%
   \IfValueTF{#1}{\orig@seccion[#1]{#2}}{\orig@seccion[]{#2}}%
 }
 \makeatother
@@ -2269,7 +2720,8 @@ async function asegurarEstilosGenerador(themeDir) {
       anterior.includes("RenewDocumentCommand{\\secciongrande}") &&
       anterior.includes("RenewDocumentCommand{\\seccion}") &&
       anterior.includes("\\orig@secciongrande[]{#2}") &&
-      anterior.includes("AddToHook{cmd/secciongrande/after}");
+      anterior.includes("AddToHook{cmd/secciongrande/after}") &&
+      !anterior.includes("\\addcontentsline{toc}{section}{#2}");
     if (estiloWecActualConIndice) return;
   }
   await writeFile(file, estilos, "utf8");
@@ -2312,13 +2764,14 @@ async function asegurarDocumentoTema(themeDir, subject, theme, title) {
       (item) =>
         item.isDirectory() &&
         new RegExp(`^Tema ${theme}\\.\\d+$`, "i").test(item.name),
-    )
-    .sort(
+    );
+
+  if (!(await existeArchivo(target))) {
+    const sortedChildren = children.sort(
       (a, b) =>
         Number(a.name.split(".").at(-1)) - Number(b.name.split(".").at(-1)),
     );
-  const inputLines = children.map((item) => `\\inputcarpeta{${item.name}}`);
-  if (!(await existeArchivo(target))) {
+    const inputLines = sortedChildren.map((item) => `\\inputcarpeta{${item.name}}`);
     const bookmark = crearNombreArchivo(`${subject}-tema${theme}`, 80);
     const content = [
       "\\documentclass[11pt,a4paper]{extarticle}",
@@ -2353,19 +2806,36 @@ async function asegurarDocumentoTema(themeDir, subject, theme, title) {
       beginDocument + "\\begin{document}".length,
       endDocument < 0 ? original.length : endDocument,
     );
+
+    // Conservar todas las carpetas que ya estaban en el documento para nunca perder apartados
+    const carpetasEnDoc = [
+      ...original.matchAll(/\\inputcarpeta\{([^}]+)\}/g),
+    ].map((m) => m[1]);
+
+    const carpetasEnDisco = children.map((item) => item.name);
+    const todasLasCarpetas = Array.from(
+      new Set([...carpetasEnDoc, ...carpetasEnDisco]),
+    ).sort((a, b) => {
+      const numA = Number(a.split(".").at(-1)) || 0;
+      const numB = Number(b.split(".").at(-1)) || 0;
+      return numA - numB;
+    });
+
+    const inputLines = todasLasCarpetas.map((c) => `\\inputcarpeta{${c}}`);
+
     const preambleLines = preamble
       .split("\n")
       .filter(
         (line) =>
           line.trim() !== styleInput &&
-          !/^\\inputcarpeta\{Tema \d+\.\d+\}$/.test(line.trim()),
+          !/^\\inputcarpeta\{[^{}]+\}$/.test(line.trim()),
       );
     const normalizedBody = body
       .split("\n")
       .filter(
         (line) =>
           line.trim() !== styleInput &&
-          !/^\\inputcarpeta\{Tema \d+\.\d+\}$/.test(line.trim()),
+          !/^\\inputcarpeta\{[^{}]+\}$/.test(line.trim()),
       )
       .join("\n")
       .replace(
@@ -2403,8 +2873,39 @@ async function asegurarDocumentoTema(themeDir, subject, theme, title) {
   return { path: target, created: false };
 }
 
+const ACRONYMS_SET = new Set([
+  "HTML", "CSS", "JS", "DOM", "XML", "URL", "HTTP", "HTTPS", "API", "SQL",
+  "V8", "JIT", "WEC", "DAW", "PHP", "SSL", "TLS", "TCP", "IP", "JSON"
+]);
+const MINOR_WORDS_SET = new Set([
+  "de", "del", "la", "el", "los", "las", "en", "un", "una", "unos", "unas",
+  "por", "para", "con", "y", "o", "al", "a", "vs"
+]);
+
+export function normalizarMayusculasTitulo(titulo = "") {
+  if (!titulo || typeof titulo !== "string") return titulo;
+  const t = titulo.trim();
+  const soloLetras = t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, "");
+  if (soloLetras.length >= 4 && soloLetras === soloLetras.toUpperCase()) {
+    const palabras = t.toLowerCase().split(/\s+/);
+    return palabras
+      .map((p, idx) => {
+        const limpia = p.replace(/[^a-záéíóúñ0-9]/gi, "").toUpperCase();
+        if (ACRONYMS_SET.has(limpia)) return p.toUpperCase();
+        if (limpia === "JAVASCRIPT") return "JavaScript";
+        if (limpia === "NODEJS" || limpia === "NODE.JS") return "Node.js";
+        if (idx > 0 && MINOR_WORDS_SET.has(p)) return p;
+        return p.charAt(0).toUpperCase() + p.slice(1);
+      })
+      .join(" ");
+  }
+  return t;
+}
+
 export function detectarCatalan(texto = "") {
-  return false;
+  if (!texto || typeof texto !== "string" || !texto.trim()) return false;
+  const patron = /(?:^|[^a-zà-ÿ])(?:client-servidor|client(?:\s+servidor)?|l['’](?:origen|abast|execuci[oó]|usuari|entorn)|d['’](?:execuci[oó]|un|una|aquest|aquesta)|eines|llenguatges|execuci[oó]|entorn|entorns|desenvolupament|cercador|fitxers?|dades|sol[·.]licituds?|aquest|aquesta|aquests|aquestes|tamb[eé]|aix[oò]|dels|deles|amb|sense|per[oò]|s[oó]n|mitjan[cç]ant|interf[ií]cie|renderitzat|comunicacions|navigador)(?![a-zà-ÿ])/iu;
+  return patron.test(texto);
 }
 
 function escaparLatex(value) {

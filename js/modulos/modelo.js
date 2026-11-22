@@ -1,6 +1,39 @@
 import { Agent } from "undici";
+import translateLib from "translate";
 import { config } from "./configuracion.js";
-import { detectarCatalan } from "./apuntes.js";
+import { detectarCatalan, normalizarMayusculasTitulo } from "./apuntes.js";
+
+export async function traducirTextoGoogle(texto = "") {
+  if (!texto || typeof texto !== "string" || !texto.trim()) return texto;
+  const limpio = texto.trim();
+  const esCat = detectarCatalan(limpio);
+
+  // Intentar primero con sl=ca si se detecta catalán, o sl=auto en caso general
+  const fuentes = esCat ? ["ca", "auto"] : ["auto", "ca"];
+  for (const sl of fuentes) {
+    try {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=es&dt=t&q=` + encodeURIComponent(limpio);
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const datos = await res.json();
+        const resultado = datos?.[0]?.map((s) => s[0]).join("");
+        if (resultado && resultado.trim()) {
+          const resLimpio = resultado.trim();
+          if (!detectarCatalan(resLimpio) || resLimpio !== limpio) {
+            return resLimpio;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    translateLib.engine = "google";
+    const res = await translateLib(limpio, { from: "ca", to: "es" });
+    if (res && res.trim()) return res.trim();
+  } catch {}
+  return limpio;
+}
 
 const agenteOllama = new Agent({
   headersTimeout: config.timeoutMs,
@@ -30,13 +63,16 @@ export async function consultarModeloIA(
   modeloPersonalizado = null,
 ) {
   const fechaLimite = Date.now() + config.timeoutMs;
-  const modeloEfectivo = modeloPersonalizado || config.model;
+  // Si no se especifica modelo personalizado, usar el configurado o el por defecto
+  const modeloEfectivo = modeloPersonalizado || config.model || "qwen2.5:14b";
+  const esModeloVision = /\b(?:vl|vision|llava|bakllava|minicpm-v|moondream)\b/i.test(modeloEfectivo);
+  const imagenesFiltradas = esModeloVision ? images : [];
   const mensajes = [
     { role: "system", content: system },
     {
       role: "user",
       content: user,
-      ...(images.length ? { images: images.map((image) => image.data) } : {}),
+      ...(imagenesFiltradas.length ? { images: imagenesFiltradas.map((image) => image.data) } : {}),
     },
   ];
   const consultar = async (formatoJson, temperatura = 0.5) => {
@@ -57,8 +93,8 @@ export async function consultarModeloIA(
         messages: mensajes,
         options: {
           temperature: temperatura,
-          repeat_penalty: 1.2,
-          repeat_last_n: 128,
+          repeat_penalty: 1.1,
+          repeat_last_n: 64,
           top_p: 0.9,
           num_predict: config.maxTokens,
           num_ctx: config.contextSize,
@@ -68,6 +104,10 @@ export async function consultarModeloIA(
     });
     if (!response.ok) {
       const detalle = (await response.text()).slice(0, 500);
+      if (response.status === 400 && /multimodal/i.test(detalle) && images.length > 0) {
+        console.warn(`El modelo ${modeloEfectivo} no admite imágenes multimodales; reintentando sin imágenes...`);
+        return await consultarModeloIA(system, user, [], signal, modeloPersonalizado);
+      }
       if (/exceeds the available context size/i.test(detalle)) {
         const solicitud = detalle.match(/request\s+\(([\d,]+)\s+tokens\)/i)?.[1];
         const disponible = detalle.match(
@@ -248,9 +288,138 @@ function latexTraducidoEsFiel(original = "", traducido = "") {
   return true;
 }
 
+export async function traducirLatexAEspanolConGoogle(latex = "") {
+  if (!latex || typeof latex !== "string" || !latex.trim()) return latex;
+  if (!detectarCatalan(latex)) return latex;
+
+  // 1. Proteger bloques verbatim (código, consola) para que Google Translate no modifique código
+  const bloquesProtegidos = [];
+  let protegido = latex.replace(
+    /\\begin\{(codigo|consola|verbatim|lstlisting)\}[\s\S]*?\\end\{\1\}/g,
+    (bloque) => {
+      const marca = `%%PROTECTED_CODE_${bloquesProtegidos.length}%%`;
+      bloquesProtegidos.push(bloque);
+      return marca;
+    },
+  );
+
+  // 2. Traducir títulos y argumentos de macros con Google Translate sin API
+  const regexTitulos = /\\(secciongrande|seccion|subtituloA|subtituloB)\{([^{}]+)\}/g;
+  for (const match of [...protegido.matchAll(regexTitulos)]) {
+    const [full, cmd, title] = match;
+    if (detectarCatalan(title)) {
+      let trad = await traducirTextoGoogle(title);
+      trad = normalizarMayusculasTitulo(trad);
+      if (trad && trad !== title) {
+        protegido = protegido.replace(full, `\\${cmd}{${trad}}`);
+      }
+    }
+  }
+
+  const regexDefinicion = /\\(definicion|definicionpar|nota)\{([^{}]+)\}\{([^{}]+)\}/g;
+  for (const match of [...protegido.matchAll(regexDefinicion)]) {
+    const [full, cmd, arg1, arg2] = match;
+    let trad1 = arg1;
+    let trad2 = arg2;
+    if (detectarCatalan(arg1)) trad1 = await traducirTextoGoogle(arg1);
+    if (detectarCatalan(arg2)) trad2 = await traducirTextoGoogle(arg2);
+    if (trad1 !== arg1 || trad2 !== arg2) {
+      protegido = protegido.replace(full, `\\${cmd}{${trad1}}{${trad2}}`);
+    }
+  }
+
+  const regexResumen = /\\(resumen|alertas)\{([^{}]+)\}/g;
+  for (const match of [...protegido.matchAll(regexResumen)]) {
+    const [full, cmd, arg] = match;
+    if (detectarCatalan(arg)) {
+      const trad = await traducirTextoGoogle(arg);
+      if (trad && trad !== arg) {
+        protegido = protegido.replace(full, `\\${cmd}{${trad}}`);
+      }
+    }
+  }
+
+  // 2b. Traducir rectángulos
+  const regexRectangulos = /\\rectangulos\{([\s\S]*?)\}/g;
+  for (const match of [...protegido.matchAll(regexRectangulos)]) {
+    const [full, cuerpo] = match;
+    if (detectarCatalan(cuerpo)) {
+      const partes = [...cuerpo.matchAll(/\{([^{}]+)\}\{([^{}]+)\}/g)];
+      let nuevoCuerpo = cuerpo;
+      for (const p of partes) {
+        let t1 = p[1];
+        let t2 = p[2];
+        if (detectarCatalan(t1)) t1 = await traducirTextoGoogle(t1);
+        if (detectarCatalan(t2)) t2 = await traducirTextoGoogle(t2);
+        nuevoCuerpo = nuevoCuerpo.replace(p[0], `{${t1}}{${t2}}`);
+      }
+      protegido = protegido.replace(full, `\\rectangulos{${nuevoCuerpo}}`);
+    }
+  }
+
+  // 3. Traducir listas con catalán
+  const regexLista = /\\(lista|pasos)\{([^{}]+)\}/g;
+  for (const match of [...protegido.matchAll(regexLista)]) {
+    const [full, cmd, cuerpo] = match;
+    if (detectarCatalan(cuerpo)) {
+      const items = cuerpo.split("|");
+      const itemsTrad = [];
+      for (const it of items) {
+        if (detectarCatalan(it)) {
+          itemsTrad.push(await traducirTextoGoogle(it));
+        } else {
+          itemsTrad.push(it);
+        }
+      }
+      protegido = protegido.replace(full, `\\${cmd}{\n  ${itemsTrad.join(" |\n  ")}\n}`);
+    }
+  }
+
+  // 4. Si aún queda catalán en párrafos o líneas sueltas
+  if (detectarCatalan(protegido)) {
+    const lineas = protegido.split("\n");
+    for (let i = 0; i < lineas.length; i++) {
+      const l = lineas[i];
+      if (
+        l.trim() &&
+        !l.trim().startsWith("\\") &&
+        !l.includes("%%PROTECTED_CODE_") &&
+        detectarCatalan(l)
+      ) {
+        lineas[i] = await traducirTextoGoogle(l);
+      }
+    }
+    protegido = lineas.join("\n");
+  }
+
+  // 5. Restaurar bloques de código protegidos
+  for (let i = 0; i < bloquesProtegidos.length; i++) {
+    protegido = protegido.replace(`%%PROTECTED_CODE_${i}%%`, bloquesProtegidos[i]);
+  }
+
+  return protegido;
+}
+
 export async function traducirLatexAEspanolConIA(latex = "", signal) {
   if (!latex || typeof latex !== "string" || !latex.trim()) return latex;
   if (esEntornoPruebas()) return latex;
+  if (!detectarCatalan(latex)) {
+    return latex;
+  }
+
+  // 1. Traducción rápida, fiable y directa con Google Traductor sin API
+  try {
+    const conGoogle = await traducirLatexAEspanolConGoogle(latex);
+    if (!detectarCatalan(conGoogle) || conGoogle !== latex) {
+      return conGoogle;
+    }
+    latex = conGoogle;
+  } catch (errGoogle) {
+    console.warn(`Traducción inicial con Google omitida: ${errGoogle.message}`);
+  }
+
+  if (!detectarCatalan(latex)) return latex;
+
   const sistemaTraductor = `Eres un traductor técnico y corrector académico experto en español estándar de España.
 Tu tarea es revisar TODO el contenido LaTeX y dejar en español cualquier texto que esté en catalán, valenciano, inglés u otro idioma. Si una frase ya está en español correcto, consérvala sin cambios innecesarios.
 REGLAS INNEGOCIABLES:
@@ -261,8 +430,6 @@ REGLAS INNEGOCIABLES:
 - No inventes información ni cambies el significado técnico. Devuelve el LaTeX completo, no un resumen.
 Devuelve únicamente un JSON con la propiedad "latex" que contenga el texto íntegro revisado:`;
 
-  // Blindar el código real: el traductor nunca recibe su contenido, solo marcas.
-  // Así se evita que traduzca identificadores, cambie comillas o rompa sintaxis.
   const bloquesProtegidos = [];
   const latexProtegido = latex.replace(
     /\\begin\{(codigo|consola|verbatim|lstlisting)\}([\s\S]*?)\\end\{\1\}/g,
@@ -275,7 +442,7 @@ Devuelve únicamente un JSON con la propiedad "latex" que contenga el texto ínt
   try {
     const respuesta = await consultarModeloIA(
       sistemaTraductor,
-      `Revisa y traduce íntegramente al español estándar este LaTeX, preservando estructura y código. Las marcas ZZBLOQUECODIGOnFINZZ son bloques de código protegidos: consérvalas exactamente y en el mismo lugar.\n\n${latexProtegido}`,
+      `Revisa y traduce íntegramente al español estándar este LaTeX, preservando estructura y código. Las marcas ZZBLOQUECODIGO[número]FINZZ son bloques de código protegidos: consérvalas exactamente y en el mismo lugar.\n\n${latexProtegido}`,
       [],
       signal,
     );
@@ -289,8 +456,12 @@ Devuelve únicamente un JSON con la propiedad "latex" que contenga el texto ínt
     }
     if (traducido && typeof traducido === "string" && traducido.trim().length > 0) {
       for (let i = 0; i < bloquesProtegidos.length; i += 1) {
-        traducido = traducido.replace(`ZZBLOQUECODIGO${i}FINZZ`, bloquesProtegidos[i]);
+        traducido = traducido.replaceAll(`ZZBLOQUECODIGO${i}FINZZ`, bloquesProtegidos[i]);
       }
+      // Limpiar cualquier marca residual que la IA haya desvirtuado
+      traducido = traducido.replace(/ZZBLOQUECODIGO\w*FINZZ/g, (m) => {
+        return bloquesProtegidos[0] || "";
+      });
       if (!latexTraducidoEsFiel(latex, traducido)) {
         console.warn(
           "Aviso: la traducción con IA perdía contenido o rompía la estructura; se conserva el LaTeX original.",
@@ -309,19 +480,31 @@ export async function traducirTituloYNombreConIA({ titulo = "", nombre = "" }, s
   if (!titulo && !nombre) return { titulo, nombre };
   if (esEntornoPruebas()) return { titulo, nombre };
   try {
-    const respuesta = await consultarModeloIA(
-      `Eres un traductor técnico y profesor universitario. Tu tarea es revisar el título y el slug (nombre de archivo de 1 a 3 palabras clave en minúsculas con guiones) de unos apuntes. Si contienen palabras en catalán o en otro idioma (como "capacitats", "eines", "entorn", "renderitzat", "execucio", "fitxers", "clients", etc.), tradúcelas obligatoriamente al español estándar de España ("capacidades", "herramientas", "entorno", "renderizado", "ejecucion", "archivos", "clientes", etc.). Si ya están en español estándar, devuélvelos en español. Devuelve únicamente un JSON con {"titulo": "...", "nombre": "..."}.`,
-      `Título: ${titulo}\nNombre del archivo: ${nombre}`,
-      [],
-      signal
-    );
-    const nuevoTitulo = (typeof respuesta?.titulo === "string" && respuesta.titulo.trim()) ? respuesta.titulo.trim() : titulo;
-    const nuevoNombre = (typeof respuesta?.nombre === "string" && respuesta.nombre.trim()) ? respuesta.nombre.trim() : nombre;
+    let nuevoTitulo = titulo;
+    let nuevoNombre = nombre;
+    if (titulo) {
+      nuevoTitulo = await traducirTextoGoogle(titulo);
+      nuevoTitulo = normalizarMayusculasTitulo(nuevoTitulo);
+    }
+    if (nombre) {
+      const nombreConEspacios = nombre.replace(/[-_]+/g, " ");
+      const nombreTrad = await traducirTextoGoogle(nombreConEspacios);
+      nuevoNombre = nombreTrad
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+    }
     return {
-      titulo: nuevoTitulo,
-      nombre: nuevoNombre,
+      titulo: nuevoTitulo || titulo,
+      nombre: nuevoNombre || nombre,
     };
   } catch {
-    return { titulo, nombre };
+    return {
+      titulo: normalizarMayusculasTitulo(titulo),
+      nombre,
+    };
   }
 }
