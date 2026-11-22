@@ -13,7 +13,7 @@ import {
   deducirTituloRealista,
   normalizarMayusculasTitulo,
   esTextoDeRazonamiento,
-} from "./modulos/apuntes/utilidades-nombres.js";
+} from "./modulos/apuntes/utilidades-nombres.js?v=20261122_v43";
 
 const formulario = document.querySelector("#formulario-generacion");
 const selectorAsignatura = document.querySelector("#selector-asignatura");
