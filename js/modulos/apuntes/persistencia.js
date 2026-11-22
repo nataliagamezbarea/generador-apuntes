@@ -1,0 +1,722 @@
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { config } from "../configuracion.js";
+import { buscarImagenAbierta } from "../imagenes.js";
+import {
+  componenteSeguro,
+  crearNombreArchivo,
+  escaparLatex,
+  escaparTextoLatex,
+  existeArchivo,
+} from "./utilidades-nombres.js";
+import {
+  obtenerInformeGeneracion,
+  rutaInformeGeneracion,
+} from "./informes.js";
+import {
+  desglosarBloquesPorSubtitulos,
+  inferirSubtemaDeBloque,
+  stemArchivoGenerado,
+} from "./bloques.js";
+import {
+  aplicarEstilosLatex,
+  limpiarLatex,
+} from "./estilos-latex.js";
+
+export async function inspeccionarReemplazosGeneracion({
+  result,
+  subject,
+  theme,
+  subtheme,
+  fingerprint,
+  inputFiles = [],
+}) {
+  const informe = await obtenerInformeGeneracion(subject, theme, subtheme);
+  const fuentesAnalizadas = new Set(
+    (informe?.archivos_procesados_detalle ?? []).map((archivo) => archivo.nombre),
+  );
+  const archivosRegistrados = new Set(
+    (informe?.archivos_generados ?? []).map((archivo) => archivo.path),
+  );
+  const archivosConHuella = new Set(
+    informe?.fingerprint === fingerprint ? archivosRegistrados : [],
+  );
+  if (
+    !inputFiles.some((archivo) => fuentesAnalizadas.has(archivo.originalname))
+  )
+    return [];
+
+  result.archivos = desglosarBloquesPorSubtitulos(result.archivos);
+  const contadorSubtemasInsp = new Map();
+  for (const block of result.archivos) {
+    const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
+    const contadorActual = (contadorSubtemasInsp.get(bloqueSubtema) || 0) + 1;
+    contadorSubtemasInsp.set(bloqueSubtema, contadorActual);
+    block.orden = contadorActual;
+    block.numeroArchivoEnSubtema = contadorActual;
+  }
+
+  const existentes = [];
+  for (const [index, block] of result.archivos.entries()) {
+    const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
+    const subDir = path.join(
+      config.notesRoot,
+      componenteSeguro(subject),
+      `Tema ${theme}`,
+      `Tema ${theme}.${bloqueSubtema}`,
+    );
+    const filename = `${stemArchivoGenerado(block, theme, bloqueSubtema, index)}.tex`;
+    const target = path.join(subDir, filename);
+    const relativeTarget = path
+      .relative(config.notesRoot, target)
+      .split(path.sep)
+      .join("/");
+    if (!archivosRegistrados.has(relativeTarget)) continue;
+    try {
+      const contenido = await readFile(target, "utf8");
+      if (archivosConHuella.has(relativeTarget)) continue;
+      const hash = createHash("sha256").update(contenido).digest("hex");
+      existentes.push({
+        path: path.relative(config.notesRoot, target).split(path.sep).join("/"),
+        sha256: hash,
+      });
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  return existentes;
+}
+
+export async function guardarGeneracion({
+  result,
+  fingerprint,
+  subject,
+  theme,
+  subtheme,
+  inputFiles,
+  material,
+  existingCount,
+  replaceExisting = false,
+  expectedExistingFiles = {},
+  archivosCambiados = [],
+}) {
+  const subjectDir = path.join(config.notesRoot, componenteSeguro(subject));
+  const themeDir = path.join(subjectDir, `Tema ${theme}`);
+  const subDir = path.join(themeDir, `Tema ${theme}.${subtheme}`);
+  await mkdir(themeDir, { recursive: true });
+  const created = [];
+  const warnings = [];
+  const written = [];
+  const imagenesIncluidas = [];
+  const sugerenciasUsadas = new Set();
+
+  await asegurarEstructuraAsignatura(subjectDir);
+  await asegurarEstructuraTema(themeDir);
+  const informeAnterior = await obtenerInformeGeneracion(
+    subject,
+    theme,
+    subtheme,
+  );
+  const archivosConHuella = new Set(
+    informeAnterior?.fingerprint === fingerprint
+      ? (informeAnterior.archivos_generados ?? []).map((archivo) => archivo.path)
+      : [],
+  );
+
+  result.archivos = desglosarBloquesPorSubtitulos(result.archivos);
+  const contadorSubtemas = new Map();
+  for (const block of result.archivos) {
+    const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
+    const contadorActual = (contadorSubtemas.get(bloqueSubtema) || 0) + 1;
+    contadorSubtemas.set(bloqueSubtema, contadorActual);
+    block.orden = contadorActual;
+    block.numeroArchivoEnSubtema = contadorActual;
+  }
+
+  for (const [index, block] of result.archivos.entries()) {
+    const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
+    const subDir = path.join(themeDir, `Tema ${theme}.${bloqueSubtema}`);
+    await mkdir(subDir, { recursive: true });
+    const stem = stemArchivoGenerado(block, theme, bloqueSubtema, index);
+    const filename = `${stem}.tex`;
+    const target = path.join(subDir, filename);
+    const relativeTarget = path
+      .relative(config.notesRoot, target)
+      .split(path.sep)
+      .join("/");
+    let outputPath = target;
+    if (await existeArchivo(target)) {
+      const existing = await readFile(target, "utf8");
+      if (archivosConHuella.has(relativeTarget)) {
+        outputPath = target;
+      } else if (replaceExisting) {
+        const expectedHash = expectedExistingFiles[relativeTarget];
+        if (expectedHash) {
+          const actualHash = createHash("sha256").update(existing).digest("hex");
+          if (expectedHash !== actualHash) {
+            throw Object.assign(
+              new Error(
+                `El archivo ${relativeTarget} cambió mientras confirmabas la sustitución. No se ha sobrescrito.`,
+              ),
+              { status: 409 },
+            );
+          }
+        }
+        outputPath = target;
+      } else {
+        let suffix = 2;
+        while (await existeArchivo(path.join(subDir, `${stem}-${suffix}.tex`))) {
+          const candidato = path.join(subDir, `${stem}-${suffix}.tex`);
+          const relativoCandidato = path
+            .relative(config.notesRoot, candidato)
+            .split(path.sep)
+            .join("/");
+          if (archivosConHuella.has(relativoCandidato)) {
+            outputPath = candidato;
+            break;
+          }
+          suffix += 1;
+        }
+        if (outputPath === target)
+          outputPath = path.join(subDir, `${stem}-${suffix}.tex`);
+      }
+    } else if (replaceExisting && expectedExistingFiles[relativeTarget]) {
+      throw Object.assign(
+        new Error(
+          `El archivo ${relativeTarget} cambió mientras confirmabas la sustitución. No se ha sobrescrito.`,
+        ),
+        { status: 409 },
+      );
+    }
+    
+    const figuraAbierta = await adjuntarImagenAbierta({
+      imagenes: result.imagenes ?? [],
+      stem: path.basename(outputPath, ".tex"),
+      titulo: block.titulo,
+      directorio: subDir,
+      warnings,
+      imagenesIncluidas,
+      sugerenciasUsadas,
+    });
+    const diagramas = imagenesDelApartado(result.imagenes, stem, block.titulo);
+    let latexBloque = block.latex.trim();
+    const indiceEnSubtema = (block.orden || (index + 1)) - 1;
+    if (indiceEnSubtema > 0) {
+      latexBloque = latexBloque
+        .replace(/\\secciongrande\*?(?:\[[^\]]*\])?\{([^}]+)\}\s*/g, "")
+        .replace(/\\resumen\*?(?:\[[^\]]*\])?\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*/g, "");
+    }
+    const latexLimpio = aplicarEstilosLatex(latexBloque, subject);
+    const latex = `${latexLimpio}${figuraAbierta ? `\n\n${figuraAbierta}` : ""}${diagramas ? `\n\n${diagramas}` : ""}\n`;
+    await writeFile(outputPath, latex, "utf8");
+    written.push({
+      titulo: block.titulo,
+      archivo: outputPath,
+      relativo: path
+        .relative(config.notesRoot, outputPath)
+        .split(path.sep)
+        .join("/"),
+    });
+  }
+
+  if (replaceExisting) {
+    const rutasNuevas = new Set(written.map((w) => path.resolve(w.archivo)));
+    if (informeAnterior?.archivos_generados) {
+      for (const viejo of informeAnterior.archivos_generados) {
+        if (!viejo.path) continue;
+        const absViejo = path.resolve(config.notesRoot, viejo.path);
+        if (!rutasNuevas.has(absViejo)) {
+          try {
+            await rm(absViejo, { force: true });
+          } catch {}
+        }
+      }
+    }
+    for (const [sub] of contadorSubtemas.entries()) {
+      const subDirAfectado = path.join(themeDir, `Tema ${theme}.${sub}`);
+      try {
+        const archivosEnSubDir = await readdir(subDirAfectado);
+        for (const arch of archivosEnSubDir) {
+          if (!arch.endsWith(".tex")) continue;
+          const absArch = path.resolve(subDirAfectado, arch);
+          if (!rutasNuevas.has(absArch)) {
+            try {
+              await rm(absArch, { force: true });
+            } catch {}
+          }
+        }
+      } catch {}
+    }
+  }
+
+  const themeDocument = await asegurarDocumentoTema(
+    themeDir,
+    subject,
+    theme,
+    result.titulo_tema,
+  );
+  if (themeDocument.created) created.push(themeDocument.path);
+  const report = {
+    fingerprint,
+    generado: new Date().toISOString(),
+    asignatura: subject,
+    tema: theme,
+    subtema: subtheme,
+    titulo_tema: result.titulo_tema,
+    titulo_subtema: result.titulo_subtema,
+    conceptos_clave: result.conceptos_clave,
+    cobertura: result.cobertura,
+    fuentes: result.fuentes,
+    imagenes: imagenesIncluidas,
+    archivos_procesados: inputFiles.map((file) => file.originalname),
+    archivos_procesados_detalle: inputFiles.map((file) => ({
+      nombre: file.originalname,
+      bytes: file.size,
+      sha256: createHash("sha256").update(file.buffer).digest("hex"),
+    })),
+    archivos_cambiados: archivosCambiados,
+    documentos_leidos: material.documents.length,
+    imagenes_ocr: material.imagesOcr,
+    paginas_enviadas_a_vision: material.visuals.length,
+    apuntes_existentes: { files: existingCount },
+    archivos_generados: written.map((file) => ({
+      titulo: file.titulo,
+      path: file.relativo,
+    })),
+    tema_documento: path
+      .relative(config.notesRoot, themeDocument.path)
+      .split(path.sep)
+      .join("/"),
+    avisos: [...material.warnings, ...warnings],
+  };
+  const reportDirectory = path.dirname(
+    await rutaInformeGeneracion(subject, theme, subtheme),
+  );
+  await mkdir(reportDirectory, { recursive: true });
+  const reportText = `${JSON.stringify(report, null, 2)}\n`;
+  await writeFile(
+    path.join(reportDirectory, "ultima-generacion.json"),
+    reportText,
+    "utf8",
+  );
+  await writeFile(path.join(reportDirectory, "cobertura.json"), reportText, "utf8");
+  const historyDirectory = path.join(reportDirectory, "historial");
+  await mkdir(historyDirectory, { recursive: true });
+  await writeFile(
+    path.join(historyDirectory, `${Date.now()}-${fingerprint}.json`),
+    reportText,
+    "utf8",
+  );
+  return {
+    report,
+    salida: {
+      subject_dir: subjectDir,
+      theme_dir: themeDir,
+      sub_dir: subDir,
+      theme_document: themeDocument.path,
+      created,
+      written,
+      skipped: [],
+      warnings,
+    },
+  };
+}
+
+export async function adjuntarImagenAbierta({
+  imagenes,
+  stem,
+  titulo,
+  directorio,
+  warnings,
+  imagenesIncluidas,
+  sugerenciasUsadas,
+}) {
+  if (imagenesIncluidas.length >= 3) return "";
+  const indice = imagenes.findIndex((imagen, itemIndice) => {
+    if (sugerenciasUsadas.has(itemIndice) || !String(imagen.consulta ?? "").trim())
+      return false;
+    const asociado = String(imagen.apartado ?? imagen.archivo ?? "");
+    return !asociado || asociado === stem || asociado === titulo;
+  });
+  if (indice < 0) return "";
+  sugerenciasUsadas.add(indice);
+  const sugerencia = imagenes[indice];
+
+  try {
+    const imagen = await buscarImagenAbierta(sugerencia.consulta);
+    if (!imagen) return "";
+    const nombreImagen = `${stem}-imagen.${imagen.extension}`;
+    await writeFile(path.join(directorio, nombreImagen), imagen.data);
+    const descripcion = escaparTextoLatex(
+      String(sugerencia.descripcion ?? imagen.descripcion ?? titulo).slice(0, 300),
+    );
+    const atribucion = escaparTextoLatex(
+      `${imagen.autor}. ${imagen.licencia}. Fuente: ${imagen.fuenteUrl}`,
+    );
+    imagenesIncluidas.push({
+      archivo: nombreImagen,
+      titulo: imagen.titulo,
+      autor: imagen.autor,
+      licencia: imagen.licencia,
+      licencia_url: imagen.licenciaUrl?.href ?? "",
+      fuente_url: imagen.fuenteUrl,
+    });
+    return [
+      "\\begin{figure}[htbp]",
+      "\\centering",
+      `\\includegraphics[width=0.8\\linewidth]{${nombreImagen}}`,
+      `\\caption{${descripcion}}`,
+      `\\small\\textit{${atribucion}}`,
+      "\\end{figure}",
+    ].join("\n");
+  } catch (error) {
+    warnings.push(
+      `No se pudo añadir una imagen con licencia abierta para «${titulo}»: ${error.message}`,
+    );
+    return "";
+  }
+}
+
+export function imagenesDelApartado(imagenes = [], slug, titulo) {
+  if (!Array.isArray(imagenes)) return "";
+  return imagenes
+    .flatMap((imagen) => {
+      if (String(imagen.tikz ?? "").trim()) return [];
+      const asociado = String(imagen.apartado ?? imagen.archivo ?? "");
+      if (asociado && asociado !== slug && asociado !== titulo) return [];
+      const tikz = limpiarLatex(imagen.tikz ?? "");
+      if (!tikz) return [];
+      const descripcion = String(imagen.descripcion ?? "").replace(
+        /[#$%&_]/g,
+        "\\$&",
+      );
+      const dibujo = tikz.includes("\\begin{tikzpicture}")
+        ? tikz
+        : `\\begin{tikzpicture}\n${tikz}\n\\end{tikzpicture}`;
+      return [
+        `\\begin{figure}[htbp]\n\\centering\n${dibujo}\n${descripcion ? `\\caption{${descripcion}}` : ""}\n\\end{figure}`,
+      ];
+    })
+    .join("\n\n");
+}
+
+export async function asegurarEstructuraAsignatura(subjectDir) {
+  await mkdir(subjectDir, { recursive: true });
+  const preamblePath = path.join(subjectDir, "preambulo.tex");
+  await asegurarCargaLatex(subjectDir);
+  const preambuloWec = String.raw`% =====================================================================
+%  PREAMBULO.TEX - estilos completos WEC de bibliotecas_latex
+% =====================================================================
+\spanishdeactivate{<>}
+\AtBeginDocument{\spanishdeactivate{<>}}
+\newcommand{\subt}[1]{\par\Needspace{4\baselineskip}\vspace{2mm}\noindent{\bfseries\color{primary}#1}\par\vspace{1mm}}
+\newcommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\definecolor{codeForeground}{HTML}{243247}
+\definecolor{codeString}{HTML}{8A4B08}
+\definecolor{codeComment}{HTML}{58745C}
+\definecolor{consoleBackground}{HTML}{F1F4F8}
+\definecolor{codeBackgroundA}{HTML}{F1F7FF}
+\definecolor{codeBackgroundB}{HTML}{EFF9F5}
+\definecolor{codeBackgroundC}{HTML}{F7F2FC}
+\definecolor{codeBackgroundD}{HTML}{FFF7ED}
+\definecolor{codeBackgroundE}{HTML}{F0F8FA}
+\definecolor{codeBackgroundF}{HTML}{FFF3F5}
+\definecolor{codeKeywordA}{HTML}{2457A6}
+\definecolor{codeKeywordB}{HTML}{19704F}
+\definecolor{codeKeywordC}{HTML}{7046A3}
+\definecolor{codeKeywordD}{HTML}{A45B12}
+\definecolor{codeKeywordE}{HTML}{117184}
+\definecolor{codeKeywordF}{HTML}{A63F5B}
+\def\codeCurrentBackground{codeBackgroundA}
+\def\codeCurrentKeyword{codeKeywordA}
+\newcounter{codePaletteIndex}
+\newcommand{\nextCodePalette}{%
+  \stepcounter{codePaletteIndex}%
+  \ifnum\value{codePaletteIndex}>6\setcounter{codePaletteIndex}{1}\fi
+  \ifcase\value{codePaletteIndex}\or
+    \gdef\codeCurrentBackground{codeBackgroundA}\gdef\codeCurrentKeyword{codeKeywordA}\or
+    \gdef\codeCurrentBackground{codeBackgroundB}\gdef\codeCurrentKeyword{codeKeywordB}\or
+    \gdef\codeCurrentBackground{codeBackgroundC}\gdef\codeCurrentKeyword{codeKeywordC}\or
+    \gdef\codeCurrentBackground{codeBackgroundD}\gdef\codeCurrentKeyword{codeKeywordD}\or
+    \gdef\codeCurrentBackground{codeBackgroundE}\gdef\codeCurrentKeyword{codeKeywordE}\or
+    \gdef\codeCurrentBackground{codeBackgroundF}\gdef\codeCurrentKeyword{codeKeywordF}%
+  \fi}
+\AddToHook{cmd/secciongrande/after}{\nextCodePalette}
+\AddToHook{cmd/seccion/after}{\nextCodePalette}
+\AddToHook{cmd/subtitulo/after}{\nextCodePalette}
+\AddToHook{cmd/subtituloA/after}{\nextCodePalette}
+\AddToHook{cmd/subtituloB/after}{\nextCodePalette}
+\ifcsname codigo\endcsname\else
+\newtcblisting{codigo}{listing only, breakable, colback=\codeCurrentBackground, colframe=primary!28!white,
+  boxrule=0pt, arc=3pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+  listing options={language=Java, basicstyle=\ttfamily\footnotesize\color{codeForeground},
+    keywordstyle=\color{\codeCurrentKeyword}\bfseries,
+    morekeywords={const,let,var,of,async,await,undefined,null,true,false,console,document,window,localStorage,fetch,Promise,script,html,head,body,noscript,div,span,p,ul,li,input,form,button,type,src,id,class},
+    stringstyle=\color{codeString}, commentstyle=\color{codeComment}\itshape,
+    showstringspaces=false, breaklines=true, columns=fullflexible, keepspaces=true, upquote=true}}
+\fi
+\ifcsname consola\endcsname\else
+\newtcblisting{consola}{listing only, breakable, colback=consoleBackground, colframe=primary!22!white,
+  boxrule=0pt, arc=3pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+  listing options={basicstyle=\ttfamily\footnotesize\color{codeForeground}, breaklines=true,
+    columns=fullflexible, keepspaces=true, upquote=true}}
+\fi
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+`;
+  if (!(await existeArchivo(preamblePath))) {
+    await writeFile(preamblePath, preambuloWec, "utf8");
+  } else {
+    const anterior = await readFile(preamblePath, "utf8");
+    if (!anterior.includes("newtcblisting{codigo}")) {
+      await writeFile(preamblePath, preambuloWec, "utf8");
+    }
+  }
+}
+
+export async function asegurarEstructuraTema(themeDir) {
+  await mkdir(themeDir, { recursive: true });
+  await asegurarCargaLatex(themeDir);
+  await asegurarEstilosGenerador(themeDir);
+}
+
+export async function asegurarEstilosGenerador(themeDir) {
+  const file = path.join(themeDir, "generador-estilos.tex");
+  const estilos = String.raw`% Generador de apuntes: integración con la biblioteca oficial WEC.
+% La paleta y las macros visuales (titulo, secciongrande, seccion,
+% subtituloA/B, resumen, lista, pasos, definicion, nota, tabla...) proceden
+% de bibliotecas_latex/cabecera.tex. Aquí se sincronizan los colores
+% del resaltado de código y el índice automático clicable con hyperref.
+\providecommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\providecommand{\subnota}[2]{\nota{#1}{#2}}
+\providecommand{\subnotasin}[2]{\nota{#1}{#2}}
+\AtBeginDocument{\spanishdeactivate{<>}}
+\providecommand{\subt}[1]{\par\Needspace{4\baselineskip}\vspace{2mm}\noindent{\bfseries\color{primary}#1}\par\vspace{1mm}}
+\providecolor{codeForeground}{HTML}{243247}
+\providecolor{codeString}{HTML}{8A4B08}
+\providecolor{codeComment}{HTML}{58745C}
+\providecolor{codeBackground}{HTML}{F1F7FF}
+\providecolor{codeKeyword}{HTML}{2457A6}
+\providecolor{consoleBackground}{HTML}{F1F4F8}
+\newcommand{\actualizarColoresCodigo}{%
+  \colorlet{codeBackground}{\coloractual!7!white}%
+  \colorlet{codeKeyword}{\coloractual!80!black}%
+}
+\newcommand{\iniciarPaletaSecciones}{\pickcolor{\coloractual}}
+\AddToHook{cmd/titulo/after}{\iniciarPaletaSecciones\actualizarColoresCodigo}
+\AddToHook{cmd/secciongrande/after}{\actualizarColoresCodigo}
+
+% --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF Y CONTROL ANTI-HUÉRFANAS ---
+% Se envuelven \secciongrande, \seccion, \subtituloA y \subtituloB usando
+% \RenewDocumentCommand para mantener compatibilidad total con hyperref,
+% evitar que queden solos al final de página (\Needspace) y garantizar
+% que el contenido empiece en la misma página que el título (\nopagebreak).
+\makeatletter
+\let\orig@secciongrande\secciongrande
+\RenewDocumentCommand{\secciongrande}{o m}{%
+  \par\Needspace{8\baselineskip}%
+  \phantomsection
+  \IfValueTF{#1}{\orig@secciongrande[#1]{#2}}{\orig@secciongrande[]{#2}}%
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\let\orig@seccion\seccion
+\RenewDocumentCommand{\seccion}{o m}{%
+  \par\Needspace{6\baselineskip}%
+  \phantomsection
+  \IfValueTF{#1}{\orig@seccion[#1]{#2}}{\orig@seccion[]{#2}}%
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\RenewDocumentCommand{\subtituloA}{m}{%
+  \par\Needspace{6\baselineskip}%
+  \vspace{4mm}%
+  \noindent
+  \edef\subtituloreal{\subtitulocolor}%
+  \raisebox{0.6ex}{\tikz\fill[\subtituloreal] (0,0) circle (2.2pt);}%
+  \hspace{3mm}{\headingfontxb\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\RenewDocumentCommand{\subtituloB}{m}{%
+  \par\Needspace{5\baselineskip}%
+  \vspace{4mm}%
+  \noindent
+  \edef\subtituloreal{\subtitulocolor}%
+  {\headingfont\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\makeatother
+
+\lstdefinelanguage{JavaScript}{
+  sensitive=true,
+  morekeywords={const,let,var,of,async,await,undefined,null,true,false,function,return,if,else,for,while,switch,case,break,continue,new,class,extends,import,export,default,try,catch,throw},
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]",
+  morestring=[b]'
+}
+\ifcsname codigo\endcsname\else
+\newtcblisting{codigo}[1][Java]{listing only,breakable,colback=codeBackground,colframe=\coloractual!28!white,boxrule=0pt,arc=3pt,left=6pt,right=6pt,top=4pt,bottom=4pt,listing options={language=#1,basicstyle=\ttfamily\footnotesize\color{codeForeground},keywordstyle=\color{codeKeyword}\bfseries,morekeywords={const,let,var,of,async,await,undefined,null,true,false,console,document,window,localStorage,fetch,Promise,script,html,head,body,noscript,div,span,p,ul,li,input,form,button,type,src,id,class},stringstyle=\color{codeString},commentstyle=\color{codeComment}\itshape,showstringspaces=false,breaklines=true,columns=fullflexible,keepspaces=true,tabsize=4,upquote=true}}
+\fi
+\ifcsname consola\endcsname\else
+\newtcblisting{consola}{listing only,breakable,colback=consoleBackground,colframe=primary!22!white,boxrule=0pt,arc=3pt,left=6pt,right=6pt,top=4pt,bottom=4pt,listing options={basicstyle=\ttfamily\footnotesize\color{codeForeground},breaklines=true,columns=fullflexible,keepspaces=true,upquote=true}}
+\fi
+`;
+
+  if (await existeArchivo(file)) {
+    const anterior = await readFile(file, "utf8");
+    const estiloWecActualConIndice =
+      anterior.startsWith(
+        "% Generador de apuntes: integración con la biblioteca oficial WEC.\n",
+      ) &&
+      anterior.includes("RenewDocumentCommand{\\secciongrande}") &&
+      anterior.includes("RenewDocumentCommand{\\seccion}") &&
+      anterior.includes("\\orig@secciongrande[]{#2}") &&
+      anterior.includes("AddToHook{cmd/secciongrande/after}") &&
+      !anterior.includes("\\addcontentsline{toc}{section}{#2}");
+    if (estiloWecActualConIndice) return;
+  }
+  await writeFile(file, estilos, "utf8");
+}
+
+export async function asegurarCargaLatex(directory) {
+  const loadPath = path.join(directory, "carga.tex");
+  const libraryPath =
+    path.relative(directory, config.latexLibrary).split(path.sep).join("/") ||
+    ".";
+  const legacyPath = String.raw`\def\apuntesrutalib{/data/bibliotecas_latex}`;
+  const replacement = String.raw`\def\apuntesrutalib{${libraryPath}}`;
+  let content;
+  try {
+    content = await readFile(loadPath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    content = "";
+  }
+  if (!content) {
+    content = String.raw`\def\apuntesrutalib{${libraryPath}}
+\IfFileExists{\apuntesrutalib/cabecera.tex}{%
+  \def\bibliotecasDir{\apuntesrutalib}%
+  \input{\apuntesrutalib/cabecera}%
+}{%
+  \PackageError{apuntes}{No encuentro bibliotecas_latex}{Comprueba la ruta de la biblioteca de LaTeX configurada en el Generador.}%
+}
+`;
+    await writeFile(loadPath, content, "utf8");
+  } else if (content.includes(legacyPath)) {
+    await writeFile(loadPath, content.replace(legacyPath, replacement), "utf8");
+  }
+}
+
+export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
+  const target = path.join(themeDir, `tema${theme}.tex`);
+  const styleInput = "\\input{generador-estilos.tex}";
+  const children = (await readdir(themeDir, { withFileTypes: true }))
+    .filter(
+      (item) =>
+        item.isDirectory() &&
+        new RegExp(`^Tema ${theme}\\.\\d+$`, "i").test(item.name),
+    );
+
+  if (!(await existeArchivo(target))) {
+    const sortedChildren = children.sort(
+      (a, b) =>
+        Number(a.name.split(".").at(-1)) - Number(b.name.split(".").at(-1)),
+    );
+    const inputLines = sortedChildren.map((item) => `\\inputcarpeta{${item.name}}`);
+    const bookmark = crearNombreArchivo(`${subject}-tema${theme}`, 80);
+    const content = [
+      "\\documentclass[11pt,a4paper]{extarticle}",
+      "\\input{carga.tex}",
+      "\\usepackage[hidelinks]{hyperref}",
+      "\\IfFileExists{../preambulo.tex}{\\input{../preambulo.tex}}{\\input{preambulo.tex}}",
+      styleInput,
+      "\\begin{document}",
+      "\\paletaAzul",
+      `\\titulo{TEMA ${theme}}{${escaparLatex(title)}}`,
+      "\\usarfondo",
+      "\\renewcommand{\\contentsname}{Índice}",
+      "\\setcounter{tocdepth}{2}",
+      `\\pdfbookmark[0]{Índice}{${bookmark}}`,
+      "{\\color{black}\\tableofcontents}",
+      "\\clearpage",
+      ...inputLines,
+      "\\end{document}",
+      "",
+    ].join("\n");
+    await writeFile(target, content, "utf8");
+    return { path: target, created: true };
+  }
+  {
+    const original = await readFile(target, "utf8");
+    const beginDocument = original.indexOf("\\begin{document}");
+    const endDocument = original.indexOf("\\end{document}");
+    if (beginDocument < 0 || (endDocument >= 0 && endDocument < beginDocument))
+      throw new Error(`El documento ${target} no tiene una estructura LaTeX válida.`);
+    const preamble = original.slice(0, beginDocument);
+    const body = original.slice(
+      beginDocument + "\\begin{document}".length,
+      endDocument < 0 ? original.length : endDocument,
+    );
+
+    const carpetasEnDoc = [
+      ...original.matchAll(/\\inputcarpeta\{([^}]+)\}/g),
+    ].map((m) => m[1]);
+
+    const carpetasEnDisco = children.map((item) => item.name);
+    const todasLasCarpetas = Array.from(
+      new Set([...carpetasEnDoc, ...carpetasEnDisco]),
+    ).sort((a, b) => {
+      const numA = Number(a.split(".").at(-1)) || 0;
+      const numB = Number(b.split(".").at(-1)) || 0;
+      return numA - numB;
+    });
+
+    const inputLines = todasLasCarpetas.map((c) => `\\inputcarpeta{${c}}`);
+
+    const preambleLines = preamble
+      .split("\n")
+      .filter(
+        (line) =>
+          line.trim() !== styleInput &&
+          !/^\\inputcarpeta\{[^{}]+\}$/.test(line.trim()),
+      );
+    const normalizedBody = body
+      .split("\n")
+      .filter(
+        (line) =>
+          line.trim() !== styleInput &&
+          !/^\\inputcarpeta\{[^{}]+\}$/.test(line.trim()),
+      )
+      .join("\n")
+      .replace(
+        /(?:\{\s*)*\\color\{black\}\s*\\tableofcontents(?:\s*\})*|\\tableofcontents/,
+        "{\\color{black}\\tableofcontents}",
+      );
+    const bodyConIndice = normalizedBody.includes("\\setcounter{tocdepth}{2}")
+      ? normalizedBody
+      : normalizedBody.replace(
+          "{\\color{black}\\tableofcontents}",
+          "\\setcounter{tocdepth}{2}\n{\\color{black}\\tableofcontents}",
+        );
+    const bodySinCarpeta = bodyConIndice.replace(
+      /\\titulo\{[^{}]*·\s*TEMA\s*\d+\}\{([^{}]*)\}/,
+      `\\titulo{TEMA ${theme}}{$1}`,
+    );
+    const bodyLines = bodySinCarpeta.split("\n");
+    const clearPageIndex = bodyLines.findIndex((line) =>
+      line.includes("\\clearpage"),
+    );
+    const insertionIndex =
+      clearPageIndex >= 0
+        ? clearPageIndex + 1
+        : bodyLines.findIndex((line) => line.trim()) + 1;
+    bodyLines.splice(insertionIndex, 0, ...inputLines);
+    const updatedPreamble = `${preambleLines.join("\n").trimEnd()}\n${styleInput}\n`;
+    const updated = `${updatedPreamble}\\begin{document}${bodyLines.join("\n")}${
+      endDocument < 0 ? "" : `\\end{document}${original.slice(endDocument + "\\end{document}".length)}`
+    }`;
+    if (updated !== original) {
+      await writeFile(target, updated, "utf8");
+    }
+  }
+  return { path: target, created: false };
+}
