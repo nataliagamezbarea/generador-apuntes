@@ -1,0 +1,37 @@
+\secciongrande{Programación de scripts dónde y cómo colocar los scripts}
+
+\resumen{
+  Los scripts de JavaScript se insertan en un documento HTML utilizando la etiqueta \texttt{<script>}. Pueden ubicarse tanto en el encabezado (entre \texttt{<head>} y \texttt{</head>}) como en el cuerpo (entre \texttt{<body>} y \texttt{</body>}). La etiqueta de apertura debe incluir el atributo \texttt{type="text/javascript"} para identificar el contenido como código JavaScript.
+}
+
+\nota{Para el examen}{
+¿Cuál es la función principal del atributo \texttt{type="text/javascript"} en la etiqueta \texttt{<script>}? Indica al navegador que el contenido es código JavaScript y no HTML.
+}
+
+\begin{codigo}
+
+\cmd{<script type="text/javascript">}
+// Código JavaScript aquí
+\cmd{</script>}
+\end{codigo}
+
+
+
+\textbf{Ubicación de scripts}
+\lista{ |
+  **Encabezado:** Se coloca entre \texttt{<head>} y \texttt{</head>}. Suele usarse para scripts que deben ejecutarse antes de que el contenido visible se cargue completamente. | | |
+  **Cuerpo:** Se coloca entre \texttt{<body>} y \texttt{</body>}. Es la ubicación más común para scripts que interactúan con elementos visibles de la página. }
+
+
+\subtituloA{Ejecución básica de un script}
+
+\begin{codigo}
+
+documento.write("Hola Onliner!");
+\end{codigo}
+
+
+
+\nota{Para el examen}{
+¿Qué indica el punto y coma (\texttt{;}) al final de una instrucción en JavaScript? Señala al intérprete del navegador que la línea de código ha finalizado.
+}
