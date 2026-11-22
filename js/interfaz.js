@@ -114,16 +114,15 @@ function inicializarModelos() {
   if (esEntornoEstatico) {
     // En la nube (GitHub Pages): listar modelos gratuitos y recomendados de NVIDIA NIM
     const modelosNvidia = [
-      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Gratis / Recomendado" },
-      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large · Gratis / Máxima calidad" },
-      { id: "z-ai/glm-5.3-flash", nombre: "GLM 5.3 Flash · Gratis / Rápido" },
-      { id: "moonshotai/kimi-k3.1-pro", nombre: "Kimi K3.1 Pro · Gratis / 1M Contexto" },
-      { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) · Alternativa" },
+      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Español nativo / Máxima calidad" },
+      { id: "z-ai/glm-5.3-flash", nombre: "GLM 5.3 Flash · Rápido y conciso" },
+      { id: "moonshotai/kimi-k3.1-pro", nombre: "Kimi K3.1 Pro · 1M Contexto" },
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Alternativa" },
     ];
 
     modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado)
       ? modeloIAGuardado
-      : "nvidia/nemotron-3.5-lightning-30b-a3b";
+      : "mistralai/mistral-large-4-1t-a52b";
 
     selectorModeloIA.replaceChildren();
     modelosNvidia.forEach((m) => {
@@ -137,7 +136,7 @@ function inicializarModelos() {
 
     modeloCodigoSeleccionado = modeloCodigoGuardado && modelosNvidia.some((m) => m.id === modeloCodigoGuardado)
       ? modeloCodigoGuardado
-      : "nvidia/nemotron-3.5-lightning-30b-a3b";
+      : "mistralai/mistral-large-4-1t-a52b";
 
     selectorModeloCodigo.replaceChildren();
     modelosNvidia.forEach((m) => {

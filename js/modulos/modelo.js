@@ -85,9 +85,9 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
     new Set([
       modelo,
       config.nvidiaModel,
-      "nvidia/nemotron-3.5-lightning-30b-a3b",
       "mistralai/mistral-large-4-1t-a52b",
       "z-ai/glm-5.3-flash",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
     ])
   ).filter(Boolean);
 
@@ -127,7 +127,11 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
         throw lastError;
       }
       const json = await res.json();
-      const content = (json.choices?.[0]?.message?.content || json.choices?.[0]?.message?.reasoning_content || "").trim();
+      let content = (json.choices?.[0]?.message?.content || "").trim();
+      if (!content || /^let me\b|^i need to\b|^thinking\b/i.test(content)) {
+        console.warn(`⚠️ Modelo ${mod} devolvió contenido vacío o razonamiento en inglés, probando siguiente modelo...`);
+        continue;
+      }
       return {
         message: { content },
         done_reason: json.choices?.[0]?.finish_reason === "length" ? "length" : "stop",

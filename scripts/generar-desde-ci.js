@@ -309,10 +309,10 @@ REGLAS CRÍTICAS DE CALIDAD:
 
     const modelosAIntentar = Array.from(
       new Set([
-        modeloConfigurado,
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
         "mistralai/mistral-large-4-1t-a52b",
         "z-ai/glm-5.3-flash",
+        modeloConfigurado,
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
       ])
     ).filter(Boolean);
 
@@ -347,48 +347,33 @@ REGLAS CRÍTICAS DE CALIDAD:
         }
 
         const data = await resp.json();
-        const rawContent = data.choices?.[0]?.message?.content || "";
-        const rawReasoning = data.choices?.[0]?.message?.reasoning_content || "";
-        const rawText = (rawContent || rawReasoning).trim();
+        const rawContent = (data.choices?.[0]?.message?.content || "").trim();
 
-        if (!rawText) {
-          console.warn(`⚠️ Respuesta vacía de ${mod}, probando siguiente modelo...`);
+        if (!rawContent || /^let me\b|^i need to\b|^thinking\b/i.test(rawContent)) {
+          console.warn(`⚠️ Respuesta no utilizable o razonamiento en inglés de ${mod}, probando siguiente modelo...`);
           continue;
         }
 
         // Extraer bloque JSON
-        const matchJson = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-        const jsonCandidato = matchJson ? matchJson[1].trim() : rawText;
+        const matchJson = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        const jsonCandidato = matchJson ? matchJson[1].trim() : rawContent;
 
         try {
           const parsed = JSON.parse(jsonCandidato);
-          resultadoIA = normalizarResultadoIA(parsed, {
-            subject: asignatura,
-            theme: String(tema),
-            subtheme: String(subtema),
-            themeTitle: titulo,
-          });
-          console.log(`✓ JSON procesado y normalizado correctamente con modelo: ${mod}`);
-          errorNvidia = "";
-          break;
-        } catch (eParse) {
-          // Si no es JSON puro, intentar parsear con normalizarResultadoIA directamente
-          try {
-            resultadoIA = normalizarResultadoIA(
-              { latex: rawText, titulo_tema: titulo },
-              {
-                subject: asignatura,
-                theme: String(tema),
-                subtheme: String(subtema),
-                themeTitle: titulo,
-              }
-            );
-            console.log(`✓ Texto LaTeX normalizado correctamente con modelo: ${mod}`);
+          if (parsed && (parsed.archivos || parsed.latex)) {
+            resultadoIA = normalizarResultadoIA(parsed, {
+              subject: asignatura,
+              theme: String(tema),
+              subtheme: String(subtema),
+              themeTitle: titulo,
+            });
+            console.log(`✓ JSON procesado y normalizado correctamente con modelo: ${mod}`);
             errorNvidia = "";
             break;
-          } catch (eNorm) {
-            console.warn(`⚠️ Error parseando respuesta de ${mod}: ${eParse.message}`);
           }
+        } catch (eParse) {
+          console.warn(`⚠️ Error parseando JSON de ${mod}: ${eParse.message}. Probando siguiente modelo...`);
+          continue;
         }
       } catch (e) {
         errorNvidia = `Error de conexión con NVIDIA NIM (${mod}): ${e.message}`;
