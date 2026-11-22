@@ -117,12 +117,12 @@ function inicializarModelos() {
   const modeloCodigoGuardado = localStorage.getItem("generador.modeloCodigo");
 
   if (esEntornoEstatico) {
-    // En la nube (GitHub Pages): modelos verificados de NVIDIA NIM
+    // En la nube (GitHub Pages): modelos verificados 100% en español de NVIDIA NIM
     modelosNvidia.forEach((m) => {
-      m.disponible = m.id !== "google/gemma-3-12b-it";
+      m.disponible = true;
     });
     modelosCodigoNvidia.forEach((m) => {
-      m.disponible = m.id !== "google/gemma-3-12b-it";
+      m.disponible = true;
     });
 
     modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado && m.disponible)
@@ -225,21 +225,17 @@ let modelosDisponibles = {
 // Catálogo de modelos NVIDIA NIM (nube y también disponibles vía Ollama).
 // A nivel de módulo para que actualizarEstadoModeloIA() pueda consultar su estado.
 const modelosNvidia = [
-  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo (Recomendado)", disponible: false },
-  { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Calidad docente WEC", disponible: false },
-  { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Rápido", disponible: false },
-  { id: "nvidia/nemotron-3-ultra-550b-a55b", nombre: "NVIDIA Nemotron 3 Ultra (550B) · Modelo gigante", disponible: false },
-  { id: "poolside/laguna-xs-2.1", nombre: "Laguna XS 2.1 · Rápido y conciso", disponible: false },
-  { id: "stepfun-ai/step-5-preview", nombre: "StepFun Step-5 · Alternativa", disponible: false },
-  { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) (No disponible)", disponible: false },
+  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo (Recomendado)", disponible: true },
+  { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Rápido y en español", disponible: true },
+  { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Calidad docente en español", disponible: true },
+  { id: "minimaxai/minimax-m3.1-flash", nombre: "MiniMax M3.1 Flash · Rápido en español", disponible: true },
 ];
 
 const modelosCodigoNvidia = [
-  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", nombre: "NVIDIA Nemotron 3 (30B Reasoning) · Razonamiento profundo código (Recomendado)", disponible: false },
-  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Algoritmos y lógica", disponible: false },
-  { id: "bigcode/starcoder2-15b", nombre: "StarCoder2 (15B) · Especializado en código", disponible: false },
-  { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large · Código multilingüe avanzado", disponible: false },
-  { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) (No disponible)", disponible: false },
+  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", nombre: "NVIDIA Nemotron 3 (30B Reasoning) · Razonamiento profundo código (Recomendado)", disponible: true },
+  { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Sintaxis y código rápido", disponible: true },
+  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Algoritmos y lógica", disponible: true },
+  { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large · Código multilingüe con explicación", disponible: true },
 ];
 let modeloIASeleccionado = "";
 let modeloCodigoSeleccionado = "";
