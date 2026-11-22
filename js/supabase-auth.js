@@ -408,11 +408,19 @@ const SupabaseAuth = (() => {
     // Gate OAuth buttons
     document.getElementById("gate-btn-google")?.addEventListener("click", async () => {
       const c = getClient();
-      if (!c) return;
-      // Forzar una URL base exacta y limpia
+      if (!c) {
+        alert("Error: Supabase no está inicializado");
+        return;
+      }
       const redirectUrl = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
         ? `${window.location.protocol}//${window.location.host}/`
         : "https://nataliagamezbarea.github.io/generador-apuntes/";
+      // Guardar cookie para que localhost:3000 sepa que venimos de aquí si Supabase cae en el fallback
+      try {
+        document.cookie = `auth_origin_app=${encodeURIComponent(window.location.href)}; path=/; samesite=lax; max-age=300`;
+        localStorage.setItem("auth_origin_app", window.location.href);
+      } catch (_) {}
+      console.log("Enviando redirectTo a Supabase:", redirectUrl);
       await c.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: redirectUrl },
@@ -425,6 +433,10 @@ const SupabaseAuth = (() => {
       const redirectUrl = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
         ? `${window.location.protocol}//${window.location.host}/`
         : "https://nataliagamezbarea.github.io/generador-apuntes/";
+      try {
+        document.cookie = `auth_origin_app=${encodeURIComponent(window.location.href)}; path=/; samesite=lax; max-age=300`;
+        localStorage.setItem("auth_origin_app", window.location.href);
+      } catch (_) {}
       await c.auth.signInWithOAuth({
         provider: "github",
         options: { redirectTo: redirectUrl },
