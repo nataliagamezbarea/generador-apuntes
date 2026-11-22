@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./modulos/configuracion.js";
@@ -26,14 +27,30 @@ aplicacion.use(
 aplicacion.use("/css", express.static(path.join(directorioActual, "..", "css")));
 aplicacion.use("/js", express.static(directorioActual));
 
+async function servirHtmlConConfig(rutaArchivo, respuesta) {
+  try {
+    let contenido = await readFile(rutaArchivo, "utf8");
+    if (config.urlTests) {
+      contenido = contenido
+        .replace(/href="http:\/\/localhost:(?:3000|8124)"/g, `href="${config.urlTests}"`)
+        .replace(/class="nav-button nav-tests" href="[^"]*"/g, `class="nav-button nav-tests" href="${config.urlTests}"`);
+    }
+    respuesta.type("text/html; charset=utf-8").send(contenido);
+  } catch (_) {
+    respuesta.sendFile(rutaArchivo);
+  }
+}
+
 aplicacion.get("/", (_request, respuesta) =>
-  respuesta.sendFile(
+  servirHtmlConConfig(
     path.join(directorioActual, "..", "interfaz", "generador.html"),
+    respuesta,
   ),
 );
 aplicacion.get("/mejorar", (_request, respuesta) =>
-  respuesta.sendFile(
+  servirHtmlConConfig(
     path.join(directorioActual, "..", "interfaz", "revisar.html"),
+    respuesta,
   ),
 );
 

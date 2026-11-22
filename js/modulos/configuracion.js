@@ -58,6 +58,11 @@ export const config = {
   maxPdfPages: leerAjusteNumerico("MAX_PAGINAS_PDF", 100, 1),
   maxOcrPages: leerAjusteNumerico("MAX_PAGINAS_OCR", 60, 1),
   maxVisualPages: leerAjusteNumerico("MAX_PAGINAS_VISION", 8, 0),
+  urlTests: (
+    process.env.URL_TESTS ??
+    process.env.URL_PREPARAR_TESTS ??
+    "http://localhost:3000"
+  ).trim(),
 };
 
 export const extensionesCodigo = new Map([

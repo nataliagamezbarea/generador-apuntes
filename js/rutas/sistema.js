@@ -45,6 +45,14 @@ router.get("/api/health", async (request, respuesta) => {
   });
 });
 
+router.get("/api/configuracion", (_solicitud, respuesta) => {
+  respuesta.json({
+    urlTests: config.urlTests,
+    model: config.model,
+    notesRoot: config.notesRoot,
+  });
+});
+
 router.get(
   "/api/log",
   rutaAsincrona(async (_solicitud, respuesta) => {
