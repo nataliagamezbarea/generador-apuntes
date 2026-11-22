@@ -13,7 +13,7 @@ import {
   deducirTituloRealista,
   normalizarMayusculasTitulo,
   esTextoDeRazonamiento,
-} from "./modulos/apuntes/utilidades-nombres.js?v=20261122_v45";
+} from "./modulos/apuntes/utilidades-nombres.js?v=20261122_v46";
 
 const formulario = document.querySelector("#formulario-generacion");
 const selectorAsignatura = document.querySelector("#selector-asignatura");
@@ -2442,6 +2442,21 @@ async function reiniciarGeneracionEHistorial() {
       selectorAsignatura.value === "__new__"
         ? asignaturaNueva.value.trim()
         : selectorAsignatura.value;
+
+    // En el modo estático (GitHub Pages) no existe backend /api/*: se
+    // reinicia solo el estado local sin lanzar peticiones que darían 405/404.
+    if (esEntornoEstatico) {
+      controladorGeneracion?.abort();
+      generacionDetenida = false;
+      reiniciarAlFinalizar = false;
+      progreso.hidden = true;
+      botonDetener.hidden = true;
+      if (botonReiniciar) botonReiniciar.hidden = true;
+      botonGenerar.disabled = false;
+      controladorGeneracion = undefined;
+      asignaturaGeneracionActiva = undefined;
+      return;
+    }
 
     if (asignatura && asignatura !== "__new__") {
       try {
