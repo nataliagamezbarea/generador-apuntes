@@ -3160,27 +3160,6 @@ async function ejecutarGeneracionGitHubActions({
           const tLimpio = nuevoToken.trim();
           localStorage.setItem("cache_gh_token", tLimpio);
 
-          // Actualizar también en Supabase para que quede corregido permanentemente
-          try {
-            const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
-            const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-            fetch(`${supabaseUrl}/rest/v1/configuracion_publica`, {
-              method: "POST",
-              headers: {
-                apikey: anonKey,
-                Authorization: `Bearer ${anonKey}`,
-                "Accept-Profile": "grados-informaticos",
-                "Content-Profile": "grados-informaticos",
-                "Content-Type": "application/json",
-                Prefer: "resolution=merge-duplicates",
-              },
-              body: JSON.stringify([
-                { clave: "gh_token_general", valor: tLimpio },
-                { clave: "gh_token", valor: tLimpio },
-              ]),
-            }).catch(() => {});
-          } catch (_) {}
-
           // Reintentar inmediatamente el dispatch con el nuevo token
           const reintento = await fetch(urlDispatch, {
             method: "POST",
