@@ -5,71 +5,79 @@
 \usepackage{amsmath}
 \usepackage{hyperref}
 \usepackage{listings}
-\usepackage[margin=2.5cm]{geometry}
+\usepackage[margin=1in]{geometry}
 
-\title{Apuntes de la Asignatura JK \\ Tema 1: Introducció a les Arquitectures i les Eines}
+\hypersetup{
+    colorlinks=true,
+    urlcolor=blue,
+    linkcolor=blue,
+    citecolor=blue
+}
+
+\lstset{
+    language=[ANSI]C,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+    columns=fullflexible,
+    keepspaces=true
+}
+
+\makeatletter
+\def\lstlistingname{Código}
+\makeatother
+
+\title{Apuntes de la Asignatura JK: Tema 1 --- Arquitectures i Eines}
 \author{Profesor Experto en Informática}
-\date{}
+\date{\today}
 
 \begin{document}
 \maketitle
 
-\section{Arquitectures Bàsiques}
+\section{Introducció al disseny d'arquestures computing}
+El Tema 1 de la assignatura JK s'adentra en els conceptes fonamentals que subyacen al disseny i la comprensió d'arquestures de computadors modernes. Aquest capítol proporciona una base rigurosa per a comprendre com es organitzen els sistemes informàtics des del nivell de hardware fins a les eines de desenvolupament software.
 
-Una arquitectura de computadora define la organisació dels seus components principals: unitat aritmético-lògica (UAL), unitat de control (UC), memoria i canals d'entrada/sortida. El model von Neumann és el més habitual, on les instruccions i les dades comparten la mateixa memòria.
-
-\subsection{Arquitectura von Neumann}
+\subsection{Arquestura de Von Neumann i Princeton}
+La arquestura de Von Neumann, proposta l'any 1945, és el model bàsic sobre el qual es construeixen la majoria dels ordinadors generals d'actualdia. El seu principi és l'emmagatzematge conjoint de dades i instruccions en una memòria unificada, accessiblevia mitjançant una adreça comú.
 
 \begin{itemize}
-    \item \textbf{Memòria unificada}: Almacena tanto datos como instrucciones.
-    \item \textbf{Contador de programa (PC):} Apunta a la instrucció actual.
-    \item \textbf{Ciclo de búsqueda-ejecución}: Fetch $\rightarrow$ Decode $\rightarrow$ Execute.
+    \item \textbf{Memòria unificada:} Tant les instruccions com els dades residen en la mateixa memòria RAM.
+    \item \textbf{Adreçament:} El processador utilitza un contador de programa (Program Counter, PC) per a obtenir la següent instrucció des de la memòria.
+    \item \textbf{Bus de von Neumann:} El mateix bus s'utilitza per a transferir instruccions i dades, el que pot crear un "coll de botella" (von Neumann bottleneck).
 \end{itemize}
 
-\subsection{Conjuntos de Instrucciones (ISA)}
-El ISA defineix el llenguatge màxim que un processador entén. Inclou:
+En contraposició, l'arquestura de Princeton separa físicament la memòria d'instruccions i la memòria de dades, permetent accesos simultànies (fetch i read/write), però és menys flexible en termes de gestió dinàmica de memòria.
+
+\subsection{Components principals d'un sistema}
+Tots els sistemes computing, independentment de la seva mida, comparten un conjunt de components bàsics:
+
+\begin{center}
+\begin{tabular}{lll}
+\textbf{Component} & \textbf{Funció} & \textbf{Detall} \\
+CPU (Central Processing Unit) & Executar instruccions & ALU i Unitat de Control \\
+Memòria Principal (RAM) & Almacenament temporal & Accés aleatori, volatil \\
+Memòria Secundària (HDD/SSD) & Almacenament persistent & No volàtil, major capacitat \\
+Units d'E/S (Input/Output) & Interfície amb el món exterior & Teclat, ratolí, xarxa, gràfiques \\
+\end{tabular}
+\end{center}
+
+\subsection{Conjunts d'instruccions (ISA)}
+L'ISA defineix el vocablar màxim que un processador entén. Inclou:
 \begin{itemize}
-    \item Tipus de dades (enter, real, booleà).
-    \item Conjunt d'instruccions (aritmètiques, de control, de memòria).
-    \item Format de les instruccions (longitud, tipus de direccionament).
+    \item Tipus de dades (enter senzill, enter senzill no signat, de pla, etc.).
+    \item Formats d'instrucció (R-type, I-type, S-type en MIPS).
+    \item Registres visibles per al programador.
+    \item Sistemes d'adreçament.
 \end{itemize}
 
-\subsection{Exemple pas a pas: Codi ensamblador MIPS}
-
-Considerem la instrucció que suma dos nombres i emmagatzema el resultat:
-
-\begin{lstlisting}[language=Assembler, caption={Suma simple en MIPS}, label=code:mips_sum]
-.data
-a: .word 5
-b: .word 3
-result: .word ?
-
-.text
-main:
-    lw  $t0, a      # Cargar a en t0
-    lw  $t1, b      # Cargar b en t1
-    add $t2, $t0, $t1  # t0 + t1 -> t2
-    sw  $t2, result # Almacenar resultat en result
-    li  $v0, 10     # Exit system call
-    syscall
-\end{lstlisting}
-
-\subsection{Paso a paso de la ejecución}
-
-1. \textbf{Fetch}: El processador busca la instrucció a la memòria utilitzant el PC.
-2. \textbf{Decode}: El unitat de control interpreta l'instrucció, identifica l'operació i els operandis.
-3. \textbf{Execute}: La UAL realitza l'operació (en aquest cas, la suma).
-4. \textbf{Memory access} (si cal): Accedeix a la memòria per carregar/emmagatzemar.
-5. \textbf{Write-back}: El resultat es desa en el registre destí.
-
-\section{Eines de Desenvolupament}
-
-Per treballar ambarquitectures de baix nivell, necessitem un conjunt d'eines.
-
-\subsection{Compiladors i Assembladors}
-
-El \textit{compilador} tradueix codi d'alt nivell a codi objecte o executable. L'\textit{assemblador} fa el mateix però amb llenguatge ensamblador.
-
-\begin{lstlisting}[language=Bash, caption={Compilació i ejecució en GNU/Linux}, label=bash:compile]
-$ gcc programa.c -o programa
-$
+\subsection{Eines de desenvolupament}
+Per a treballar ambarquitectures de baix nivell, disposem d'un conjunt d'eines:
+\begin{itemize}
+    \item \textbf{Assemblers:} Traduixen llenguatge ensamblador a codi màquina. Exemples: \texttt{nasm}, \texttt{mips-as}.
+    \item \textbf{Simuladors d'arquitectura:} Permeten executar codi màquina en un entorn controlat per estudiar comportament. Exemple: \texttt{simplesim}, \texttt{gem5}.
+    \item \textbf{Debuggers:} Faciliten la inspecció i modificació del flux d'execució pas a pas. Exemple: \texttt{gdb}.
+    \item \textbf{Compiladors:} Traduixen llenguatges de alt nivell a codi màquina o ensamb
