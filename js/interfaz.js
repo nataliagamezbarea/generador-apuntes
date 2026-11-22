@@ -3122,7 +3122,6 @@ async function ejecutarGeneracionGitHubActions({
       false,
     );
 
-    const repoDestino = repo.includes("/") ? repo : `nataliagamezbarea/${repo}`;
     const urlDispatch = `https://api.github.com/repos/${repoDestino}/actions/workflows/generar-apuntes.yml/dispatches`;
 
     const res = await fetch(urlDispatch, {
