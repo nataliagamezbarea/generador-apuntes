@@ -393,7 +393,11 @@ const SupabaseAuth = (() => {
       const c = getClient();
       if (!c) return;
       const redirectUrl = window.location.origin + window.location.pathname;
-      try { localStorage.setItem("auth_origin_app", window.location.href); } catch (_) {}
+      // Cookie compartida entre puertos de localhost (localStorage NO se comparte entre puertos)
+      try {
+        document.cookie = `auth_origin_app=${encodeURIComponent(window.location.href)}; path=/; samesite=lax; max-age=300`;
+        localStorage.setItem("auth_origin_app", window.location.href);
+      } catch (_) {}
       await c.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: redirectUrl },
@@ -404,7 +408,11 @@ const SupabaseAuth = (() => {
       const c = getClient();
       if (!c) return;
       const redirectUrl = window.location.origin + window.location.pathname;
-      try { localStorage.setItem("auth_origin_app", window.location.href); } catch (_) {}
+      // Cookie compartida entre puertos de localhost (localStorage NO se comparte entre puertos)
+      try {
+        document.cookie = `auth_origin_app=${encodeURIComponent(window.location.href)}; path=/; samesite=lax; max-age=300`;
+        localStorage.setItem("auth_origin_app", window.location.href);
+      } catch (_) {}
       await c.auth.signInWithOAuth({
         provider: "github",
         options: { redirectTo: redirectUrl },
