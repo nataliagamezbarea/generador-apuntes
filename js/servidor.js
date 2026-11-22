@@ -2417,10 +2417,6 @@ async function generarUnidadEtapas({
           archivo.apartado = apartadoEfectivo;
           archivo.apartadoNumero = apartadoEfectivo;
         }
-        if (unidad.orden || unidad.indiceApartado) {
-          archivo.orden = unidad.orden || unidad.indiceApartado;
-          archivo.indiceApartado = unidad.orden || unidad.indiceApartado;
-        }
         archivo.titulo = String(archivo.titulo || "")
           .replace(/\\textbf\{([^}]+)\}/g, "$1")
           .replace(/[*#]/g, "")
@@ -2746,18 +2742,15 @@ function agruparResultadosTrabajo(trabajo, fase = null) {
     }
     grupo.unidadIds.push(item.unidad);
     const archivosDesglosados = desglosarBloquesPorSubtitulos(item.resultado?.archivos ?? []);
-    const contadorSub = new Map();
     for (const arch of archivosDesglosados) {
-      const sub = arch.subtema || item.destino?.apartado || 1;
-      const count = (contadorSub.get(sub) || 0) + 1;
-      contadorSub.set(sub, count);
+      const count = grupo.resultado.archivos.length + 1;
       arch.orden = count;
-      arch.indiceApartado = count;
+      arch.numeroArchivoEnSubtema = count;
       let slug = deducirSlugConceptual("", arch.titulo || arch.nombre || "apartado");
       slug = slug.replace(/^\d+[.\-]+\s*/, "");
       arch.nombre = `${count}.${slug || "apartado"}`;
+      grupo.resultado.archivos.push(arch);
     }
-    grupo.resultado.archivos.push(...archivosDesglosados);
     grupo.resultado.conceptos_clave.push(...(item.resultado?.conceptos_clave ?? []));
     grupo.resultado.cobertura.push(...(item.resultado?.cobertura ?? []));
     grupo.resultado.imagenes.push(...(item.resultado?.imagenes ?? []));

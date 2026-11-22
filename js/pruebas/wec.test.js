@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { execSync } from "child_process";
 import { writeFileSync, unlinkSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
-import { desglosarBloquesPorSubtitulos } from "../modulos/apuntes.js";
+import { desglosarBloquesPorSubtitulos, aplicarEstilosLatex } from "../modulos/apuntes.js";
+import { detectarApartadosEnTexto } from "../modulos/instrucciones.js";
 
 function compileLatex(texContent) {
   const texPath = join(process.cwd(), "temp_test.tex");
@@ -102,4 +103,31 @@ test('desglosarBloquesPorSubtitulos divide un bloque con varios subtitulos en ar
   assert.doesNotMatch(resultado[2].latex, /\\secciongrande/);
   assert.doesNotMatch(resultado[2].latex, /\\resumen/);
   assert.match(resultado[2].latex, /\\subtituloA\{Modelo cliente-servidor\}/);
+});
+
+test('aplicarEstilosLatex corrige extbf a \\textbf sin alterar comandos válidos', () => {
+  const input = 'c) Red extbf{Respuesta:} La opción correcta es b.';
+  const output = aplicarEstilosLatex(input, "TEST");
+  assert.match(output, /\\textbf\{Respuesta:\}/);
+  assert.doesNotMatch(output, /(?<![\\a-zA-Z])extbf\{/);
+});
+
+test('detectarApartadosEnTexto detecta encabezados numerados del PDF Tema 1', () => {
+  const samplePdf = `
+DESENVOLUPAMENT WEB EN ENTORN CLIENT
+Tema 1: Selecció d'arquitectures i d'eines de programació
+INTRODUCCIÓ: L'origen i l'abast de la web
+1.1 · MODELS D'EXECUCIÓ DE CODI: Els quatre camps del disseny web
+1.2 · LLENGUATGES DE PROGRAMACIÓ EN ENTORN CLIENT: Dos entorns d'execució
+1.3 · MECANISMES D'EXECUCIÓ DE CODI EN UN NAVEGADOR WEB: L'arquitectura del navegador
+1.4 · CAPACITATS I LIMITACIONS D'EXECUCIÓ: Per què JavaScript en el client?
+1.5 · PROGRAMACIÓ DE SCRIPTS: On i com col·locar els scripts
+1.6 · INTEGRACIÓ DEL CODI AMB LES ETIQUETES HTML: Integració en línia
+1.7 · EINES DE PROGRAMACIÓ SOBRE CLIENTS WEB: Triar l'editor de codi
+`;
+  const apartados = detectarApartadosEnTexto(samplePdf);
+  assert.equal(apartados.length, 7, "Debe detectar los 7 subtemas");
+  assert.equal(apartados[0].subtema, 1);
+  assert.equal(apartados[1].subtema, 2);
+  assert.equal(apartados[6].subtema, 7);
 });

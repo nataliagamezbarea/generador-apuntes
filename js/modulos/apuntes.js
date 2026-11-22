@@ -670,17 +670,12 @@ function stemArchivoGenerado(block, theme, subtheme, index) {
 
   if (Number.isInteger(Number(block?.orden)) && Number(block.orden) > 0) {
     orden = Number(block.orden);
-  } else if (Number.isInteger(Number(block?.indiceApartado)) && Number(block.indiceApartado) > 0) {
-    orden = Number(block.indiceApartado);
-  } else if (Number.isInteger(Number(block?.apartadoNumero)) && Number(block.apartadoNumero) > 0) {
-    orden = Number(block.apartadoNumero);
+  } else if (Number.isInteger(Number(block?.numeroArchivoEnSubtema)) && Number(block.numeroArchivoEnSubtema) > 0) {
+    orden = Number(block.numeroArchivoEnSubtema);
   }
 
   if (!orden) {
-    const textoAExaminar = `${block?.nombre || ""} ${block?.titulo || ""}`;
-    const matchNum =
-      textoAExaminar.match(/(?:^|\s)(?:(?:tema|apartado|sección|seccion)\s*\d+[.\-]\s*)?(\d+)(?:[.\-]\d+)*\s*[:.\-·\s]/i) ||
-      String(block?.nombre || "").match(/^(\d+)[.\-]/);
+    const matchNum = String(block?.nombre || "").match(/^(\d+)[.\-]/);
     if (matchNum && Number(matchNum[1]) > 0) {
       orden = Number(matchNum[1]);
     }
@@ -737,9 +732,8 @@ export async function inspeccionarReemplazosGeneracion({
     const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
     const contadorActual = (contadorSubtemasInsp.get(bloqueSubtema) || 0) + 1;
     contadorSubtemasInsp.set(bloqueSubtema, contadorActual);
-    if (!block.orden) {
-      block.orden = contadorActual;
-    }
+    block.orden = contadorActual;
+    block.numeroArchivoEnSubtema = contadorActual;
   }
 
   const existentes = [];
@@ -815,9 +809,8 @@ export async function guardarGeneracion({
     const bloqueSubtema = inferirSubtemaDeBloque(block, subtheme);
     const contadorActual = (contadorSubtemas.get(bloqueSubtema) || 0) + 1;
     contadorSubtemas.set(bloqueSubtema, contadorActual);
-    if (!block.orden) {
-      block.orden = contadorActual;
-    }
+    block.orden = contadorActual;
+    block.numeroArchivoEnSubtema = contadorActual;
   }
 
   for (const [index, block] of result.archivos.entries()) {
@@ -890,8 +883,8 @@ export async function guardarGeneracion({
     const indiceEnSubtema = (block.orden || (index + 1)) - 1;
     if (indiceEnSubtema > 0) {
       latexBloque = latexBloque
-        .replace(/\\secciongrande\*?(?:\[[^\]]*\])?\{([^}]+)\}/g, "\\subtituloA{$1}")
-        .replace(/\\resumen\*?(?:\[[^\]]*\])?\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*/g, "$1\n\n");
+        .replace(/\\secciongrande\*?(?:\[[^\]]*\])?\{([^}]+)\}\s*/g, "")
+        .replace(/\\resumen\*?(?:\[[^\]]*\])?\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*/g, "");
     }
     const latexLimpio = aplicarEstilosLatex(latexBloque, subject);
     const latex = `${latexLimpio}${figuraAbierta ? `\n\n${figuraAbierta}` : ""}${diagramas ? `\n\n${diagramas}` : ""}\n`;
@@ -904,6 +897,36 @@ export async function guardarGeneracion({
         .split(path.sep)
         .join("/"),
     });
+  }
+
+  if (replaceExisting) {
+    const rutasNuevas = new Set(written.map((w) => path.resolve(w.archivo)));
+    if (informeAnterior?.archivos_generados) {
+      for (const viejo of informeAnterior.archivos_generados) {
+        if (!viejo.path) continue;
+        const absViejo = path.resolve(config.notesRoot, viejo.path);
+        if (!rutasNuevas.has(absViejo)) {
+          try {
+            await rm(absViejo, { force: true });
+          } catch {}
+        }
+      }
+    }
+    for (const [sub] of contadorSubtemas.entries()) {
+      const subDirAfectado = path.join(themeDir, `Tema ${theme}.${sub}`);
+      try {
+        const archivosEnSubDir = await readdir(subDirAfectado);
+        for (const arch of archivosEnSubDir) {
+          if (!arch.endsWith(".tex")) continue;
+          const absArch = path.resolve(subDirAfectado, arch);
+          if (!rutasNuevas.has(absArch)) {
+            try {
+              await rm(absArch, { force: true });
+            } catch {}
+          }
+        }
+      } catch {}
+    }
   }
 
   const themeDocument = await asegurarDocumentoTema(
@@ -1050,7 +1073,8 @@ function escaparTextoLatex(value) {
   return String(value).replace(/[\\{}#$%&_~^]/g, (character) => escapes[character]);
 }
 
-function imagenesDelApartado(imagenes, slug, titulo) {
+function imagenesDelApartado(imagenes = [], slug, titulo) {
+  if (!Array.isArray(imagenes)) return "";
   return imagenes
     .flatMap((imagen) => {
       if (String(imagen.tikz ?? "").trim()) return [];
@@ -1487,8 +1511,8 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(?:^|\s)egin\{seccion\}/g, "\\seccion")
     .replace(/(?:^|\s)egin\{/g, (m) => m.replace("egin{", "\\begin{"))
     .replace(/(?:^|\s)end\{/g, (m) => m.replace("end{", "\\end{"))
-    .replace(/(?:[\x00-\x1f\s]|\b)extbf\s*\{*/g, "\\textbf{")
-    .replace(/(?:[\x00-\x1f\s]|\b)extcolor\s*\{*/g, "\\textcolor{")
+    .replace(/(?:[\x00-\x1f\s]|\b|\\)extbf\s*\{+/g, " \\textbf{")
+    .replace(/(?:[\x00-\x1f\s]|\b|\\)extcolor\s*\{+/g, " \\textcolor{")
     .replace(/\\(textbf|textit|cmd|nota|definicion)\s*\{{2,}/g, "\\$1{")
     .replace(/(?:[\x00-\x1f\s]|\b)eginconsola/g, "\\begin{consola}")
     .replace(/(?:[\x00-\x1f\s]|\b)eginhtml/g, "\\begin{codigo}")
@@ -1791,7 +1815,7 @@ export function aplicarEstilosLatex(value, subject = "") {
   // Limpiar \subnota y caracteres de tabulación espurios \t
   resultado = resultado
     .replace(/\\subnota\{/g, "\\nota{")
-    .replace(/(?:^|\s)\\t(?=[A-Za-zÁÉÍÓÚáéíóú¿¡])/g, " ")
+    .replace(/(?:^|\s)\\t(?!(?:ext|abla|itulo|ikz|iny|rue)\w*)(?=[A-Za-zÁÉÍÓÚáéíóú¿¡])/g, " ")
     .replace(/\\t(?=\s*[\}\]])/g, "");
 
   // En un mismo archivo o subtema solo debe haber UNA única \secciongrande con su \resumen al principio.
