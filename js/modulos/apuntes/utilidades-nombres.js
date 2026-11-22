@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 export const titlePattern =
   /\\(?:secciongrande|seccion|titulo|subtituloA|subtituloB|subtitulo)\*?(?:\[[^\]]*\])?\{([^{}]+)\}/g;
 
@@ -280,14 +278,4 @@ export function obtenerListaTexto(value, maxItems, maxLength) {
     .filter((item) => ["string", "number"].includes(typeof item))
     .map((item) => String(item).slice(0, maxLength))
     .slice(0, maxItems);
-}
-
-export async function existeArchivo(file) {
-  try {
-    await readFile(file);
-    return true;
-  } catch (error) {
-    if (error.code === "ENOENT") return false;
-    throw error;
-  }
 }

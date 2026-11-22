@@ -519,7 +519,14 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/<!\[CDATA\[\/\/><!--/g, "")
     .replace(/<!\[CDATA\[/g, "")
     .replace(/\]\]>/g, "")
-    .replace(/<!--\/\/-->/g, "");
+    .replace(/<!--\/\/-->/g, "")
+    .replace(/(?:^|\n|\s)\]\]+(?=\s|[.,;:]|$)/g, " ");
+
+  // Reparar listas cerradas prematuramente como: \lista{ ... }. Licencias: ...
+  resultado = resultado.replace(
+    /\\lista\{([^{}]*)\}\s*[.·•]\s*([A-Za-zÁÉÍÓÚáéíóúñÑ][^:\n]{1,50}:[^\n]+)/g,
+    (_m, items, resto) => `\\lista{\n  ${items.trim()} |\n  ${resto.trim()}\n}`
+  );
 
   while (/\\lista\{[^{}]*\\lista\{/.test(resultado)) {
     resultado = resultado.replace(/\\lista\{([^{}]*)\\lista\{([^{}]*)\}([^{}]*)\}/gs, (_m, antes, dentro, despues) => {
@@ -883,6 +890,11 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/\\cmd\{([^}\n]*)$/gm, "\\cmd{$1}");
 
   resultado = balancearLlavesLatex(resultado);
+
+  resultado = resultado.replace(
+    /\\(secciongrande|seccion|subtituloA|subtituloB)\{([^{}]+)\}/g,
+    (_m, macro, tit) => `\\${macro}{${normalizarMayusculasTitulo(tit)}}`
+  );
 
   return resultado;
 }

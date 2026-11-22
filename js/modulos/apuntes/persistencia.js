@@ -8,8 +8,17 @@ import {
   crearNombreArchivo,
   escaparLatex,
   escaparTextoLatex,
-  existeArchivo,
 } from "./utilidades-nombres.js";
+
+async function existeArchivo(file) {
+  try {
+    await readFile(file);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
 import {
   obtenerInformeGeneracion,
   rutaInformeGeneracion,
@@ -573,7 +582,7 @@ export async function asegurarEstilosGenerador(themeDir) {
 \providecommand{\alertas}[1]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Alerta:}\ #1}}\par\vspace{2mm}}
 \providecommand{\rectangulos}[1]{#1}
 \ExplSyntaxOn
-\RenewDocumentCommand{\lista}{m}{%
+\DeclareDocumentCommand{\lista}{m}{%
   \begin{itemize}%
     \seq_set_split:Nnn \l_tmpa_seq { | } { #1 }%
     \seq_map_inline:Nn \l_tmpa_seq {%
@@ -602,7 +611,9 @@ export async function asegurarEstilosGenerador(themeDir) {
       ) &&
       anterior.includes("DeclareDocumentCommand{\\secciongrande}") &&
       anterior.includes("DeclareDocumentCommand{\\seccion}") &&
-      anterior.includes("\\addcontentsline{toc}{section}{#2}");
+      anterior.includes("\\addcontentsline{toc}{section}{#2}") &&
+      anterior.includes("\\providecommand{\\pickcolor}") &&
+      anterior.includes("DeclareDocumentCommand{\\lista}");
     if (estiloWecActualConIndice) return;
   }
   await writeFile(file, estilos, "utf8");
