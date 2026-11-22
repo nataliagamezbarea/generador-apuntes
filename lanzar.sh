@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-DIR="/home/natalia/Escritorio/generador-apuntes-WEC-corregido"
+DIR="/home/natalia/Escritorio/generador-apuntes"
 cd "$DIR"
 
 # 1. Asegurar Docker activo
