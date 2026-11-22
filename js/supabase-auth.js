@@ -27,6 +27,11 @@ const SupabaseAuth = (() => {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
+            // flowType 'implicit': el token vuelve en la URL (#access_token=...) sin
+            // verificar PKCE state en localStorage — necesario porque Supabase puede
+            // redirigir a localhost:3000 (Site URL) siendo el origen localhost:8002,
+            // y localStorage NO se comparte entre puertos.
+            flowType: "implicit",
           },
         });
         window.supabaseClient = client;
