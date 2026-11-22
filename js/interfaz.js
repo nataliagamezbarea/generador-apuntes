@@ -3081,46 +3081,7 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
-  // 2. REGLA ESTRICTA: COMPROBAR SI EXISTE NVIDIA_API_KEY EN SUPABASE O GITHUB
-  let tieneNvidiaKey = Boolean(cfgSupabase.nvidiaApiKey);
-
-  if (!tieneNvidiaKey) {
-    // Si no está en Supabase, comprobar si el token de GitHub puede verificar el secreto en GitHub
-    try {
-      const resSecrets = await fetch(`https://api.github.com/repos/${repoDestino}/actions/secrets`, {
-        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
-      });
-      if (resSecrets.ok) {
-        const dataSecrets = await resSecrets.json();
-        const secretNombres = (dataSecrets?.secrets || []).map((s) => s.name);
-        if (secretNombres.includes("NVIDIA_API_KEY")) {
-          tieneNvidiaKey = true;
-        }
-      }
-    } catch (_) {}
-  }
-
-  // SI FALTA LA CLAVE EN SUPABASE Y EN GITHUB, BLOQUEAR EN EL FRONTEND
-  if (!tieneNvidiaKey) {
-    botonGenerar.disabled = false;
-    progreso.hidden = true;
-    panelError.innerHTML = `
-      <div style="background:rgba(239,68,68,0.12); border:1px solid #ef4444; border-radius:12px; padding:20px; color:#fff; text-align:left;">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
-          <span style="font-size:24px;">⛔</span>
-          <h3 style="margin:0; font-size:17px; color:#f87171;">Generación bloqueada: Falta NVIDIA_API_KEY</h3>
-        </div>
-        <p style="margin:0; color:#e2e8f0; font-size:14px; line-height:1.5;">
-          No se puede generar ningún apunte porque <strong>no está configurada la clave NVIDIA_API_KEY en configuracion_privada de Supabase ni en GitHub</strong>. No se permite avanzar sin ella.
-        </p>
-      </div>
-    `;
-    panelError.hidden = false;
-    panelError.scrollIntoView({ behavior: "smooth" });
-    registrarEventoConsola("⛔ Generación bloqueada: falta NVIDIA_API_KEY en Supabase/GitHub. No se puede avanzar.");
-    return; // NO DEJA AVANZAR
-  }
-
+  // 2. Comprobar si hay clave en Supabase (si no, se usará el secreto NVIDIA_API_KEY configurado en GitHub)
   panelError.hidden = true;
   progreso.hidden = false;
   botonGenerar.disabled = true;
