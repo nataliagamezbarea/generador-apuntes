@@ -5,6 +5,10 @@ import {
   guardarArchivosPersistidos,
 } from "./persistencia-archivos.js";
 import { formatearDuracion } from "./formato-salida.js";
+import {
+  detectarApartadosEnTexto,
+  dividirTextoPorApartados,
+} from "./modulos/instrucciones/division-material.js";
 
 const formulario = document.querySelector("#formulario-generacion");
 const selectorAsignatura = document.querySelector("#selector-asignatura");
@@ -271,16 +275,24 @@ function registrarEventoConsola(mensaje) {
 const trabajosPendientesOcultos = new Set(
   JSON.parse(sessionStorage.getItem("generador.trabajos-pendientes-ocultos") || "[]"),
 );
-const fasesProgreso = [
-  ["subida", "Envío de archivos al servidor local"],
-  ["lectura", "Lectura de PDF, documentos, código y OCR"],
-  ["internet", "Búsqueda en Internet y recopilación de fuentes"],
-  ["comparacion", "Comparación con apuntes y conceptos anteriores"],
-  ["ia", "Análisis de material y redacción con IA local"],
-  ["confirmacion", "Confirmación de sustitución de apuntes existentes"],
-  ["guardado", "Creación de apuntes LaTeX e informe de cobertura"],
-  ["completado", "Generación finalizada"],
-];
+const fasesProgreso = esEntornoEstatico
+  ? [
+      ["lectura", "Lectura de documentos y PDF"],
+      ["traduccion", "Traducción previa al español"],
+      ["ia", "Redacción de apartados con IA (NVIDIA NIM)"],
+      ["guardado", "Compilación de apuntes con LaTeX en la nube"],
+      ["completado", "Generación finalizada"],
+    ]
+  : [
+      ["subida", "Envío de archivos al servidor local"],
+      ["lectura", "Lectura de PDF, documentos, código y OCR"],
+      ["internet", "Búsqueda en Internet y recopilación de fuentes"],
+      ["comparacion", "Comparación con apuntes y conceptos anteriores"],
+      ["ia", "Análisis de material y redacción con IA local"],
+      ["confirmacion", "Confirmación de sustitución de apuntes existentes"],
+      ["guardado", "Creación de apuntes LaTeX e informe de cobertura"],
+      ["completado", "Generación finalizada"],
+    ];
 
 function asignarValorValido(selector, valorGuardado) {
   if ([...selector.options].some((opcion) => opcion.value === valorGuardado))
@@ -3247,6 +3259,119 @@ async function traducirTextoLargoBrowser(texto = "") {
   return trads.join("\n");
 }
 
+// PDF Extractor para navegador usando PDF.js
+async function extraerTextoPdfBrowser(file) {
+  if (!window.pdfjsLib) return "";
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    let paginas = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const textItems = textContent.items.map((item) => item.str).join(" ");
+      if (textItems.trim()) {
+        paginas.push(`--- Diapositiva / Página ${i} ---\n${textItems.trim()}`);
+      }
+    }
+    return paginas.join("\n\n");
+  } catch (err) {
+    console.warn("Aviso extrayendo PDF en navegador:", err.message);
+    return "";
+  }
+}
+
+// Consultar NVIDIA NIM apartado a apartado desde navegador
+async function consultarNvidiaNIMApartadoBrowser({
+  apiKey,
+  modelo,
+  asignatura,
+  tema,
+  tituloTema,
+  subtema,
+  subtemaTitulo,
+  instrucciones,
+  textoFuente,
+}) {
+  const prompt = `Asignatura: "${asignatura}"
+Tema ${tema}: "${tituloTema}"
+Subtema / Apartado ${tema}.${subtema}: "${subtemaTitulo}"
+
+Instrucciones del alumno:
+${instrucciones || "Elabora unos apuntes universitarios completos, rigurosos y pedagógicos para este apartado, con explicaciones paso a paso, ejemplos de código y notas de examen."}
+
+Material fuente del apartado:
+${textoFuente || "Elabora el temario oficial para este apartado."}
+
+FORMATO DE SALIDA OBLIGATORIO:
+Devuelve EXCLUSIVAMENTE un objeto JSON válido con este formato:
+{
+  "tema_existente": 0,
+  "titulo_tema": "${tituloTema}",
+  "titulo_subtema": "${subtemaTitulo}",
+  "conceptos_clave": ["Concepto 1", "Concepto 2"],
+  "archivos": [
+    {
+      "subtema": "${subtema}",
+      "nombre": "1.slug-del-apartado",
+      "titulo": "${subtemaTitulo}",
+      "latex": "\\secciongrande{${subtemaTitulo}}\\n\\n\\resumen{Síntesis sustancial de la teoría en 3 a 5 líneas sin frases vacías ni metalenguaje.}\\n\\n\\definicion{Concepto Técnico}{Definición técnica formal.}\\n\\n\\subtituloA{Detalle conceptual}\\n\\n\\lista{\\n  **Elemento 1:** Explicación técnica detallada.\\n  **Elemento 2:** Explicación técnica detallada.\\n}\\n\\n\\nota{Para el examen}{Pregunta de autoevaluación con respuesta razonada.}"
+    }
+  ]
+}
+
+REGLAS CRÍTICAS:
+1. Todo el contenido DEBE estar 100% en ESPAÑOL ESTÁNDAR. Prohibido incluir palabras en catalán.
+2. Usa las macros oficiales de la biblioteca WEC (\\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}).
+3. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
+
+  const modelosAIntentar = Array.from(
+    new Set([
+      modelo,
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "mistralai/mistral-large-4-1t-a52b",
+      "z-ai/glm-5.3-flash",
+    ])
+  ).filter(Boolean);
+
+  for (const mod of modelosAIntentar) {
+    try {
+      const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: mod,
+          messages: [
+            {
+              role: "system",
+              content: "Eres un profesor experto en informática. Redacta apuntes estructurados para LaTeX. Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos (cada uno con subtema, nombre, titulo y latex en español).",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 8192,
+        }),
+      });
+
+      if (!resp.ok) continue;
+
+      const data = await resp.json();
+      const rawContent = data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning_content || "";
+      const matchJ = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      const strJson = matchJ ? matchJ[1].trim() : rawContent.trim();
+      const parsed = JSON.parse(strJson);
+      if (parsed && (parsed.archivos || parsed.latex)) {
+        return parsed;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
 // GENERACIÓN EN LA NUBE VÍA GITHUB ACTIONS (MODO GITHUB PAGES)
 // ============================================================
 async function ejecutarGeneracionGitHubActions({
@@ -3262,7 +3387,6 @@ async function ejecutarGeneracionGitHubActions({
   // 1. Obtener configuración exclusivamente desde Supabase
   const cfgSupabase = await obtenerConfiguracionSupabase();
 
-  // Priorizar siempre el token fresco de Supabase (gh_token_general) sobre la caché del navegador
   let token = cfgSupabase.ghToken || localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
   if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_") && !token.startsWith("gho_")) {
     token = "";
@@ -3285,21 +3409,38 @@ async function ejecutarGeneracionGitHubActions({
     }
   }
 
-  if (cfgSupabase.nvidiaApiKey) {
-    registrarEventoConsola("✓ Clave NVIDIA obtenida de Supabase.");
-  } else {
-    registrarEventoConsola("ℹ️ Conectando con GitHub Actions...");
-  }
-
   panelError.hidden = true;
   progreso.hidden = false;
   botonGenerar.disabled = true;
 
-  // Procesar archivos subidos si los hay
+  // FASE 1: LECTURA Y PREPARACIÓN DE DOCUMENTOS
+  mostrarProgresoGeneracion(
+    {
+      fase: "lectura",
+      mensaje: "Lectura y preparación de documentos...",
+      detalle: archivosElegidos.length ? `Extrayendo ${archivosElegidos.length} archivo(s) adjunto(s)…` : "Procesando material fuente…",
+      actual: 1,
+      total: 5,
+    },
+    false,
+  );
+  registrarEventoConsola("📄 [Fase 1/5] Lectura y preparación de documentos...");
+
   let contenidoArchivos = "";
   if (Array.isArray(archivosElegidos) && archivosElegidos.length > 0) {
     for (const f of archivosElegidos) {
-      if (f.name.endsWith(".txt") || f.name.endsWith(".md") || f.name.endsWith(".json") || f.name.endsWith(".js") || f.name.endsWith(".html")) {
+      if (f.name.toLowerCase().endsWith(".pdf")) {
+        try {
+          registrarEventoConsola(`Extrayendo texto del PDF: ${f.name}...`);
+          const txtPdf = await extraerTextoPdfBrowser(f);
+          if (txtPdf) {
+            contenidoArchivos += `\n--- PDF: ${f.name} ---\n${txtPdf}\n`;
+            registrarEventoConsola(`✓ Extraídos ${txtPdf.length} caracteres de ${f.name}`);
+          }
+        } catch (ePdf) {
+          console.warn("Aviso extrayendo PDF:", ePdf.message);
+        }
+      } else if (f.name.endsWith(".txt") || f.name.endsWith(".md") || f.name.endsWith(".json") || f.name.endsWith(".js") || f.name.endsWith(".html")) {
         try {
           const t = await f.text();
           contenidoArchivos += `\n--- Archivo: ${f.name} ---\n${t}\n`;
@@ -3312,156 +3453,156 @@ async function ejecutarGeneracionGitHubActions({
 
   let textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
 
-  // ETAPA 1: TRADUCCIÓN PREVIA (SI ESTÁ EN CATALÁN/VALENCIANO)
-  if (detectarCatalanTexto(titulo)) {
+  // FASE 2: TRADUCCIÓN PREVIA (SI ESTÁ EN CATALÁN/VALENCIANO)
+  const esCatalan = detectarCatalanTexto(titulo) || detectarCatalanTexto(instrucciones) || detectarCatalanTexto(textoFinal);
+  if (esCatalan) {
     mostrarProgresoGeneracion(
       {
         fase: "traduccion",
-        mensaje: `Traduciendo título "${titulo}" al español...`,
-        detalle: "Detectado catalán en el temario…",
+        mensaje: "Traduciendo temario y material al español...",
+        detalle: "Detectado catalán/valenciano. Convirtiendo a español estándar…",
+        actual: 2,
+        total: 5,
       },
       false,
     );
-    registrarEventoConsola(`🌐 Traduciendo título "${titulo}" al español...`);
-    try {
-      const trad = await traducirTextoGoogleBrowser(titulo);
-      if (trad && trad.trim()) {
-        titulo = trad.trim();
-        registrarEventoConsola(`✓ Título traducido: "${titulo}"`);
-      }
-    } catch (_) {}
-  }
-
-  if (detectarCatalanTexto(instrucciones)) {
-    try {
-      const trad = await traducirTextoGoogleBrowser(instrucciones);
-      if (trad && trad.trim()) instrucciones = trad.trim();
-    } catch (_) {}
-  }
-
-  if (detectarCatalanTexto(textoFinal)) {
-    mostrarProgresoGeneracion(
-      {
-        fase: "traduccion",
-        mensaje: "Traduciendo material fuente al español...",
-        detalle: "Detectado contenido en catalán/valenciano en los textos…",
-      },
-      false,
-    );
-    registrarEventoConsola("🌐 Detectado contenido en catalán/valenciano. Traduciendo material al español...");
-    try {
+    registrarEventoConsola("🌐 [Fase 2/5] Detección y traducción al español estándar...");
+    if (detectarCatalanTexto(titulo)) {
+      titulo = await traducirTextoGoogleBrowser(titulo);
+      registrarEventoConsola(`✓ Título traducido: "${titulo}"`);
+    }
+    if (detectarCatalanTexto(instrucciones)) {
+      instrucciones = await traducirTextoGoogleBrowser(instrucciones);
+    }
+    if (detectarCatalanTexto(textoFinal)) {
       textoFinal = await traducirTextoLargoBrowser(textoFinal);
-      registrarEventoConsola("✓ Material fuente traducido con éxito al español.");
-    } catch (_) {}
+      registrarEventoConsola("✓ Material fuente traducido al español.");
+    }
+  } else {
+    mostrarProgresoGeneracion(
+      {
+        fase: "traduccion",
+        mensaje: "Material verificado en español estándar",
+        detalle: "No requiere traducción previa.",
+        actual: 2,
+        total: 5,
+      },
+      false,
+    );
   }
 
-  // ETAPA 2: INTERACTUAR CON LA IA BLOQUE A BLOQUE (COMO EN LOCAL)
+  // FASE 3: REDACCIÓN DE APARTADOS CON IA (NVIDIA NIM) BLOQUE A BLOQUE
   let contenidoLatexGenerado = "";
   const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-lightning-30b-a3b").trim();
 
   if (cfgSupabase.nvidiaApiKey) {
-    mostrarProgresoGeneracion(
-      {
-        fase: "ia",
-        mensaje: "Interactuando con la IA: analizando temario y planificando apartados...",
-        detalle: `Conectando con NVIDIA NIM (${modelo})…`,
-      },
-      false,
-    );
-    registrarEventoConsola(`🤖 Conectando con NVIDIA NIM (${modelo}) para redactar apartados...`);
-
+    registrarEventoConsola(`🤖 [Fase 3/5] Redacción de apartados con IA (${modelo})...`);
     try {
-      const promptUsuario = `Asignatura: "${asignatura}"
-Tema ${tema}: "${titulo}"
-Subtema: ${subtema || "1"}
+      const apartadosDetectados = detectarApartadosEnTexto(textoFinal);
+      const todosLosArchivos = [];
 
-Instrucciones:
-${instrucciones || "Elabora apuntes universitarios completos, rigurosos, divididos por apartados y subtemas, con código, definiciones y notas de examen."}
-
-Material fuente:
-${textoFinal || "Elabora el temario estándar oficial para esta asignatura y tema."}
-
-FORMATO DE SALIDA OBLIGATORIO:
-Devuelve EXCLUSIVAMENTE un objeto JSON válido con:
-{
-  "tema_existente": 0,
-  "titulo_tema": "${titulo}",
-  "titulo_subtema": "Título formal del apartado en español",
-  "conceptos_clave": ["Concepto 1", "Concepto 2"],
-  "archivos": [
-    {
-      "subtema": "1",
-      "nombre": "1.slug-del-apartado",
-      "titulo": "Título formal del apartado en español",
-      "latex": "\\secciongrande{Título del apartado}\\n\\n\\resumen{Síntesis sustancial de 3 a 5 líneas.}\\n\\n\\definicion{Concepto}{Definición técnica formal.}\\n\\n\\subtituloA{Detalle conceptual}\\n\\n\\lista{\\n  **Elemento 1:** Explicación técnica.\\n  **Elemento 2:** Explicación técnica.\\n}\\n\\n\\nota{Para el examen}{Pregunta con respuesta razonada.}"
-    }
-  ]
-}
-Reglas: 100% en ESPAÑOL ESTÁNDAR. Divide en subtemas y archivos numerados (1.<slug>, 2.<slug>).`;
-
-      const respIA = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${cfgSupabase.nvidiaApiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelo,
-          messages: [
-            {
-              role: "system",
-              content: "Eres un profesor experto en informática. Redacta apuntes estructurados para LaTeX. Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos (cada uno con subtema, nombre, titulo y latex en español).",
-            },
-            { role: "user", content: promptUsuario },
-          ],
-          temperature: 0.2,
-          max_tokens: 8192,
-        }),
-      });
-
-      if (respIA.ok) {
-        const datosIA = await respIA.json();
-        const rawContenido = datosIA.choices?.[0]?.message?.content || datosIA.choices?.[0]?.message?.reasoning_content || "";
-        const matchJ = rawContenido.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-        const strJson = matchJ ? matchJ[1].trim() : rawContenido.trim();
-        const parsedIA = JSON.parse(strJson);
-
-        if (parsedIA && Array.isArray(parsedIA.archivos) && parsedIA.archivos.length > 0) {
-          registrarEventoConsola(`✓ IA generó ${parsedIA.archivos.length} bloques estructurados:`);
-          for (let i = 0; i < parsedIA.archivos.length; i++) {
-            const arch = parsedIA.archivos[i];
-            mostrarProgresoGeneracion(
-              {
-                fase: "redaccion",
-                mensaje: `Escribiendo bloque ${i + 1}/${parsedIA.archivos.length}: ${arch.titulo || arch.nombre}`,
-                detalle: `Archivo: ${arch.nombre || `bloque-${i + 1}`}.tex`,
-              },
-              false,
-            );
-            registrarEventoConsola(`📝 [Bloque ${i + 1}/${parsedIA.archivos.length}] ${arch.nombre || `archivo-${i + 1}`}.tex — ${arch.titulo || "Apartado"}`);
-            // Pequeña pausa visual como en local para ver el avance bloque a bloque
-            await new Promise((r) => setTimeout(r, 350));
-          }
-          contenidoLatexGenerado = JSON.stringify(parsedIA);
+      if (apartadosDetectados.length >= 2) {
+        registrarEventoConsola(`Detectados ${apartadosDetectados.length} apartados en el temario:`);
+        for (const a of apartadosDetectados) {
+          registrarEventoConsola(`  - Apartado ${a.tema}.${a.subtema}: ${a.titulo}`);
         }
+        const bloques = dividirTextoPorApartados(textoFinal, [], apartadosDetectados);
+
+        for (let i = 0; i < bloques.length; i++) {
+          const apInfo = apartadosDetectados[i] || { subtema: i + 1, titulo: `Apartado ${i + 1}` };
+          const subtemaId = String(apInfo.subtema || i + 1);
+          const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
+
+          mostrarProgresoGeneracion(
+            {
+              fase: "ia",
+              mensaje: `Redactando apartado ${i + 1} de ${bloques.length}: ${subtemaTitulo}`,
+              detalle: `Conectando con NVIDIA NIM (${modelo})…`,
+              actual: i + 1,
+              total: bloques.length,
+            },
+            false,
+          );
+
+          const resAp = await consultarNvidiaNIMApartadoBrowser({
+            apiKey: cfgSupabase.nvidiaApiKey,
+            modelo,
+            asignatura,
+            tema,
+            tituloTema: titulo,
+            subtema: subtemaId,
+            subtemaTitulo,
+            instrucciones,
+            textoFuente: bloques[i].texto,
+          });
+
+          if (resAp?.archivos?.length) {
+            for (const arch of resAp.archivos) {
+              arch.subtema = subtemaId;
+              todosLosArchivos.push(arch);
+              registrarEventoConsola(`📝 [Bloque ${todosLosArchivos.length}] ${arch.nombre || `seccion`}.tex — ${arch.titulo || subtemaTitulo}`);
+            }
+          }
+        }
+      } else {
+        mostrarProgresoGeneracion(
+          {
+            fase: "ia",
+            mensaje: `Redactando tema completo: ${titulo}`,
+            detalle: `Conectando con NVIDIA NIM (${modelo})…`,
+            actual: 1,
+            total: 1,
+          },
+          false,
+        );
+
+        const resTema = await consultarNvidiaNIMApartadoBrowser({
+          apiKey: cfgSupabase.nvidiaApiKey,
+          modelo,
+          asignatura,
+          tema,
+          tituloTema: titulo,
+          subtema: String(subtema || 1),
+          subtemaTitulo: titulo,
+          instrucciones,
+          textoFuente: textoFinal,
+        });
+
+        if (resTema?.archivos?.length) {
+          todosLosArchivos.push(...resTema.archivos);
+          for (let k = 0; k < resTema.archivos.length; k++) {
+            registrarEventoConsola(`📝 [Bloque ${k + 1}] ${resTema.archivos[k].nombre || `seccion`}.tex — ${resTema.archivos[k].titulo || titulo}`);
+          }
+        }
+      }
+
+      if (todosLosArchivos.length > 0) {
+        contenidoLatexGenerado = JSON.stringify({
+          titulo_tema: titulo,
+          titulo_subtema: titulo,
+          archivos: todosLosArchivos,
+        });
+        registrarEventoConsola(`✓ Total de archivos modulares generados: ${todosLosArchivos.length}`);
       }
     } catch (errIA) {
       console.warn("Aviso en interacción directa con NVIDIA NIM:", errIA.message);
-      registrarEventoConsola(`ℹ️ Generación directa en navegador pasó el relevo a GitHub Actions: ${errIA.message}`);
+      registrarEventoConsola(`ℹ️ Generación continuará en GitHub Actions: ${errIA.message}`);
     }
   }
 
-  // ETAPA 3: COMPILACIÓN Y SINCRONIZACIÓN EN GITHUB ACTIONS
+  // FASE 4: COMPILACIÓN CON LATEX EN LA NUBE (GITHUB ACTIONS)
   try {
-    registrarEventoConsola(`🚀 Secreto verificado. Disparando GitHub Actions para compilar LaTeX y sincronizar ${asignatura} - Tema ${tema}...`);
     mostrarProgresoGeneracion(
       {
-        fase: "subida",
-        mensaje: `Iniciando compilador en la nube para ${asignatura} - Tema ${tema}`,
-        detalle: "Enviando workflow_dispatch a GitHub Actions…",
+        fase: "guardado",
+        mensaje: `Compilando apuntes con LaTeX en la nube para ${asignatura} - Tema ${tema}...`,
+        detalle: "Ejecutando workflow de compilación XeLaTeX en GitHub Actions…",
+        actual: 4,
+        total: 5,
       },
       false,
     );
+    registrarEventoConsola(`🚀 [Fase 4/5] Disparando GitHub Actions para compilar LaTeX y subir a GRADOS_INFORMATICOS...`);
 
     const urlDispatch = `https://api.github.com/repos/${repoDestino}/actions/workflows/generar-apuntes.yml/dispatches`;
 
@@ -3490,60 +3631,18 @@ Reglas: 100% en ESPAÑOL ESTÁNDAR. Divide en subtemas y archivos numerados (1.<
     });
 
     if (!res.ok) {
-      if (res.status === 401) {
-        localStorage.removeItem("cache_gh_token");
-        localStorage.removeItem("gh_token");
-        const nuevoToken = window.prompt("El token de GitHub actual ha expirado o no es válido (401 Bad credentials).\nIntroduce tu token de GitHub activo:", "");
-        if (nuevoToken && nuevoToken.trim()) {
-          token = nuevoToken.trim();
-          localStorage.setItem("cache_gh_token", token);
-          res = await fetch(urlDispatch, {
-            method: "POST",
-            headers: {
-              Accept: "application/vnd.github+json",
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              ref: "main",
-              inputs: {
-                asignatura,
-                tema: String(tema),
-                titulo: String(titulo),
-                subtema: String(subtema),
-                instrucciones: String(instrucciones || ""),
-                texto_fuente: textoFinal.slice(0, 60000),
-                nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
-                nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-lightning-30b-a3b").trim(),
-                gh_token: token,
-              },
-            }),
-          });
-        }
-      }
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions (comprueba los permisos del token de GitHub)`);
-      }
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
     }
 
     registrarEventoConsola("✓ Orden recibida con éxito por GitHub Actions.");
-    registrarEventoConsola("Pipeline en curso: 1. IA redacta contenido con NVIDIA_API_KEY -> 2. Compilación de apuntes con LaTeX.");
-
-    mostrarProgresoGeneracion(
-      {
-        fase: "ia",
-        mensaje: "¡Generación iniciada en GitHub Actions!",
-        detalle: `Fase 1: La IA redacta con NVIDIA_API_KEY. Fase 2: LaTeX compila el PDF. Siguiendo estado en vivo…`,
-      },
-      false,
-    );
+    registrarEventoConsola("Compilando PDF en GitHub Actions con XeLaTeX...");
 
     panelResultados.hidden = false;
     panelResultados.innerHTML = `
       <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
-        <div style="font-size:36px; margin-bottom:8px;">🚀</div>
-        <h3 style="margin:0 0 8px; font-size:18px;">Trabajo en curso en la nube</h3>
+        <div style="font-size:36px; margin-bottom:8px;">⚙️</div>
+        <h3 style="margin:0 0 8px; font-size:18px;">Compilando apuntes con LaTeX en la nube</h3>
         <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
           Se está generando el documento LaTeX y compilando el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
         </p>
@@ -3584,7 +3683,6 @@ Reglas: 100% en ESPAÑOL ESTÁNDAR. Divide en subtemas y archivos numerados (1.<
     panelError.textContent = `Error al activar GitHub Actions: ${error.message}`;
     panelError.hidden = false;
     registrarEventoConsola(`❌ Error: ${error.message}`);
-  } finally {
     botonGenerar.disabled = false;
   }
 }
@@ -3592,7 +3690,7 @@ Reglas: 100% en ESPAÑOL ESTÁNDAR. Divide en subtemas y archivos numerados (1.<
 function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, titulo, tiempoInicio }) {
   const badge = document.querySelector("#estado-actions-badge");
   let intentos = 0;
-  const maxIntentos = 90; // Hasta ~7 minutos
+  const maxIntentos = 90;
 
   const interval = setInterval(async () => {
     intentos++;
@@ -3602,6 +3700,7 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
         localStorage.removeItem("generador_trabajo_activo");
       } catch (_) {}
       if (badge) badge.textContent = "El trabajo continúa en la nube. Consulta GitHub Actions.";
+      botonGenerar.disabled = false;
       return;
     }
 
@@ -3629,25 +3728,31 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
       if (run.status === "queued") {
         if (badge) badge.textContent = `En cola en GitHub (Run #${run.id})…`;
       } else if (run.status === "in_progress") {
-        if (badge) badge.textContent = `En ejecución: IA redactando y compilando con LaTeX (Run #${run.id})…`;
+        if (badge) badge.textContent = `Compilando LaTeX y generando PDF (Run #${run.id})…`;
         if (intentos % 4 === 0) {
-          registrarEventoConsola(`[GitHub Actions #${run.id}] Trabajo en marcha: redactando y compilando PDF…`);
+          registrarEventoConsola(`[GitHub Actions #${run.id}] Compilación LaTeX en curso…`);
         }
       } else if (run.status === "completed") {
         clearInterval(interval);
         try {
           localStorage.removeItem("generador_trabajo_activo");
         } catch (_) {}
+        botonGenerar.disabled = false;
+
         if (run.conclusion === "success") {
+          // FASE 5: COMPLETADO
           mostrarProgresoGeneracion(
             {
               fase: "completado",
-              mensaje: "¡Apuntes generados y PDF compilado con éxito!",
-              detalle: `El PDF ha sido creado y publicado en el repositorio.`,
+              mensaje: "¡Generación finalizada con éxito!",
+              detalle: `El PDF ha sido creado y publicado en GRADOS_INFORMATICOS.`,
+              actual: 5,
+              total: 5,
             },
             false
           );
-          registrarEventoConsola("🎉 ¡Generación completada con éxito en GitHub Actions!");
+          barraProgreso.value = 100;
+          registrarEventoConsola("🎉 ¡Generación completada con éxito!");
           registrarEventoConsola(`📄 Archivo PDF: apuntes-generados/${asignatura}/tema-${tema}.pdf`);
 
           const urlPdf = `https://raw.githubusercontent.com/${repoDestino}/main/apuntes-generados/${encodeURIComponent(asignatura)}/tema-${tema}.pdf`;
@@ -3657,9 +3762,9 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
           panelResultados.innerHTML = `
             <div style="background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:12px; padding:24px; text-align:center; color:#fff;">
               <div style="font-size:42px; margin-bottom:8px;">✅</div>
-              <h3 style="margin:0 0 8px; font-size:20px; color:#34d399;">¡Apuntes generados y compilados con éxito!</h3>
+              <h3 style="margin:0 0 8px; font-size:20px; color:#34d399;">¡Apuntes generados y PDF compilado con éxito!</h3>
               <p style="margin:0 0 20px; color:#cbd5e1; font-size:14px;">
-                La IA ha redactado el contenido y LaTeX ha compilado el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
+                La IA ha redactado el temario y LaTeX ha compilado el PDF para <strong>${asignatura} - Tema ${tema}: ${titulo}</strong>.
               </p>
               <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
                 <a href="${urlPdf}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#10b981; color:#fff; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600; font-size:15px; box-shadow:0 4px 12px rgba(16,185,129,0.3);">
@@ -3680,9 +3785,6 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
           panelResultados.scrollIntoView({ behavior: "smooth" });
         } else {
           registrarEventoConsola(`❌ El trabajo de GitHub Actions terminó con estado: ${run.conclusion}`);
-          try {
-            localStorage.removeItem("generador_trabajo_activo");
-          } catch (_) {}
           if (panelError) {
             panelError.textContent = `La generación en GitHub Actions finalizó con estado: ${run.conclusion}. Puedes revisar los detalles en: ${run.html_url}`;
             panelError.hidden = false;
@@ -3703,19 +3805,77 @@ async function recuperarTrabajoGitHubActions() {
   } catch (_) {}
 
   if (!datos || !datos.tiempoInicio) return;
-  // Si han pasado más de 15 minutos, descartar
   if (Date.now() - datos.tiempoInicio > 15 * 60 * 1000) {
     try { localStorage.removeItem("generador_trabajo_activo"); } catch (_) {}
     return;
   }
 
+  // Verificar primero si el trabajo ya terminó en GitHub
+  try {
+    const resp = await fetch(
+      `https://api.github.com/repos/${datos.repoDestino}/actions/runs?event=workflow_dispatch&per_page=3`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${datos.token}`,
+        },
+      }
+    );
+    if (resp.ok) {
+      const respDatos = await resp.json();
+      const runs = respDatos.workflow_runs || [];
+      const run = runs.find((r) => {
+        const creado = new Date(r.created_at).getTime();
+        return creado >= datos.tiempoInicio - 45000;
+      }) || runs[0];
+
+      if (run && run.status === "completed") {
+        localStorage.removeItem("generador_trabajo_activo");
+        if (run.conclusion === "success") {
+          mostrarProgresoGeneracion(
+            {
+              fase: "completado",
+              mensaje: "¡Generación finalizada con éxito!",
+              detalle: `El PDF ha sido creado y publicado en GRADOS_INFORMATICOS.`,
+              actual: 5,
+              total: 5,
+            },
+            false
+          );
+          barraProgreso.value = 100;
+          const urlPdf = `https://raw.githubusercontent.com/${datos.repoDestino}/main/apuntes-generados/${encodeURIComponent(datos.asignatura)}/tema-${datos.tema}.pdf`;
+          panelResultados.hidden = false;
+          panelResultados.innerHTML = `
+            <div style="background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:12px; padding:24px; text-align:center; color:#fff;">
+              <div style="font-size:42px; margin-bottom:8px;">✅</div>
+              <h3 style="margin:0 0 8px; font-size:20px; color:#34d399;">¡Apuntes generados y PDF compilado con éxito!</h3>
+              <p style="margin:0 0 20px; color:#cbd5e1; font-size:14px;">
+                PDF disponible para <strong>${datos.asignatura} - Tema ${datos.tema}: ${datos.titulo}</strong>.
+              </p>
+              <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                <a href="${urlPdf}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:8px; background:#10b981; color:#fff; padding:12px 22px; border-radius:8px; text-decoration:none; font-weight:600; font-size:15px; box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                  <i class="fa-solid fa-file-pdf"></i>
+                  <span>Descargar / Ver PDF</span>
+                </a>
+              </div>
+            </div>
+          `;
+          return;
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Si aún sigue activo, reanudar monitoreo
   if (progreso) progreso.hidden = false;
   if (botonGenerar) botonGenerar.disabled = true;
   mostrarProgresoGeneracion(
     {
-      fase: "ia",
-      mensaje: `Reanudando seguimiento: ${datos.asignatura} - Tema ${datos.tema}`,
-      detalle: `El trabajo sigue ejecutándose en la nube. Conectando con GitHub Actions…`,
+      fase: "guardado",
+      mensaje: `Compilando en la nube: ${datos.asignatura} - Tema ${datos.tema}`,
+      detalle: `El trabajo sigue ejecutándose en GitHub Actions…`,
+      actual: 4,
+      total: 5,
     },
     false
   );
@@ -3723,10 +3883,10 @@ async function recuperarTrabajoGitHubActions() {
     panelResultados.hidden = false;
     panelResultados.innerHTML = `
       <div style="background:rgba(37,99,235,0.08); border:1px solid #3b82f6; border-radius:12px; padding:20px; text-align:center; color:#fff;">
-        <div style="font-size:36px; margin-bottom:8px;">🚀</div>
-        <h3 style="margin:0 0 8px; font-size:18px;">Trabajo en curso en la nube (recuperado)</h3>
+        <div style="font-size:36px; margin-bottom:8px;">⚙️</div>
+        <h3 style="margin:0 0 8px; font-size:18px;">Compilación en curso en GitHub Actions</h3>
         <p style="margin:0 0 16px; color:#cbd5e1; font-size:14px;">
-          Se está generando el documento LaTeX y compilando el PDF para <strong>${datos.asignatura} - Tema ${datos.tema}: ${datos.titulo}</strong>.
+          Se está compilando el PDF para <strong>${datos.asignatura} - Tema ${datos.tema}: ${datos.titulo}</strong>.
         </p>
         <div id="estado-actions-badge" style="display:inline-block; background:#1e293b; border:1px solid #475569; color:#93c5fd; padding:6px 14px; border-radius:999px; font-size:13px; font-weight:500;">
           Consultando estado en GitHub Actions…
