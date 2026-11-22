@@ -409,12 +409,10 @@ const SupabaseAuth = (() => {
     document.getElementById("gate-btn-google")?.addEventListener("click", async () => {
       const c = getClient();
       if (!c) return;
-      const redirectUrl = window.location.origin + window.location.pathname;
-      // Cookie compartida entre puertos de localhost (localStorage NO se comparte entre puertos)
-      try {
-        document.cookie = `auth_origin_app=${encodeURIComponent(window.location.href)}; path=/; samesite=lax; max-age=300`;
-        localStorage.setItem("auth_origin_app", window.location.href);
-      } catch (_) {}
+      // Forzar una URL base exacta y limpia
+      const redirectUrl = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+        ? `${window.location.protocol}//${window.location.host}/`
+        : "https://nataliagamezbarea.github.io/generador-apuntes/";
       await c.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: redirectUrl },
@@ -424,12 +422,9 @@ const SupabaseAuth = (() => {
     document.getElementById("gate-btn-github")?.addEventListener("click", async () => {
       const c = getClient();
       if (!c) return;
-      const redirectUrl = window.location.origin + window.location.pathname;
-      // Cookie compartida entre puertos de localhost (localStorage NO se comparte entre puertos)
-      try {
-        document.cookie = `auth_origin_app=${encodeURIComponent(window.location.href)}; path=/; samesite=lax; max-age=300`;
-        localStorage.setItem("auth_origin_app", window.location.href);
-      } catch (_) {}
+      const redirectUrl = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+        ? `${window.location.protocol}//${window.location.host}/`
+        : "https://nataliagamezbarea.github.io/generador-apuntes/";
       await c.auth.signInWithOAuth({
         provider: "github",
         options: { redirectTo: redirectUrl },
