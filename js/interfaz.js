@@ -256,13 +256,17 @@ let ultimosResultadosMostrados = 0;
 
 function actualizarEstadoModeloIA() {
   const valor = selectorModeloIA.value || (esEntornoEstatico ? "nvidia/nemotron-3.5-bolt-e4b" : "qwen2.5:14b");
-  estadoModeloSeleccionado.textContent = `Modelo IA: ${valor}`;
+  const modeloInfo = modelosNvidia.find((m) => m.id === valor);
+  const estaDisabled = modeloInfo && !modeloInfo.disponible;
+  estadoModeloSeleccionado.textContent = `Modelo IA: ${valor}${estaDisabled ? " (disabled)" : ""}`;
   if (esEntornoEstatico) {
     estadoModeloSeleccionado.style.color = "#c3e88d";
   } else if (valor === "qwen2.5:14b") {
     estadoModeloSeleccionado.style.color = "#c3e88d";
   } else if (valor === "qwen2.5:7b") {
     estadoModeloSeleccionado.style.color = "#ffce54";
+  } else if (!estaDisabled) {
+    estadoModeloSeleccionado.style.color = "#e6ac00";
   } else {
     estadoModeloSeleccionado.style.color = "#e6ac00";
   }

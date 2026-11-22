@@ -56,11 +56,22 @@ export async function comprobarModelo(modeloObjetivo = config.model) {
         target.startsWith(`${name}:`) ||
         name.replace(/:latest$/, "") === target.replace(/:latest$/, "")
     );
+    // Detectar si el modelo está "disabled" por falta de tokens o contexto excesivo
+    const modelDisabled = !modelAvailable && models.length > 0;
+    // Si el modelo no está disponible pero hay modelos en la lista, marcar como disabled
+    // para indicar al usuario que necesita liberar tokens o aumentar NUM_CTX_IA
     return {
       connected: true,
       modelAvailable,
       model: target,
       models,
+      modelDisabled,
+      // Motivación si está disabled
+      disabledReason: modelAvailable
+        ? null
+        : models.length > 0
+        ? "Agota los tokens o el contexto. Aumenta NUM_CTX_IA o separa el PDF en partes más pequeñas."
+        : "No hay modelos disponibles en Ollama. Verifica la conexión.",
     };
   } catch (err) {
     if (config.nvidiaApiKey) {
@@ -72,7 +83,7 @@ export async function comprobarModelo(modeloObjetivo = config.model) {
         provider: "nvidia",
       };
     }
-    return { connected: false, modelAvailable: false, models: [] };
+    return { connected: false, modelAvailable: false, models: [], modelDisabled: true, disabledReason: "Error de conexión con Ollama" };
   }
 }
 
@@ -86,10 +97,12 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
       modelo,
       config.nvidiaModel,
       "nvidia/nemotron-3.5-bolt-e4b",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",  // Nemotron 3.5 30B - modelo recomendado
       "mistralai/mistral-large-4-1t-a52b",
       "nvidia/nemotron-3-ultra-550b-a55b",
       "poolside/laguna-xs-2.1",
-      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",  // Nemotron 3.5 30B - modelo con razonamiento profundo
+      "nvidia/nemotron-3.5-lightning-30b-a3b-recomendado",
     ])
   ).filter(Boolean);
 
@@ -301,7 +314,18 @@ export function preRepararJsonLatex(jsonStr) {
       /(?<!\\)\\(begin|textbf|textit|texttt|textcolor|tabla|tablacab|resumen|seccion|secciongrande|subtitulo|subtituloA|subtituloB|definicion|definicionpar|rectangulos|lista|pasos|nota|alertas|cmd|textless|textgreater)(?=[^a-zA-Z]|$)/g,
       "\\\\$1",
     )
-    .replace(/(?<!\\)\\([a-zA-Z]+)(?=[^a-zA-Z"\\\/bfnrtu]|$)/g, "\\\\$1");
+    .replace(/(?<!\\)\\([a-zA-Z]+)(?=[^a-zA-Z"\\\/bfnrtu]|$)/g, "\\\\$1")
+    // Convertir negrita markdown **texto** a macros LaTeX \subtituloA{} o \subtituloB{}
+    .replace(/\*\*(.*?)\*\*/g, (match, text) => {
+      // Si el texto parece un título principal, usar \subtituloA, si es un subtítulo usar \subtituloB
+      // Por defecto, convertir a \subtituloB para subtítulos internos
+      const textoLimpio = text.trim();
+      if (textoLimpio.length > 0) {
+        // Convertir a macro LaTeX - usar \subtituloB para subtítulos de segundo nivel
+        return `\\subtituloB{${textoLimpio}}`;
+      }
+      return match;
+    });
 }
 
 export function analizarJson(text, motivoFinal = "") {
