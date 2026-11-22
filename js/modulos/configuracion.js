@@ -63,6 +63,10 @@ export const config = {
     process.env.URL_PREPARAR_TESTS ??
     "http://localhost:3000"
   ).trim(),
+  nvidiaApiKey: (process.env.NVIDIA_API_KEY ?? "").trim(),
+  nvidiaModel: (process.env.NVIDIA_MODELO ?? "meta/llama-3.1-8b-instruct").trim(),
+  nvidiaBaseUrl: (process.env.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1").trim().replace(/\/+$/, ""),
+  proveedorIA: (process.env.PROVEEDOR_IA ?? "auto").trim().toLowerCase(),
 };
 
 export const extensionesCodigo = new Map([
