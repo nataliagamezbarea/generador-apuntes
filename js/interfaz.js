@@ -3598,6 +3598,23 @@ async function ejecutarGeneracionGitHubActions({
     );
     registrarEventoConsola(`🚀 [Fase 3/4] Disparando GitHub Actions para redacción con NVIDIA NIM y compilación XeLaTeX...`);
 
+    let ultimoRunIdAntesDeLanzar = 0;
+    try {
+      const respPrev = await fetch(
+        `https://api.github.com/repos/${repoDestino}/actions/runs?event=workflow_dispatch&per_page=1`,
+        {
+          headers: {
+            Accept: "application/vnd.github+json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (respPrev.ok) {
+        const datosPrev = await respPrev.json();
+        ultimoRunIdAntesDeLanzar = datosPrev.workflow_runs?.[0]?.id || 0;
+      }
+    } catch (_) {}
+
     const urlDispatch = `https://api.github.com/repos/${repoDestino}/actions/workflows/generar-apuntes.yml/dispatches`;
 
     let res = await fetch(urlDispatch, {
@@ -3631,7 +3648,7 @@ async function ejecutarGeneracionGitHubActions({
     }
 
     registrarEventoConsola("✓ Orden recibida con éxito por GitHub Actions.");
-    registrarEventoConsola("Compilando PDF en GitHub Actions con XeLaTeX...");
+    registrarEventoConsola("Iniciando compilación LaTeX y generación de apuntes en la nube...");
     panelResultados.hidden = true;
 
     const tiempoInicio = Date.now();
@@ -3643,6 +3660,7 @@ async function ejecutarGeneracionGitHubActions({
         tema,
         titulo,
         tiempoInicio,
+        ultimoRunIdAntesDeLanzar,
       }));
     } catch (_) {}
 
@@ -3653,6 +3671,7 @@ async function ejecutarGeneracionGitHubActions({
       tema,
       titulo,
       tiempoInicio,
+      ultimoRunIdAntesDeLanzar,
     });
   } catch (error) {
     panelError.textContent = `Error al activar GitHub Actions: ${error.message}`;
@@ -3662,10 +3681,15 @@ async function ejecutarGeneracionGitHubActions({
   }
 }
 
-function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, titulo, tiempoInicio }) {
+function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, titulo, tiempoInicio, ultimoRunIdAntesDeLanzar = 0, runId = 0 }) {
   const badge = document.querySelector("#estado-actions-badge");
   let intentos = 0;
-  const maxIntentos = 90;
+  const maxIntentos = 180; // 180 * 4s = 12 minutos
+  let idRunActivo = runId || 0;
+
+  if (progreso) progreso.hidden = false;
+  if (botonDetener) botonDetener.hidden = true;
+  if (panelError) panelError.hidden = true;
 
   const interval = setInterval(async () => {
     intentos++;
@@ -3680,32 +3704,83 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
     }
 
     try {
-      const resp = await fetch(
-        `https://api.github.com/repos/${repoDestino}/actions/runs?event=workflow_dispatch&per_page=3`,
-        {
-          headers: {
-            Accept: "application/vnd.github+json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const urlFetch = idRunActivo
+        ? `https://api.github.com/repos/${repoDestino}/actions/runs/${idRunActivo}`
+        : `https://api.github.com/repos/${repoDestino}/actions/runs?event=workflow_dispatch&per_page=5`;
+
+      const resp = await fetch(urlFetch, {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (!resp.ok) return;
 
       const datos = await resp.json();
-      const runs = datos.workflow_runs || [];
-      const run = runs.find((r) => {
-        const creado = new Date(r.created_at).getTime();
-        return creado >= tiempoInicio - 45000;
-      }) || runs[0];
+      let run = null;
 
-      if (!run) return;
+      if (idRunActivo) {
+        run = datos;
+      } else {
+        const runs = datos.workflow_runs || [];
+        // Buscar un run que pertenezca a esta ejecución (más nuevo que el anterior o creado tras tiempoInicio)
+        run = runs.find((r) => {
+          if (ultimoRunIdAntesDeLanzar > 0 && r.id > ultimoRunIdAntesDeLanzar) return true;
+          const creado = new Date(r.created_at).getTime();
+          return creado >= tiempoInicio - 15000;
+        });
+
+        if (run) {
+          idRunActivo = run.id;
+          try {
+            const guardado = JSON.parse(localStorage.getItem("generador_trabajo_activo") || "{}");
+            guardado.runId = idRunActivo;
+            localStorage.setItem("generador_trabajo_activo", JSON.stringify(guardado));
+          } catch (_) {}
+        }
+      }
+
+      // Si el nuevo run aún no aparece en GitHub, seguir esperando pacientemente sin cerrar ni dar error
+      if (!run) {
+        if (badge) badge.textContent = `Iniciando trabajo en GitHub Actions (esperando asignación #${intentos})…`;
+        if (intentos % 3 === 0) {
+          registrarEventoConsola(`⏳ Esperando asignación de máquina en GitHub Actions (intento ${intentos})…`);
+        }
+        return;
+      }
+
+      // El progreso siempre visible mientras el trabajo esté en curso
+      if (progreso) progreso.hidden = false;
 
       if (run.status === "queued") {
         if (badge) badge.textContent = `En cola en GitHub (Run #${run.id})…`;
+        mostrarProgresoGeneracion(
+          {
+            fase: "ia",
+            mensaje: `En cola en GitHub Actions (Run #${run.id})…`,
+            detalle: "Preparando entorno virtual de compilación…",
+            actual: 2,
+            total: 5,
+          },
+          false
+        );
+        barraProgreso.value = 25;
       } else if (run.status === "in_progress") {
         if (badge) badge.textContent = `Compilando LaTeX y generando PDF (Run #${run.id})…`;
+        const avanceEstimado = Math.min(92, 35 + Math.floor(intentos * 1.5));
+        barraProgreso.value = avanceEstimado;
+        mostrarProgresoGeneracion(
+          {
+            fase: "ia",
+            mensaje: `Redactando con IA y compilando con XeLaTeX (Run #${run.id})…`,
+            detalle: `Generación en curso (${avanceEstimado}%). Por favor espera…`,
+            actual: 3,
+            total: 5,
+          },
+          false
+        );
         if (intentos % 4 === 0) {
-          registrarEventoConsola(`[GitHub Actions #${run.id}] Compilación LaTeX en curso…`);
+          registrarEventoConsola(`[GitHub Actions #${run.id}] Generación activa en curso (${avanceEstimado}%)…`);
         }
       } else if (run.status === "completed") {
         clearInterval(interval);
@@ -3715,7 +3790,6 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
         botonGenerar.disabled = false;
 
         if (run.conclusion === "success") {
-          // FASE 5: COMPLETADO
           mostrarProgresoGeneracion(
             {
               fase: "completado",
@@ -3759,15 +3833,15 @@ function iniciarMonitoreoGitHubActions({ repoDestino, token, asignatura, tema, t
           `;
           panelResultados.scrollIntoView({ behavior: "smooth" });
         } else {
-          registrarEventoConsola(`❌ El trabajo de GitHub Actions terminó con estado: ${run.conclusion}`);
+          registrarEventoConsola(`❌ El trabajo #${run.id} de GitHub Actions terminó con estado: ${run.conclusion}`);
           if (panelError) {
-            panelError.textContent = `La generación en GitHub Actions finalizó con estado: ${run.conclusion}. Puedes revisar los detalles en: ${run.html_url}`;
+            panelError.textContent = `La generación en GitHub Actions (Run #${run.id}) finalizó con estado: ${run.conclusion}. Puedes revisar los detalles en: ${run.html_url}`;
             panelError.hidden = false;
           }
         }
       }
     } catch (_) {}
-  }, 5000);
+  }, 4000);
 }
 
 async function recuperarTrabajoGitHubActions() {
@@ -3780,29 +3854,34 @@ async function recuperarTrabajoGitHubActions() {
   } catch (_) {}
 
   if (!datos || !datos.tiempoInicio) return;
-  if (Date.now() - datos.tiempoInicio > 15 * 60 * 1000) {
+  if (Date.now() - datos.tiempoInicio > 20 * 60 * 1000) {
     try { localStorage.removeItem("generador_trabajo_activo"); } catch (_) {}
     return;
   }
 
-  // Verificar primero si el trabajo ya terminó en GitHub
   try {
-    const resp = await fetch(
-      `https://api.github.com/repos/${datos.repoDestino}/actions/runs?event=workflow_dispatch&per_page=3`,
-      {
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${datos.token}`,
-        },
-      }
-    );
+    const urlCheck = datos.runId
+      ? `https://api.github.com/repos/${datos.repoDestino}/actions/runs/${datos.runId}`
+      : `https://api.github.com/repos/${datos.repoDestino}/actions/runs?event=workflow_dispatch&per_page=5`;
+
+    const resp = await fetch(urlCheck, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${datos.token}`,
+      },
+    });
     if (resp.ok) {
       const respDatos = await resp.json();
-      const runs = respDatos.workflow_runs || [];
-      const run = runs.find((r) => {
-        const creado = new Date(r.created_at).getTime();
-        return creado >= datos.tiempoInicio - 45000;
-      }) || runs[0];
+      let run = datos.runId ? respDatos : null;
+
+      if (!run) {
+        const runs = respDatos.workflow_runs || [];
+        run = runs.find((r) => {
+          if (datos.ultimoRunIdAntesDeLanzar > 0 && r.id > datos.ultimoRunIdAntesDeLanzar) return true;
+          const creado = new Date(r.created_at).getTime();
+          return creado >= datos.tiempoInicio - 15000;
+        });
+      }
 
       if (run && run.status === "completed") {
         localStorage.removeItem("generador_trabajo_activo");
