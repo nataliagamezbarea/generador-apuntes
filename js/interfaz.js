@@ -3168,54 +3168,18 @@ async function obtenerConfiguracionSupabase() {
     }
   }
 
-  // 3. Si aún no se encontró y tenemos un token de usuario real, probar REST autenticado con profile
-  if (!config.nvidiaApiKey && accessToken && accessToken !== anonKey) {
-    try {
-      const url = `${supabaseUrl}/rest/v1/configuracion_privada?select=*`;
-      const resp = await fetch(url, {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/json",
-          "Accept-Profile": "grados-informaticos",
-          "Content-Profile": "grados-informaticos",
-        },
-        cache: "no-store",
-      });
-
-      if (resp.ok) {
-        const filas = await resp.json();
-        procesarFilas(filas);
-      }
-    } catch (_) {}
-  }
-
-  // 4. Consultar configuracion_publica como respaldo
+  // 3. Consultar configuracion_publica como respaldo si aún falta información
   if (!config.ghToken || !config.nvidiaApiKey) {
     if (c) {
       try {
-        const { data } = await c.schema("grados-informaticos").from("configuracion_publica").select("*");
-        procesarFilas(data);
+        const { data: dataPub } = await c.schema("grados-informaticos").from("configuracion_publica").select("*");
+        if (Array.isArray(dataPub) && dataPub.length > 0) procesarFilas(dataPub);
+      } catch (_) {}
+      try {
+        const { data: dataPubDef } = await c.from("configuracion_publica").select("*");
+        if (Array.isArray(dataPubDef) && dataPubDef.length > 0) procesarFilas(dataPubDef);
       } catch (_) {}
     }
-    try {
-      const respPub = await fetch(
-        `${supabaseUrl}/rest/v1/configuracion_publica?select=*`,
-        {
-          headers: {
-            apikey: anonKey,
-            Authorization: `Bearer ${anonKey}`,
-            Accept: "application/json",
-            "Accept-Profile": "grados-informaticos",
-          },
-          cache: "no-store",
-        }
-      );
-      if (respPub.ok) {
-        const filasPub = await respPub.json();
-        procesarFilas(filasPub);
-      }
-    } catch (_) {}
   }
 
   // 5. Respaldo en localStorage si se introdujo previamente
