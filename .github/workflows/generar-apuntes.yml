@@ -31,6 +31,10 @@ on:
         description: "Clave de NVIDIA NIM (leída de Supabase)"
         required: false
         default: ""
+      nvidia_modelo:
+        description: "Modelo de NVIDIA NIM (ej: google/gemma-3-12b-it)"
+        required: false
+        default: ""
       contenido_latex:
         description: "Código LaTeX ya generado y aprobado desde el frontend"
         required: false
@@ -71,7 +75,7 @@ jobs:
         env:
           PROVEEDOR_IA: "nvidia"
           NVIDIA_API_KEY: ${{ inputs.nvidia_api_key || secrets.NVIDIA_API_KEY || vars.NVIDIA_API_KEY }}
-          NVIDIA_MODELO: ${{ vars.NVIDIA_MODELO || 'meta/llama-3.1-8b-instruct' }}
+          NVIDIA_MODELO: ${{ inputs.nvidia_modelo || vars.NVIDIA_MODELO || 'google/gemma-3-12b-it' }}
           ASIGNATURA: ${{ inputs.asignatura }}
           TEMA: ${{ inputs.tema }}
           TITULO: ${{ inputs.titulo }}

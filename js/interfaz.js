@@ -3048,6 +3048,9 @@ async function obtenerConfiguracionSupabase() {
           if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && r.valor && !config.nvidiaApiKey) {
             config.nvidiaApiKey = r.valor.trim();
           }
+          if ((r.clave === "nvidia_modelo" || r.clave === "NVIDIA_MODELO") && r.valor && !config.nvidiaModelo) {
+            config.nvidiaModelo = r.valor.trim();
+          }
         }
       }
     }
@@ -3059,7 +3062,7 @@ async function obtenerConfiguracionSupabase() {
   if (!config.ghToken || !config.nvidiaApiKey) {
     try {
       const respPub = await fetch(
-        `${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token,gh_repo,gh_repo_general,nvidia_api_key,NVIDIA_API_KEY)`,
+        `${supabaseUrl}/rest/v1/configuracion_publica?select=clave,valor&clave=in.(gh_token_general,gh_token,gh_repo,gh_repo_general,nvidia_api_key,NVIDIA_API_KEY,nvidia_modelo,NVIDIA_MODELO)`,
         {
           headers: {
             apikey: anonKey,
@@ -3082,6 +3085,9 @@ async function obtenerConfiguracionSupabase() {
             }
             if ((r.clave === "nvidia_api_key" || r.clave === "NVIDIA_API_KEY") && r.valor && !config.nvidiaApiKey) {
               config.nvidiaApiKey = r.valor.trim();
+            }
+            if ((r.clave === "nvidia_modelo" || r.clave === "NVIDIA_MODELO") && r.valor && !config.nvidiaModelo) {
+              config.nvidiaModelo = r.valor.trim();
             }
           }
         }
@@ -3203,6 +3209,7 @@ async function ejecutarGeneracionGitHubActions({
           instrucciones: String(instrucciones || ""),
           texto_fuente: textoFinal.slice(0, 60000),
           nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
+          nvidia_modelo: cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it",
         },
       }),
     });

@@ -82,7 +82,7 @@ async function consultarNvidia({ system, user, signal, formatoJson = true }) {
   }
   const url = `${config.nvidiaBaseUrl}/chat/completions`;
   const body = {
-    model: config.nvidiaModel || "meta/llama-3.1-8b-instruct",
+    model: config.nvidiaModel || "google/gemma-3-12b-it",
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },

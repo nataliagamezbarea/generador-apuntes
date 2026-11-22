@@ -10,12 +10,12 @@ async function main() {
   const instrucciones = process.env.INSTRUCCIONES || "";
   const textoFuente = process.env.TEXTO_FUENTE || "";
   const apiKey = process.env.NVIDIA_API_KEY || "";
-  const modelo = process.env.NVIDIA_MODELO || "meta/llama-3.1-8b-instruct";
+  const modeloConfigurado = process.env.NVIDIA_MODELO || "google/gemma-3-12b-it";
 
   console.log(`=== Generando apuntes en GitHub Actions ===`);
   console.log(`Asignatura: ${asignatura}`);
   console.log(`Tema: ${tema} - ${titulo}`);
-  console.log(`Modelo: ${modelo}`);
+  console.log(`Modelo preferido: ${modeloConfigurado}`);
 
   let contenidoLatex = (process.env.CONTENIDO_LATEX || "").trim();
   let errorNvidia = "";
@@ -27,7 +27,7 @@ async function main() {
   if (contenidoLatex) {
     console.log("✓ Usando contenido LaTeX proporcionado directamente.");
   } else if (!apiKey) {
-    throw new Error("Falta el secreto NVIDIA_API_KEY en los Secrets del repositorio de GitHub. No se puede generar con IA.");
+    throw new Error("Falta la clave NVIDIA_API_KEY en configuracion_privada de Supabase. No se puede generar con IA.");
   } else {
     console.log("Conectando con NVIDIA NIM API...");
     const prompt = `Eres un profesor experto en informática y redactor de apuntes universitarios en LaTeX.
@@ -44,35 +44,55 @@ Devuelve un documento LaTeX completo y válido que compile directamente, empezan
 Usa los paquetes babel [spanish], inputenc [utf8], amsmath, hyperref, listings y geometry.
 No incluyas explicaciones antes o después del código LaTeX; entrega solo el código LaTeX entre triples comillas invertidas.`;
 
-    try {
-      const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: modelo,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.3,
-          max_tokens: 4096,
-        }),
-      });
+    const modelosAIntentar = Array.from(
+      new Set([
+        modeloConfigurado,
+        "google/gemma-3-12b-it",
+        "mistralai/mistral-large-4-1t-a52b",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        "z-ai/glm-5.3-flash",
+      ])
+    ).filter(Boolean);
 
-      if (!resp.ok) {
-        const detalle = await resp.text();
-        errorNvidia = `NVIDIA NIM respondió con código HTTP ${resp.status}: ${detalle}`;
-        console.error(`❌ ERROR: ${errorNvidia}`);
-      } else {
+    for (const mod of modelosAIntentar) {
+      console.log(`Intentando llamada con modelo: ${mod}...`);
+      try {
+        const resp = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: mod,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.3,
+            max_tokens: 4096,
+          }),
+        });
+
+        if (!resp.ok) {
+          const detalle = await resp.text();
+          errorNvidia = `NVIDIA NIM (${mod}) HTTP ${resp.status}: ${detalle}`;
+          console.warn(`⚠️ ${errorNvidia}`);
+          // Si el modelo está obsoleto/retirado (410) o no encontrado (404), prueba el siguiente
+          if (resp.status === 410 || resp.status === 404) {
+            continue;
+          }
+          break;
+        }
+
         const data = await resp.json();
         const rawText = data.choices?.[0]?.message?.content || "";
         const match = rawText.match(/```(?:latex|tex)?([\s\S]*?)```/i);
         contenidoLatex = match ? match[1].trim() : rawText.trim();
-        console.log("✓ Apuntes generados con éxito por la IA de NVIDIA NIM.");
+        console.log(`✓ Apuntes generados con éxito por la IA de NVIDIA NIM usando modelo: ${mod}`);
+        errorNvidia = "";
+        break;
+      } catch (e) {
+        errorNvidia = `Error de conexión con NVIDIA NIM (${mod}): ${e.message}`;
+        console.error(`❌ ERROR: ${errorNvidia}`);
       }
-    } catch (e) {
-      errorNvidia = `Error de conexión con NVIDIA NIM: ${e.message}`;
-      console.error(`❌ ERROR: ${errorNvidia}`);
     }
   }
 
@@ -82,7 +102,7 @@ No incluyas explicaciones antes o después del código LaTeX; entrega solo el c�
     const avisoLatex = errorNvidia
       ? `\\begin{tcolorbox}[colback=red!5!white,colframe=red!75!black,title=Aviso sobre la IA de NVIDIA]
 ${errorNvidia.replace(/[_%$#&{}]/g, "\\$&")}
-\\\\ \\small Para resolverlo, añade o renueva el secreto \\textbf{NVIDIA\\_API\\_KEY} en la configuración de GitHub (Settings $\\rightarrow$ Secrets and variables $\\rightarrow$ Actions).
+\\\\ \\small Para resolverlo, revisa la clave \\textbf{nvidia\\_api\\_key} en Supabase (tabla \\texttt{configuracion\\_privada}, esquema \\texttt{grados-informaticos}).
 \\end{tcolorbox}`
       : "";
 
