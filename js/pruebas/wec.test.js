@@ -181,3 +181,28 @@ test('buscarEnInternet devuelve fuentes estructuradas con titulo, url y resumen'
   }
 });
 
+test('normalizarMayusculasTitulo normaliza mayusculas sostenidas y elimina signos de exclamacion', async () => {
+  const { normalizarMayusculasTitulo } = await import("../modulos/apuntes/utilidades-nombres.js");
+  const input = "MECANISMOS DE EJECUCIÓN DE CÓDIGO EN UN NAVEGADOR WEB: La Arquitectura del Navegador !";
+  const output = normalizarMayusculasTitulo(input);
+  assert.equal(output, "Mecanismos de ejecución de código en un navegador web: La Arquitectura del Navegador");
+});
+
+test('deducirTituloRealista extrae titulo de diapositivas', async () => {
+  const { deducirTituloRealista } = await import("../modulos/apuntes/utilidades-nombres.js");
+  const textoSlide = "DESENVOLUPAMENT WEB EN ENTORN CLIENT\n\nTema 1\nSelecció d'arquitectures i d'eines de programació\n\n2n DAW";
+  const deducido = deducirTituloRealista(textoSlide, "1", "Tema 1");
+  assert.equal(deducido, "Selecció d'arquitectures i d'eines de programació");
+});
+
+test('aplicarEstilosLatex limpia CDATA, elimina viñetas huerfanas y corrige . Licencias', async () => {
+  const { aplicarEstilosLatex } = await import("../modulos/apuntes/estilos-latex.js");
+  const input = `\\secciongrande{Test}\n\n• Sin Soporte: Se utiliza la etiqueta <noscript> para informar al usuario si JavaScript no está habilitado. ]]>\n\n. Licencias: Se pueden añadir licencias para gestionar el uso.\n\n• \n\n\\begin{codigo}\n&lt;h1&gt;Bienvenido&lt;/h1&gt;\n\\end{codigo}`;
+  const out = aplicarEstilosLatex(input);
+  assert.ok(!out.includes("]]>"), "No debe contener ]]>");
+  assert.ok(!out.includes(". Licencias:"), "No debe contener . Licencias:");
+  assert.ok(out.includes("**Licencias:**"), "Debe convertir a **Licencias:**");
+  assert.ok(out.includes("<h1>Bienvenido</h1>"), "Debe decodificar &lt;h1&gt;");
+  assert.ok(!out.includes("&lt;h1&gt;"), "No debe contener &lt;h1&gt;");
+});
+

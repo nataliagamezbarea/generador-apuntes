@@ -9,6 +9,10 @@ import {
   detectarApartadosEnTexto,
   dividirTextoPorApartados,
 } from "./modulos/instrucciones/division-material.js";
+import {
+  deducirTituloRealista,
+  normalizarMayusculasTitulo,
+} from "./modulos/apuntes/utilidades-nombres.js";
 
 const formulario = document.querySelector("#formulario-generacion");
 const selectorAsignatura = document.querySelector("#selector-asignatura");
@@ -3329,9 +3333,12 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con este formato:
 }
 
 REGLAS CRÍTICAS:
-1. Todo el contenido DEBE estar 100% en ESPAÑOL ESTÁNDAR. Prohibido incluir palabras en catalán.
-2. Usa las macros oficiales de la biblioteca WEC (\\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}).
-3. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
+1. DESARROLLO EXHAUSTIVO Y COMPLETO: Debes incluir y explicar detalladamente TODOS los conceptos, componentes, clasificaciones, listas, sintaxis, código y preguntas de autoevaluación del material fuente. PROHIBIDO omitir puntos o resumir en exceso.
+2. 100% ESPAÑOL ESTÁNDAR: Todo el contenido DEBE estar en castellano formal y riguroso. Cero catalán o valenciano.
+3. FORMATO DE TÍTULOS: Usa mayúscula inicial y minúsculas (tipo oración), respetando siglas técnicas (HTML, CSS, JS, DOM, XML, W3C, V8, SOP, CORS, XSS). PROHIBIDO mayúsculas sostenidas o signos de exclamación al final.
+4. CÓDIGO LIMPIO: No uses entidades HTML (&lt; o &gt;); escribe siempre el código real dentro de \\begin{codigo}...\\end{codigo}.
+5. MACROS WEC: Usa \\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista con elementos separados por | (**Concepto:** Explicación), \\nota{Para el examen}{...}. No coloques subtítulos dentro de \\lista ni dejes viñetas vacías.
+6. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
 
   const modelosAIntentar = Array.from(
     new Set([
@@ -3357,7 +3364,7 @@ REGLAS CRÍTICAS:
           messages: [
             {
               role: "system",
-              content: "Eres un profesor experto en informática. Redacta apuntes estructurados para LaTeX. Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos (cada uno con subtema, nombre, titulo y latex en español).",
+              content: "Eres un profesor experto en informática. Redacta apuntes estructurados, exhaustivos y rigurosos para LaTeX con las macros oficiales WEC. Todo en español estándar (cero catalán ni inglés). Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos.",
             },
             { role: "user", content: prompt },
           ],
@@ -3467,6 +3474,18 @@ async function ejecutarGeneracionGitHubActions({
 
   let textoFinal = ((textoFuente || "") + (contenidoArchivos ? "\n" + contenidoArchivos : "")).trim();
 
+  // Deducir título realista si el actual es genérico ("Tema 1")
+  if (!titulo || /^tema\s*\d+$/i.test(titulo.trim())) {
+    const deducido = deducirTituloRealista(textoFinal, tema, titulo);
+    if (deducido && !/^tema\s*\d+$/i.test(deducido.trim())) {
+      titulo = deducido;
+      registrarEventoConsola(`✓ Título realista deducido de la fuente: "${titulo}"`);
+      if (temaNuevo && (!temaNuevo.value || /^tema\s*\d+$/i.test(temaNuevo.value.trim()))) {
+        temaNuevo.value = titulo;
+      }
+    }
+  }
+
   // FASE 2: TRADUCCIÓN PREVIA (SI ESTÁ EN CATALÁN/VALENCIANO)
   const esCatalan = detectarCatalanTexto(titulo) || detectarCatalanTexto(instrucciones) || detectarCatalanTexto(textoFinal);
   if (esCatalan) {
@@ -3504,6 +3523,7 @@ async function ejecutarGeneracionGitHubActions({
       false,
     );
   }
+  titulo = normalizarMayusculasTitulo(titulo);
 
   // FASE 3: REDACCIÓN DE APARTADOS CON IA (NVIDIA NIM) BLOQUE A BLOQUE
   let contenidoLatexGenerado = "";

@@ -739,10 +739,16 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
           "{\\color{black}\\tableofcontents}",
           "\\setcounter{tocdepth}{2}\n{\\color{black}\\tableofcontents}",
         );
-    const bodySinCarpeta = bodyConIndice.replace(
+    let bodySinCarpeta = bodyConIndice.replace(
       /\\titulo\{[^{}]*·\s*TEMA\s*\d+\}\{([^{}]*)\}/,
       `\\titulo{TEMA ${theme}}{$1}`,
     );
+    if (title && !/^tema\s*\d+$/i.test(title.trim())) {
+      bodySinCarpeta = bodySinCarpeta.replace(
+        /\\titulo\{TEMA\s*\d+\}\{[^{}]*\}/,
+        `\\titulo{TEMA ${theme}}{${escaparLatex(title)}}`,
+      );
+    }
     const bodyLines = bodySinCarpeta.split("\n");
     const clearPageIndex = bodyLines.findIndex((line) =>
       line.includes("\\clearpage"),

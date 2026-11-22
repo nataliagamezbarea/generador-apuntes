@@ -10,6 +10,8 @@ import {
 import {
   detectarCatalan,
   crearNombreArchivo,
+  deducirTituloRealista,
+  normalizarMayusculasTitulo,
 } from "../js/modulos/apuntes/utilidades-nombres.js";
 import {
   sistemaApuntes,
@@ -99,11 +101,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con este formato:
 }
 
 REGLAS CRÍTICAS:
-1. Todo el contenido DEBE estar 100% en ESPAÑOL ESTÁNDAR. Prohibido incluir palabras en catalán.
-2. Usa las macros oficiales de la biblioteca WEC (\\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}).
-3. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
+1. DESARROLLO EXHAUSTIVO Y COMPLETO: Debes incluir y explicar detalladamente TODOS los conceptos, componentes, clasificaciones, listas, sintaxis, código y preguntas de autoevaluación del material fuente. PROHIBIDO omitir puntos o resumir en exceso.
+2. 100% ESPAÑOL ESTÁNDAR: Todo el contenido DEBE estar en castellano. Cero catalán o valenciano.
+3. FORMATO DE TÍTULOS: Usa mayúscula inicial y minúsculas (tipo oración), respetando siglas técnicas (HTML, CSS, JS, DOM, XML, W3C, V8, SOP, CORS, XSS). PROHIBIDO mayúsculas sostenidas o signos de exclamación al final.
+4. CÓDIGO LIMPIO: No uses entidades HTML (&lt; o &gt;); escribe siempre el código real dentro de \\begin{codigo}...\\end{codigo}.
+5. MACROS WEC: Usa \\secciongrande, \\resumen, \\subtituloA, \\subtituloB, \\definicion, \\rectangulos, \\lista con elementos separados por | (**Concepto:** Explicación), \\nota{Para el examen}{...}. No coloques subtítulos dentro de \\lista ni dejes viñetas vacías.
+6. Devuelve únicamente el JSON, sin texto explicativo adicional.`;
 
-  const sistemaConciso = "Eres un profesor experto en informática. Redacta apuntes docentes estructurados para LaTeX con las macros oficiales WEC (\\secciongrande, \\resumen, \\definicion, \\subtituloA, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}). Todo en español estándar (cero catalán ni inglés). Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos (cada uno con subtema, nombre, titulo y latex en español). Cero rodeos, solo el JSON puro.";
+  const sistemaConciso = "Eres un profesor experto en informática. Redacta apuntes docentes estructurados, rigurosos y exhaustivos para LaTeX con las macros oficiales WEC (\\secciongrande, \\resumen, \\definicion, \\subtituloA, \\lista, \\nota{Para el examen}{...}, \\begin{codigo}...\\end{codigo}). Todo en español estándar (cero catalán ni inglés). Devuelve EXCLUSIVAMENTE un JSON válido con campos titulo_tema, titulo_subtema, conceptos_clave y archivos (cada uno con subtema, nombre, titulo y latex en español). Cero rodeos, solo el JSON puro.";
 
   try {
     const raw = await consultarModeloIA(
@@ -152,7 +157,15 @@ async function main() {
   await fs.mkdir(dirSalidaAsignatura, { recursive: true });
   await fs.mkdir(dirSalidaTema, { recursive: true });
 
-  // 1. TRADUCCIÓN AUTOMÁTICA DEL MATERIAL AL ESPAÑOL ESTÁNDAR
+  // 1. DEDUCCIÓN Y TRADUCCIÓN AUTOMÁTICA DEL MATERIAL AL ESPAÑOL ESTÁNDAR
+  if (!titulo || /^tema\s*\d+$/i.test(titulo.trim())) {
+    const deducido = deducirTituloRealista(textoFuente, tema, titulo);
+    if (deducido && !/^tema\s*\d+$/i.test(deducido.trim())) {
+      titulo = deducido;
+      console.log(`✓ Título realista deducido de la fuente: "${titulo}"`);
+    }
+  }
+
   if (detectarCatalan(titulo)) {
     console.log(`🌐 Traduciendo título "${titulo}" al español...`);
     try {
@@ -165,6 +178,7 @@ async function main() {
       console.warn("Aviso al traducir título:", e.message);
     }
   }
+  titulo = normalizarMayusculasTitulo(titulo);
 
   if (detectarCatalan(instrucciones)) {
     try {
@@ -510,7 +524,13 @@ ${inputArchivos || "\\section{Contenido}\\nSin apartados."}
   try {
     const rutaTemaX = path.join(dirSalidaTema, `tema${tema}.tex`);
     if (await fs.stat(rutaTemaX).catch(() => null)) {
-      console.log(`Intentando compilar ${rutaTemaX} con xelatex...`);
+      console.log(`Intentando compilar ${rutaTemaX} con xelatex (pase 1)...`);
+      execSync(`xelatex -shell-escape -interaction=nonstopmode tema${tema}.tex`, {
+        cwd: dirSalidaTema,
+        stdio: "pipe",
+        timeout: 60000,
+      });
+      console.log(`Compilando con xelatex (pase 2 para generar el índice completo)...`);
       execSync(`xelatex -shell-escape -interaction=nonstopmode tema${tema}.tex`, {
         cwd: dirSalidaTema,
         stdio: "pipe",
@@ -519,7 +539,7 @@ ${inputArchivos || "\\section{Contenido}\\nSin apartados."}
       const pdfTemaX = path.join(dirSalidaTema, `tema${tema}.pdf`);
       if (await fs.stat(pdfTemaX).catch(() => null)) {
         compilado = true;
-        console.log("✓ Compilación con xelatex exitosa.");
+        console.log("✓ Compilación con xelatex exitosa (índice y referencias actualizados).");
       }
     }
   } catch (errXelatex) {

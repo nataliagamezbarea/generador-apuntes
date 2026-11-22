@@ -10,8 +10,9 @@ export const stopWords = new Set(
 );
 
 const ACRONYMS_SET = new Set([
-  "HTML", "CSS", "JS", "DOM", "XML", "URL", "HTTP", "HTTPS", "API", "SQL",
-  "V8", "JIT", "WEC", "DAW", "PHP", "SSL", "TLS", "TCP", "IP", "JSON"
+  "HTML", "CSS", "JS", "DOM", "XML", "URL", "URI", "HTTP", "HTTPS", "API", "SQL",
+  "V8", "JIT", "WEC", "DAW", "PHP", "SSL", "TLS", "TCP", "IP", "JSON",
+  "W3C", "XSS", "CORS", "SOP", "FTP", "XHTML", "DWEC", "DEC"
 ]);
 
 const MINOR_WORDS_SET = new Set([
@@ -176,22 +177,55 @@ export function corregirCatalanAEspanol(texto = "") {
 
 export function normalizarMayusculasTitulo(titulo = "") {
   if (!titulo || typeof titulo !== "string") return titulo;
-  const t = titulo.trim();
-  const soloLetras = t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, "");
-  if (soloLetras.length >= 4 && soloLetras === soloLetras.toUpperCase()) {
-    const palabras = t.toLowerCase().split(/\s+/);
+  let t = titulo
+    .replace(/\s*[:\-–—!¡?¿]+\s*$/g, "")
+    .trim();
+
+  if (t.includes(":")) {
+    return t
+      .split(":")
+      .map((seg) => normalizarSegmentoMayusculas(seg.trim()))
+      .join(": ");
+  }
+  return normalizarSegmentoMayusculas(t);
+}
+
+function normalizarSegmentoMayusculas(seg = "") {
+  if (!seg) return "";
+  const soloLetras = seg.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, "");
+  if (soloLetras.length >= 3 && soloLetras === soloLetras.toUpperCase()) {
+    const palabras = seg.toLowerCase().split(/\s+/);
     return palabras
       .map((p, idx) => {
         const limpia = p.replace(/[^a-záéíóúñ0-9]/gi, "").toUpperCase();
-        if (ACRONYMS_SET.has(limpia)) return p.toUpperCase();
+        if (ACRONYMS_SET.has(limpia)) return limpia;
         if (limpia === "JAVASCRIPT") return "JavaScript";
         if (limpia === "NODEJS" || limpia === "NODE.JS") return "Node.js";
-        if (idx > 0 && MINOR_WORDS_SET.has(p)) return p;
-        return p.charAt(0).toUpperCase() + p.slice(1);
+        if (idx === 0) return p.charAt(0).toUpperCase() + p.slice(1);
+        return p;
       })
       .join(" ");
   }
-  return t;
+  return seg.charAt(0).toUpperCase() + seg.slice(1);
+}
+
+export function deducirTituloRealista(texto = "", tema = "1", tituloActual = "") {
+  if (tituloActual && !/^tema\s*\d+$/i.test(tituloActual.trim())) {
+    return tituloActual.trim();
+  }
+  if (!texto || typeof texto !== "string") return tituloActual || `Tema ${tema}`;
+
+  const m1 = texto.match(/Tema\s*\d+\s*[:·\-–—]\s*([^\n\r]+)/i);
+  if (m1 && m1[1] && m1[1].trim().length > 3) {
+    return m1[1].replace(/\s*·\s*\d+\s*$/, "").trim();
+  }
+
+  const m2 = texto.match(/Tema\s*\d+\s*\r?\n+([A-Za-zÀ-ÿ][^\n\r]+(?:\r?\n[A-Za-zÀ-ÿ][^\n\r]+)?)/i);
+  if (m2 && m2[1] && m2[1].trim().length > 3) {
+    return m2[1].replace(/\r?\n+/g, " ").replace(/\s*·\s*\d+\s*$/, "").trim();
+  }
+
+  return tituloActual || `Tema ${tema}`;
 }
 
 export function detectarCatalan(texto = "") {

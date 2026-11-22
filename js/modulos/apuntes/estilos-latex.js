@@ -108,23 +108,50 @@ export function limpiarLatex(value) {
 
 export function convertirMarkdownALatexWec(contenido = "") {
   if (!contenido || typeof contenido !== "string") return "";
-  let texto = contenido.trim();
+  let texto = contenido
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\/\/--><!\]\]>/g, "")
+    .replace(/<!\[CDATA\[\/\/><!--/g, "")
+    .replace(/<!\[CDATA\[/g, "")
+    .replace(/\]\]>/g, "")
+    .replace(/<!--\/\/-->/g, "")
+    .trim();
 
   const verbatimBlocks = [];
   texto = texto.replace(/```([a-zA-Z0-9_-]*)\r?\n([\s\S]*?)```/g, (_match, lang, code) => {
     const l = (lang || "").toLowerCase();
     const token = `%%VERBATIM_BLOCK_${verbatimBlocks.length}%%`;
+    const cleanCode = code
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\]\]>/g, "")
+      .trimEnd();
     if (["bash", "sh", "shell", "terminal", "consola", "console"].includes(l)) {
-      verbatimBlocks.push(`\\begin{consola}\n${code.trimEnd()}\n\\end{consola}`);
+      verbatimBlocks.push(`\\begin{consola}\n${cleanCode}\n\\end{consola}`);
     } else {
-      verbatimBlocks.push(`\\begin{codigo}\n${code.trimEnd()}\n\\end{codigo}`);
+      verbatimBlocks.push(`\\begin{codigo}\n${cleanCode}\n\\end{codigo}`);
     }
     return token;
   });
 
-  texto = texto.replace(/\\begin\{(?:codigo|consola)\}(?:\[[^\]]*\])?[\s\S]*?\\end\{(?:codigo|consola)\}/gi, (match) => {
+  texto = texto.replace(/\\begin\{(?:codigo|consola)\}(?:\[[^\]]*\])?([\s\S]*?)\\end\{(?:codigo|consola)\}/gi, (_match, code) => {
     const token = `%%VERBATIM_BLOCK_${verbatimBlocks.length}%%`;
-    verbatimBlocks.push(match.replace(/\\begin\{codigo\}\[[^\]]*\]/gi, "\\begin{codigo}"));
+    const cleanCode = code
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\]\]>/g, "")
+      .trimEnd();
+    verbatimBlocks.push(`\\begin{codigo}\n${cleanCode}\n\\end{codigo}`);
     return token;
   });
 
@@ -482,6 +509,18 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/\\secciongrande\{\[object\s+Object\]\}\s*/gi, "")
     .replace(/\[object\s+Object\]/gi, "");
 
+  resultado = resultado
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\/\/--><!\]\]>/g, "")
+    .replace(/<!\[CDATA\[\/\/><!--/g, "")
+    .replace(/<!\[CDATA\[/g, "")
+    .replace(/\]\]>/g, "")
+    .replace(/<!--\/\/-->/g, "");
+
   while (/\\lista\{[^{}]*\\lista\{/.test(resultado)) {
     resultado = resultado.replace(/\\lista\{([^{}]*)\\lista\{([^{}]*)\}([^{}]*)\}/gs, (_m, antes, dentro, despues) => {
       const parteAntes = antes.trim();
@@ -490,6 +529,36 @@ export function aplicarEstilosLatex(value, subject = "") {
       return `\\lista{\n  ${parteAntes ? parteAntes + " |\n  " : ""}${parteDentro}${parteDespues ? " |\n  " + parteDespues : ""}\n}`;
     });
   }
+
+  resultado = resultado.replace(/\\lista\{([^{}]*)\}/gs, (_m, contenidoLista) => {
+    const subtitulos = [];
+    let limpio = contenidoLista.replace(/\\(subtitulo[AB]?|seccion(?:grande)?)\{([^{}]*)\}/g, (_sm, smacro, stit) => {
+      subtitulos.push(`\\${smacro}{${stit}}`);
+      return "";
+    });
+
+    let items = limpio
+      .split(/\s*\|\s*|\n{2,}/)
+      .map((it) => it.trim())
+      .filter((it) => it.length > 0 && !/^[-*•·.\s]+$/.test(it));
+
+    items = items.map((it) => {
+      let s = it.replace(/^[.\-•*·]\s*/, "");
+      if (/^[A-Za-zÁÉÍÓÚáéíóúñÑ][^:]{1,40}:/.test(s) && !s.startsWith("**") && !s.startsWith("\\textbf")) {
+        s = s.replace(/^([^:]+):/, "**$1:**");
+      }
+      return s;
+    });
+
+    const listaStr = items.length ? `\\lista{\n  ${items.join(" |\n  ")}\n}` : "";
+    return (subtitulos.length ? subtitulos.join("\n\n") + "\n\n" : "") + listaStr;
+  });
+
+  // Eliminar viñetas huérfanas y corregir items con punto inicial (. Licencias:)
+  resultado = resultado
+    .replace(/(?:^|\n)\s*[•·\-*]\s*(?=\n|$)/g, "\n")
+    .replace(/(^|\n)\s*[.·•]\s*([A-Za-zÁÉÍÓÚáéíóúñÑ][^:\n]{1,40}:)/g, "$1**$2**")
+    .replace(/(^|\s)\]\]+(?=\s|[.,;:]|$)/g, "$1");
 
   resultado = resultado.replace(/(^|[\n|])\s*([A-Za-z0-9ÁÉÍÓÚáéíóúñÑ][^:\n|]{1,60}):\*\*/g, "$1**$2:**");
 
@@ -626,6 +695,7 @@ export function aplicarEstilosLatex(value, subject = "") {
           .replace(/<(\/?[a-zA-Z0-9_-]+(?: [^>]*)?)>/g, "\\cmd{<$1>}")
           .replace(/</g, "\\textless ")
           .replace(/>/g, "\\textgreater ")
+          .replace(/\s*[:\-–—!¡?¿]+\s*$/g, "")
           .trim();
         clean = normalizarMayusculasTitulo(clean);
         if (clean.length > 0) {
@@ -1255,15 +1325,46 @@ export function convertirCodigoWec(value) {
     .replace(
       /```([a-zA-Z0-9_-]*)\r?\n([\s\S]*?)```/g,
       (_match, lang, code) => {
+        const limpia = code
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\]\]>/g, "")
+          .trimEnd();
         const etiqueta = lang ? `[${lang}]` : "";
-        return `\\begin{codigo}${etiqueta}\n${code.trimEnd()}\n\\end{codigo}`;
+        return `\\begin{codigo}${etiqueta}\n${limpia}\n\\end{codigo}`;
       },
     )
     .replace(
       /\\begin\{lstlisting\}(?:\[(?:language=)?([a-zA-Z0-9_-]+)\])?([\s\S]*?)\\end\{lstlisting\}/gi,
       (_match, lang, code) => {
+        const limpia = code
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\]\]>/g, "")
+          .trimEnd();
         const etiqueta = lang ? `[${lang}]` : "";
-        return `\\begin{codigo}${etiqueta}\n${code.trimEnd()}\n\\end{codigo}`;
+        return `\\begin{codigo}${etiqueta}\n${limpia}\n\\end{codigo}`;
+      },
+    )
+    .replace(
+      /\\begin\{codigo\}(?:\[([^\]]*)\])?([\s\S]*?)\\end\{codigo\}/gi,
+      (_match, lang, code) => {
+        const limpia = code
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\]\]>/g, "")
+          .trimEnd();
+        const etiqueta = lang ? `[${lang}]` : "";
+        return `\\begin{codigo}${etiqueta}\n${limpia}\n\\end{codigo}`;
       },
     )
     .replace(

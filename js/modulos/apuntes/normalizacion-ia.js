@@ -93,7 +93,18 @@ export function normalizarResultadoIA(payload, {
       if (index === 0) contenidoBruto = payload.resumen;
     }
 
-    const textoVerificacion = String(contenidoBruto ?? "").trim();
+    let textoVerificacion = String(contenidoBruto ?? "")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\/\/--><!\]\]>/g, "")
+      .replace(/<!\[CDATA\[\/\/><!--/g, "")
+      .replace(/<!\[CDATA\[/g, "")
+      .replace(/\]\]>/g, "")
+      .replace(/<!--\/\/-->/g, "")
+      .trim();
     if (!textoVerificacion || /^(?:apartado|seccion)\s*\d+$/i.test(textoVerificacion)) {
       return [];
     }
