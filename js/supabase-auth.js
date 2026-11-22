@@ -253,7 +253,21 @@ const SupabaseAuth = (() => {
       const hasTokenInUrl = window.location.hash.includes("access_token") || window.location.search.includes("code=");
 
       if (!session && hasTokenInUrl) {
-        if (window.location.search.includes("code=")) {
+        // Con flowType:'implicit', el token viene en el hash — llamar setSession directamente
+        if (window.location.hash.includes("access_token")) {
+          try {
+            const hp = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+            const accessToken = hp.get("access_token");
+            const refreshToken = hp.get("refresh_token") || "";
+            if (accessToken) {
+              const res = await c.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+              if (res.data?.session) session = res.data.session;
+            }
+          } catch (eSet) {
+            console.warn("setSession desde hash falló:", eSet);
+          }
+        }
+        if (!session && window.location.search.includes("code=")) {
           const code = urlParams.get("code");
           if (code && typeof c.auth.exchangeCodeForSession === "function") {
             try {
@@ -262,14 +276,12 @@ const SupabaseAuth = (() => {
             } catch (_) {}
           }
         }
+        // Polling como fallback (máx 2s)
         if (!session) {
-          for (let i = 0; i < 15; i++) {
+          for (let i = 0; i < 20; i++) {
             await new Promise((r) => setTimeout(r, 100));
             const res = await c.auth.getSession();
-            if (res.data?.session) {
-              session = res.data.session;
-              break;
-            }
+            if (res.data?.session) { session = res.data.session; break; }
           }
         }
       }
