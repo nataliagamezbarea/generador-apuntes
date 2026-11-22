@@ -2,6 +2,7 @@ import {
   crearNombreArchivo,
   deducirSlugConceptual,
   esTituloDePlantilla,
+  esTextoDeRazonamiento,
   normalizarTexto,
   obtenerListaTexto,
   quitarAsignaturaDelTitulo,
@@ -41,7 +42,7 @@ export function normalizarResultadoIA(payload, {
   rawBlocks = rawBlocks.filter((b) => b && typeof b === "object");
   if (!rawBlocks.length) {
     const fallbackLatex = payload.latex ?? payload.markdown ?? payload.contenido ?? payload.resumen ?? "";
-    if (fallbackLatex && fallbackLatex.length > 30) {
+    if (fallbackLatex && fallbackLatex.length > 30 && !esTextoDeRazonamiento(fallbackLatex)) {
       rawBlocks = [
         {
           titulo: payload.titulo_subtema ?? payload.titulo_tema ?? "Apuntes generados",
@@ -105,7 +106,7 @@ export function normalizarResultadoIA(payload, {
       .replace(/\]\]>/g, "")
       .replace(/<!--\/\/-->/g, "")
       .trim();
-    if (!textoVerificacion || /^(?:apartado|seccion)\s*\d+$/i.test(textoVerificacion)) {
+    if (!textoVerificacion || esTextoDeRazonamiento(textoVerificacion) || /^(?:apartado|seccion)\s*\d+$/i.test(textoVerificacion)) {
       return [];
     }
     if (textoVerificacion.length < 60 && !/\\[a-zA-Z]+/.test(textoVerificacion)) {

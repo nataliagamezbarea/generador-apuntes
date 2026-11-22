@@ -1,7 +1,7 @@
 import { Agent } from "undici";
 import translateLib from "translate";
 import { config } from "./configuracion.js";
-import { detectarCatalan, normalizarMayusculasTitulo } from "./apuntes.js";
+import { detectarCatalan, normalizarMayusculasTitulo, esTextoDeRazonamiento } from "./apuntes.js";
 
 export async function traducirTextoGoogle(texto = "") {
   if (!texto || typeof texto !== "string" || !texto.trim()) return texto;
@@ -130,8 +130,8 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
       }
       const json = await res.json();
       let content = (json.choices?.[0]?.message?.content || "").trim();
-      if (!content || /^let me\b|^i need to\b|^thinking\b/i.test(content)) {
-        console.warn(`⚠️ Modelo ${mod} devolvió contenido vacío o razonamiento en inglés, probando siguiente modelo...`);
+      if (!content || esTextoDeRazonamiento(content) || /^let me\b|^i need to\b|^thinking\b/i.test(content)) {
+        console.warn(`⚠️ Modelo ${mod} devolvió razonamiento/pensamiento en inglés, probando siguiente modelo...`);
         continue;
       }
       return {

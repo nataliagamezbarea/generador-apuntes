@@ -206,3 +206,15 @@ test('aplicarEstilosLatex limpia CDATA, elimina viñetas huerfanas y corrige . L
   assert.ok(!out.includes("&lt;h1&gt;"), "No debe contener &lt;h1&gt;");
 });
 
+test('esTextoDeRazonamiento detecta y rechaza razonamiento interno o thinking process de la IA', async () => {
+  const { esTextoDeRazonamiento } = await import("../modulos/apuntes/utilidades-nombres.js");
+  const thinking1 = "Here's a thinking process:\n1 Analyze User Input:\nSubject/Asignatura: \"JK\"";
+  const thinking2 = "Let me analyze this task carefully. I need to: 1 Read and understand the PDF";
+  const thinking3 = "<think>The user wants university notes</think>";
+  const validNotes = "\\secciongrande{Modelos de ejecución}\\n\\resumen{Texto didáctico válido}";
+  assert.equal(esTextoDeRazonamiento(thinking1), true);
+  assert.equal(esTextoDeRazonamiento(thinking2), true);
+  assert.equal(esTextoDeRazonamiento(thinking3), true);
+  assert.equal(esTextoDeRazonamiento(validNotes), false);
+});
+

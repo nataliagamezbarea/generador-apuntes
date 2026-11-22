@@ -12,6 +12,7 @@ import {
 import {
   deducirTituloRealista,
   normalizarMayusculasTitulo,
+  esTextoDeRazonamiento,
 } from "./modulos/apuntes/utilidades-nombres.js";
 
 const formulario = document.querySelector("#formulario-generacion");
@@ -3267,6 +3268,20 @@ async function traducirTextoLargoBrowser(texto = "") {
 
 // PDF Extractor para navegador usando PDF.js
 async function extraerTextoPdfBrowser(file) {
+  // 1. Intentar extracción rápida con el backend local (pdftotext nativo de alta precisión)
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const resp = await fetch("/api/extraer-pdf", { method: "POST", body: fd });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.texto && data.texto.trim()) {
+        return data.texto.trim();
+      }
+    }
+  } catch (_) {}
+
+  // 2. Fallback con PDF.js en el navegador
   if (!window.pdfjsLib) {
     for (let w = 0; w < 10 && !window.pdfjsLib; w++) {
       await new Promise((r) => setTimeout(r, 200));
@@ -3377,7 +3392,7 @@ REGLAS CRÍTICAS:
 
       const data = await resp.json();
       const rawContent = (data.choices?.[0]?.message?.content || "").trim();
-      if (!rawContent || /^let me\b|^i need to\b|^thinking\b|^here's a thinking\b/i.test(rawContent)) {
+      if (!rawContent || esTextoDeRazonamiento(rawContent) || /^let me\b|^i need to\b|^thinking\b/i.test(rawContent)) {
         continue;
       }
       const matchJ = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);

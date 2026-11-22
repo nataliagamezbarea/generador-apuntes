@@ -228,6 +228,26 @@ export function deducirTituloRealista(texto = "", tema = "1", tituloActual = "")
   return tituloActual || `Tema ${tema}`;
 }
 
+export function esTextoDeRazonamiento(texto = "") {
+  if (!texto || typeof texto !== "string") return false;
+  const t = texto.trim();
+  return (
+    /^here['’]s\s+a\s+thinking\s+process/i.test(t) ||
+    /^<think>/i.test(t) ||
+    /\bhere['’]s\s+a\s+thinking\s+process\b/i.test(t) ||
+    /\banalyze\s+user\s+input\b/i.test(t) ||
+    /\bsince\s+i\s+cannot\s+(?:actually\s+)?read\b/i.test(t) ||
+    /\bi\s+need\s+to\s+generate\s+a\s+json\s+structure\b/i.test(t) ||
+    /\blet['’]s\s+re-read\s+the\s+json\s+format\b/i.test(t) ||
+    /\blooking\s+at\s+the\s+output\s+format\b/i.test(t) ||
+    /\bi\s+notice\s+that\s+titulo_subtema\b/i.test(t) ||
+    /\bi'll\s+assume\s+the\s+content\s+is\s+about\b/i.test(t) ||
+    /\bfirst,\s+i\s+need\s+to\s+examine\s+the\s+pdf\b/i.test(t) ||
+    /\blet\s+me\s+think\s+about\s+what\b/i.test(t) ||
+    /\blet\s+me\s+analyze\s+this\s+task\b/i.test(t)
+  );
+}
+
 export function detectarCatalan(texto = "") {
   if (!texto || typeof texto !== "string" || !texto.trim()) return false;
   const patron = /(?:^|[^a-zà-ÿ])(?:client-servidor|client(?:\s+servidor)?|l['’](?:origen|abast|execuci[oó]|usuari|entorn)|d['’](?:execuci[oó]|un|una|aquest|aquesta)|eines|llenguatges|execuci[oó]|entorn|entorns|desenvolupament|cercador|fitxers?|dades|sol[·.]licituds?|aquest|aquesta|aquests|aquestes|tamb[eé]|aix[oò]|dels|deles|amb|sense|per[oò]|s[oó]n|mitjan[cç]ant|interf[ií]cie|renderitzat|comunicacions|navigador)(?![a-zà-ÿ])/iu;

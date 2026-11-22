@@ -12,6 +12,7 @@ import {
   crearNombreArchivo,
   deducirTituloRealista,
   normalizarMayusculasTitulo,
+  esTextoDeRazonamiento,
 } from "../js/modulos/apuntes/utilidades-nombres.js";
 import {
   sistemaApuntes,
@@ -367,7 +368,7 @@ REGLAS CRÍTICAS DE CALIDAD:
         const data = await resp.json();
         const rawContent = (data.choices?.[0]?.message?.content || "").trim();
 
-        if (!rawContent || /^let me\b|^i need to\b|^thinking\b/i.test(rawContent)) {
+        if (!rawContent || esTextoDeRazonamiento(rawContent) || /^let me\b|^i need to\b|^thinking\b/i.test(rawContent)) {
           console.warn(`⚠️ Respuesta no utilizable o razonamiento en inglés de ${mod}, probando siguiente modelo...`);
           continue;
         }

@@ -408,8 +408,7 @@ export async function asegurarEstructuraAsignatura(subjectDir) {
   const preambuloWec = String.raw`% =====================================================================
 %  PREAMBULO.TEX - estilos completos WEC de bibliotecas_latex
 % =====================================================================
-\spanishdeactivate{<>}
-\AtBeginDocument{\spanishdeactivate{<>}}
+\AtBeginDocument{\ifcsname spanishdeactivate\endcsname\spanishdeactivate{<>}\fi}
 \newcommand{\subt}[1]{\par\Needspace{4\baselineskip}\vspace{2mm}\noindent{\bfseries\color{primary}#1}\par\vspace{1mm}}
 \newcommand{\cmd}[1]{\texttt{\detokenize{#1}}}
 \definecolor{codeForeground}{HTML}{243247}
@@ -498,6 +497,12 @@ export async function asegurarEstilosGenerador(themeDir) {
 \providecolor{codeBackground}{HTML}{F1F7FF}
 \providecolor{codeKeyword}{HTML}{2457A6}
 \providecolor{consoleBackground}{HTML}{F1F4F8}
+\providecolor{primary}{HTML}{0B4F6C}
+\providecolor{coloractual}{HTML}{0B4F6C}
+\providecommand{\subtituloreal}{primary}
+\providecommand{\subtitulocolor}{primary}
+\providecommand{\pickcolor}[1]{}
+
 \newcommand{\actualizarColoresCodigo}{%
   \colorlet{codeBackground}{\coloractual!7!white}%
   \colorlet{codeKeyword}{\coloractual!80!black}%
@@ -507,40 +512,33 @@ export async function asegurarEstilosGenerador(themeDir) {
 \AddToHook{cmd/secciongrande/after}{\actualizarColoresCodigo}
 
 % --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF Y CONTROL ANTI-HUÉRFANAS ---
-% Se envuelven \secciongrande, \seccion, \subtituloA y \subtituloB usando
-% \RenewDocumentCommand para mantener compatibilidad total con hyperref,
-% evitar que queden solos al final de página (\Needspace) y garantizar
-% que el contenido empiece en la misma página que el título (\nopagebreak).
 \makeatletter
-\let\orig@secciongrande\secciongrande
-\RenewDocumentCommand{\secciongrande}{o m}{%
+\DeclareDocumentCommand{\secciongrande}{o m}{%
   \par\Needspace{8\baselineskip}%
   \phantomsection
-  \IfValueTF{#1}{\orig@secciongrande[#1]{#2}}{\orig@secciongrande[]{#2}}%
+  \addcontentsline{toc}{section}{#2}%
+  \vspace{4mm}\noindent{\fontsize{15}{18}\selectfont\bfseries\color{primary}#2}\par
   \nopagebreak\vspace{2mm}\nopagebreak
 }
-\let\orig@seccion\seccion
-\RenewDocumentCommand{\seccion}{o m}{%
+\DeclareDocumentCommand{\seccion}{o m}{%
   \par\Needspace{6\baselineskip}%
   \phantomsection
-  \IfValueTF{#1}{\orig@seccion[#1]{#2}}{\orig@seccion[]{#2}}%
+  \addcontentsline{toc}{section}{#2}%
+  \vspace{3mm}\noindent{\fontsize{13}{16}\selectfont\bfseries\color{primary}#2}\par
   \nopagebreak\vspace{2mm}\nopagebreak
 }
-\RenewDocumentCommand{\subtituloA}{m}{%
-  \par\Needspace{6\baselineskip}%
-  \vspace{4mm}%
-  \noindent
-  \edef\subtituloreal{\subtitulocolor}%
-  \raisebox{0.6ex}{\tikz\fill[\subtituloreal] (0,0) circle (2.2pt);}%
-  \hspace{3mm}{\headingfontxb\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
-  \nopagebreak\vspace{2mm}\nopagebreak
-}
-\RenewDocumentCommand{\subtituloB}{m}{%
+\DeclareDocumentCommand{\subtituloA}{m}{%
   \par\Needspace{5\baselineskip}%
-  \vspace{4mm}%
-  \noindent
-  \edef\subtituloreal{\subtitulocolor}%
-  {\headingfont\fontsize{13.5}{16.5}\selectfont\color{\subtituloreal}#1}\par
+  \phantomsection
+  \addcontentsline{toc}{subsection}{#1}%
+  \vspace{3mm}\noindent{\fontsize{12}{15}\selectfont\bfseries\color{primary}#1}\par
+  \nopagebreak\vspace{2mm}\nopagebreak
+}
+\DeclareDocumentCommand{\subtituloB}{m}{%
+  \par\Needspace{4\baselineskip}%
+  \phantomsection
+  \addcontentsline{toc}{subsubsection}{#1}%
+  \vspace{2mm}\noindent{\fontsize{11}{14}\selectfont\bfseries\color{primary}#1}\par
   \nopagebreak\vspace{2mm}\nopagebreak
 }
 \makeatother
@@ -574,7 +572,20 @@ export async function asegurarEstilosGenerador(themeDir) {
 \providecommand{\nota}[2]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{#1:}\ #2}}\par\vspace{2mm}}
 \providecommand{\alertas}[1]{\par\vspace{2mm}\noindent\fbox{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{\textbf{Alerta:}\ #1}}\par\vspace{2mm}}
 \providecommand{\rectangulos}[1]{#1}
-\providecommand{\lista}[1]{\begin{itemize}#1\end{itemize}}
+\ExplSyntaxOn
+\RenewDocumentCommand{\lista}{m}{%
+  \begin{itemize}%
+    \seq_set_split:Nnn \l_tmpa_seq { | } { #1 }%
+    \seq_map_inline:Nn \l_tmpa_seq {%
+      \tl_set:Nn \l_tmpa_tl { ##1 }%
+      \tl_trim_spaces:N \l_tmpa_tl
+      \tl_if_empty:NF \l_tmpa_tl {%
+        \item \l_tmpa_tl
+      }%
+    }%
+  \end{itemize}%
+}
+\ExplSyntaxOff
 \providecommand{\pasos}[1]{\begin{enumerate}#1\end{enumerate}}
 \providecommand{\tabla}[2][]{#2}
 \providecommand{\inputcarpeta}[1]{%
@@ -589,11 +600,9 @@ export async function asegurarEstilosGenerador(themeDir) {
       anterior.startsWith(
         "% Generador de apuntes: integración con la biblioteca oficial WEC.\n",
       ) &&
-      anterior.includes("RenewDocumentCommand{\\secciongrande}") &&
-      anterior.includes("RenewDocumentCommand{\\seccion}") &&
-      anterior.includes("\\orig@secciongrande[]{#2}") &&
-      anterior.includes("AddToHook{cmd/secciongrande/after}") &&
-      !anterior.includes("\\addcontentsline{toc}{section}{#2}");
+      anterior.includes("DeclareDocumentCommand{\\secciongrande}") &&
+      anterior.includes("DeclareDocumentCommand{\\seccion}") &&
+      anterior.includes("\\addcontentsline{toc}{section}{#2}");
     if (estiloWecActualConIndice) return;
   }
   await writeFile(file, estilos, "utf8");
@@ -635,7 +644,16 @@ export async function asegurarCargaLatex(directory) {
           \def\bibliotecasDir{/data/bibliotecas_latex}%
           \input{/data/bibliotecas_latex/cabecera}%
         }{%
-          \typeout{Aviso: bibliotecas_latex no encontrada, usando macros autonomas}%
+          \usepackage[spanish]{babel}
+          \usepackage{xcolor}
+          \usepackage{tikz}
+          \usepackage{needspace}
+          \usepackage{amsmath,amssymb}
+          \usepackage{listings}
+          \usepackage{array}
+          \usepackage[most]{tcolorbox}
+          \tcbuselibrary{listings,skins,breakable}
+          \typeout{Aviso: bibliotecas_latex no encontrada, usando macros autonomas WEC}%
         }%
       }%
     }%
@@ -643,8 +661,45 @@ export async function asegurarCargaLatex(directory) {
 }
 `;
     await writeFile(loadPath, content, "utf8");
-  } else if (content.includes(legacyPath)) {
-    await writeFile(loadPath, content.replace(legacyPath, replacement), "utf8");
+  } else if (!content.includes("\\usepackage[spanish]{babel}") || content.includes(legacyPath)) {
+    const updatedContent = String.raw`\def\apuntesrutalib{${libraryPath}}
+\IfFileExists{\apuntesrutalib/cabecera.tex}{%
+  \def\bibliotecasDir{\apuntesrutalib}%
+  \input{\apuntesrutalib/cabecera}%
+}{%
+  \IfFileExists{../../../bibliotecas_latex/cabecera.tex}{%
+    \def\bibliotecasDir{../../../bibliotecas_latex}%
+    \input{../../../bibliotecas_latex/cabecera}%
+  }{%
+    \IfFileExists{../../bibliotecas_latex/cabecera.tex}{%
+      \def\bibliotecasDir{../../bibliotecas_latex}%
+      \input{../../bibliotecas_latex/cabecera}%
+    }{%
+      \IfFileExists{./bibliotecas_latex/cabecera.tex}{%
+        \def\bibliotecasDir{./bibliotecas_latex}%
+        \input{./bibliotecas_latex/cabecera}%
+      }{%
+        \IfFileExists{/data/bibliotecas_latex/cabecera.tex}{%
+          \def\bibliotecasDir{/data/bibliotecas_latex}%
+          \input{/data/bibliotecas_latex/cabecera}%
+        }{%
+          \usepackage[spanish]{babel}
+          \usepackage{xcolor}
+          \usepackage{tikz}
+          \usepackage{needspace}
+          \usepackage{amsmath,amssymb}
+          \usepackage{listings}
+          \usepackage{array}
+          \usepackage[most]{tcolorbox}
+          \tcbuselibrary{listings,skins,breakable}
+          \typeout{Aviso: bibliotecas_latex no encontrada, usando macros autonomas WEC}%
+        }%
+      }%
+    }%
+  }%
+}
+`;
+    await writeFile(loadPath, updatedContent, "utf8");
   }
 }
 
