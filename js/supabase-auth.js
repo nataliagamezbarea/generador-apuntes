@@ -8,11 +8,11 @@
 window.SUPABASE_URL = window.SUPABASE_URL
   || (window.APP_CONFIG && window.APP_CONFIG.supabaseUrl)
   || (typeof localStorage !== "undefined" && localStorage.getItem("supabase_url"))
-  || "";
+  || "https://lztatgnlplpduiatmlrv.supabase.co";
 window.SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY
   || (window.APP_CONFIG && window.APP_CONFIG.supabaseAnonKey)
   || (typeof localStorage !== "undefined" && localStorage.getItem("supabase_anon_key"))
-  || "";
+  || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
 
 const SupabaseAuth = (() => {
   let client = null;
@@ -23,6 +23,7 @@ const SupabaseAuth = (() => {
     if (typeof window.supabase !== "undefined" && typeof window.supabase.createClient === "function") {
       try {
         client = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {
+          db: { schema: "grados-informaticos" },
           auth: {
             flowType: "pkce",
             persistSession: true,

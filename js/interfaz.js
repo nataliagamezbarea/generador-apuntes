@@ -1421,6 +1421,10 @@ function actualizarResumenFuentes() {
 }
 
 async function cargarUltimaGeneracion() {
+  if (esEntornoEstatico) {
+    if (ultimaGeneracion) ultimaGeneracion.hidden = true;
+    return;
+  }
   const asignatura =
     selectorAsignatura.value === "__new__"
       ? asignaturaNueva.value.trim()
@@ -2043,6 +2047,7 @@ async function consultarProgreso(
   asignaturaTrabajo = asignaturaGeneracionActiva,
   monitorId = monitorGeneracionActivo,
 ) {
+  if (esEntornoEstatico) return;
   const consultaActual = ++ultimaConsultaProgreso;
   try {
     const respuesta = await fetch(`/api/progress/${encodeURIComponent(id)}`);
@@ -2217,9 +2222,12 @@ selectorAsignatura.addEventListener("change", () => {
   }
   cambioAsignaturaPendiente = (async () => {
     try {
-      const resp = await fetch("/api/subjects");
-      if (resp.ok) {
-        asignaturas = (await resp.json()).asignaturas ?? asignaturas;
+      if (!esEntornoEstatico) {
+        const resp = await fetch("/api/subjects");
+        const datos = await parseJsonSeguro(resp);
+        if (datos && Array.isArray(datos.asignaturas)) {
+          asignaturas = datos.asignaturas;
+        }
       }
     } catch {}
     actualizarCamposAsignatura();
@@ -3012,11 +3020,52 @@ async function ejecutarGeneracionGitHubActions({
     try {
       const c = window.SupabaseAuth.getClient();
       if (c) {
-        const { data } = await c.schema("grados-informaticos").from("configuracion_privada").select("clave, valor");
-        if (Array.isArray(data)) {
-          const rowToken = data.find((r) => r.clave === "gh_token" || r.clave === "gh_token_general");
-          if (rowToken?.valor) {
-            token = rowToken.valor;
+        // 1. Si el usuario inició sesión con GitHub OAuth, el provider_token es el token de GitHub
+        const sRes = await c.auth.getSession();
+        const session = sRes?.data?.session;
+        if (session?.provider_token) {
+          token = session.provider_token;
+          localStorage.setItem("cache_gh_token", token);
+        }
+
+        // 2. Si no hay provider_token, consultar en configuracion_privada (como en acceso-grados-informaticos)
+        if (!token) {
+          const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
+          const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+          const accessToken = session?.access_token || anonKey;
+
+          // Intentar con supabase-js
+          try {
+            const { data } = await c.from("configuracion_privada").select("clave, valor");
+            if (Array.isArray(data)) {
+              const row = data.find((r) => r.clave === "gh_token" || r.clave === "gh_token_general");
+              if (row?.valor) token = row.valor;
+            }
+          } catch (_) {}
+
+          // Fallback REST idéntico a acceso-grados-informaticos / apiestatica.js
+          if (!token && supabaseUrl) {
+            try {
+              const u = `${supabaseUrl}/rest/v1/configuracion_privada?select=clave,valor&clave=in.(gh_token,gh_token_general)`;
+              const r = await fetch(u, {
+                headers: {
+                  apikey: anonKey,
+                  Authorization: `Bearer ${accessToken}`,
+                  Accept: "application/json",
+                  "Accept-Profile": "grados-informaticos",
+                },
+              });
+              if (r.ok) {
+                const filas = await r.json();
+                if (Array.isArray(filas)) {
+                  const row = filas.find((x) => x.clave === "gh_token" || x.clave === "gh_token_general");
+                  if (row?.valor) token = row.valor;
+                }
+              }
+            } catch (_) {}
+          }
+
+          if (token) {
             localStorage.setItem("cache_gh_token", token);
           }
         }

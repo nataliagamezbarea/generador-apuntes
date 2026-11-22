@@ -18,8 +18,12 @@ async function main() {
   console.log(`Modelo: ${modelo}`);
 
   let contenidoLatex = "";
+  let errorNvidia = "";
 
-  if (apiKey) {
+  if (!apiKey) {
+    errorNvidia = "No se configuró NVIDIA_API_KEY en los Secrets del repositorio de GitHub (Settings > Secrets and variables > Actions > New repository secret con nombre NVIDIA_API_KEY).";
+    console.warn(`⚠️ AVISO: ${errorNvidia}`);
+  } else {
     console.log("Conectando con NVIDIA NIM API...");
     const prompt = `Eres un profesor experto en informática y redactor de apuntes universitarios en LaTeX.
 Genera unos apuntes completos, rigurosos y perfectamente estructurados en formato LaTeX para la asignatura "${asignatura}", Tema ${tema}: "${titulo}".
@@ -51,23 +55,52 @@ No incluyas explicaciones antes o después del código LaTeX; entrega solo el c�
       });
 
       if (!resp.ok) {
-        throw new Error(`Error NVIDIA NIM: ${resp.status} ${await resp.text()}`);
+        const detalle = await resp.text();
+        errorNvidia = `NVIDIA NIM respondió con código HTTP ${resp.status}: ${detalle}`;
+        console.error(`❌ ERROR: ${errorNvidia}`);
+      } else {
+        const data = await resp.json();
+        const rawText = data.choices?.[0]?.message?.content || "";
+        const match = rawText.match(/```(?:latex|tex)?([\s\S]*?)```/i);
+        contenidoLatex = match ? match[1].trim() : rawText.trim();
+        console.log("✓ Apuntes generados con éxito por la IA de NVIDIA NIM.");
       }
-
-      const data = await resp.json();
-      const rawText = data.choices?.[0]?.message?.content || "";
-      const match = rawText.match(/```(?:latex|tex)?([\s\S]*?)```/i);
-      contenidoLatex = match ? match[1].trim() : rawText.trim();
     } catch (e) {
-      console.warn("Fallo llamando a NVIDIA NIM:", e.message);
+      errorNvidia = `Error de conexión con NVIDIA NIM: ${e.message}`;
+      console.error(`❌ ERROR: ${errorNvidia}`);
     }
   }
 
-  // Si no hay API key o falló, generar plantilla básica válida de LaTeX
+  // Si no hay API key o falló, generar plantilla básica válida de LaTeX informando del estado
   if (!contenidoLatex || !contenidoLatex.includes("\\documentclass")) {
-    console.log("Generando documento LaTeX base...");
+    console.log("Generando documento LaTeX base de respaldo...");
+    const avisoLatex = errorNvidia
+      ? `\\begin{tcolorbox}[colback=red!5!white,colframe=red!75!black,title=Aviso sobre la IA de NVIDIA]
+${errorNvidia.replace(/[_%$#&{}]/g, "\\$&")}
+\\\\ \\small Para resolverlo, añade o renueva el secreto \\textbf{NVIDIA\\_API\\_KEY} en la configuración de GitHub (Settings $\\rightarrow$ Secrets and variables $\\rightarrow$ Actions).
+\\end{tcolorbox}`
+      : "";
+
     contenidoLatex = `\\documentclass[a4paper,11pt]{article}
 \\usepackage[utf8]{inputenc}
+\\usepackage[spanish]{babel}
+\\usepackage{amsmath,amssymb}
+\\usepackage{geometry}
+\\usepackage{hyperref}
+\\usepackage{listings}
+\\usepackage{xcolor}
+\\usepackage{tcolorbox}
+
+\\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+
+\\title{\\textbf{${asignatura}}\\\\ \\large Tema ${tema}: ${titulo}}
+\\author{Generador Automático de Apuntes}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+
+${avisoLatex}
 \\usepackage[spanish]{babel}
 \\usepackage{amsmath,amssymb}
 \\usepackage{geometry}
