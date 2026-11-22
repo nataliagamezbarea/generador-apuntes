@@ -1,14 +1,14 @@
 \secciongrande{Programación de scripts dónde y cómo colocar los scripts}
 
 \resumen{
-  Los scripts de javascript se insertan en un documento html utilizando la etiqueta \texttt{<script>}. Pueden ubicarse tanto en la sección \texttt{<head>} como en el cuerpo \texttt{<body>}. La etiqueta de apertura debe incluir el atributo \texttt{type="text/javascript"} para indicar al navegador el formato del código.
+  Los scripts de javascript se insertan en un documento html utilizando la etiqueta \texttt{<script>}. Pueden ubicarse tanto en el encabezado (entre \texttt{<head>} y \texttt{</head>}) como en el cuerpo (entre \texttt{<body>} y \texttt{</body>}). La etiqueta de apertura debe incluir el atributo \texttt{type="text/javascript"} para indicar al navegador el formato del código.
 }
 
-\definicion{Etiqueta script}{Etiqueta contenedora html que designa el inicio y el fin de un bloque de código javascript, comenzando con \texttt{<script>} y terminando con \texttt{</script>}.}
+\definicion{Etiqueta script}{Etiqueta html contenedora que designa bloques de código javascript, comenzando con \texttt{<script>} y terminando con \texttt{</script>}.}
 
 \subtituloA{Ubicación de los scripts en html}
 
 \lista{
-  **Encabezado:** Los scripts pueden colocarse entre \texttt{<head>} y \texttt{</head>}. Esto es útil para scripts que deben ejecutarse antes de que se cargue el contenido visible. |
-  **Cuerpo:** Los scripts también pueden colocarse entre \texttt{<body>} y \texttt{</body>}. Esta ubicación es frecuentemente preferida para scripts que manipulan elementos de la página, asegurando que dichos elementos ya existan en el documento.
+  **Encabezado:** Colocación entre \texttt{<head>} y \texttt{</head>}. Suele usarse para scripts que deben ejecutarse antes de que el contenido visible se cargue. |
+  **Cuerpo:** Colocación entre \texttt{<body>} y \texttt{</body>}. Es la ubicación más común para scripts que interactúan con elementos visibles de la página.
 }

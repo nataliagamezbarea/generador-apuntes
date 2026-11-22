@@ -1,0 +1,41 @@
+\subtituloA{Arquitectura de referencia del navegador}
+
+\nota{Para el examen}{
+Identificar los componentes básicos de la arquitectura de referencia es fundamental para entender el funcionamiento del cliente web.
+}
+
+\subtituloB{Componentes principales (Parte 1)}
+
+\rista{
+  **Interfaz de usuario:** Actúa como puente entre el usuario y el motor (barras de herramientas, gestión de descargas, preferencias).
+  **Motor del buscador:** Carga la dirección (URL/URI) y soporta navegación básica (anterior/siguiente/recargar) y alertas de JavaScript.
+  **Motor de renderizado:** Presenta visualmente el recurso, interpretando HTML, XML, CSS y contenido embebido (audio/vídeo/imágenes).
+  **Subsistema de comunicaciones:** Implementa protocolos de transferencia de archivos y documentos de internet.
+}
+
+\subtituloB{Componentes principales (Parte 2)}
+
+\rista{
+  **Intérprete de JavaScript:** Analiza y ejecuta código JavaScript, incluyendo eventos de ratón o teclado.
+  **Parser XML:** Carga en memoria una representación en árbol (DOM) del documento HTML para facilitar el acceso a sus elementos.
+  **Componente de visualización:** Ofrece funcionalidades específicas para la presentación del contenido HTML.
+  **Subsistema de persistencia de datos:** Almacena historial, sesiones de usuario, preferencias, certificados de seguridad y cookies.
+}
+
+\textbf{Motores de JavaScript}
+
+\rista{
+  **V8:** Motor de Chrome, Edge, Opera y Brave. Es la base de Node.js, permitiendo el uso unificado de JS en navegador y servidor.
+  **SpiderMonkey:** Motor de Firefox, desarrollado inicialmente por Brendan Eich en 1995.
+  **JavaScriptCore:** Motor de Safari, exclusivo para navegadores en iPhone e iPad.
+}
+
+\nota{Para el examen}{
+¿Por qué el JavaScript moderno es rápido?
+
+\textbf{Respuesta:} Porque los motores (V8, SpiderMonkey, JSC) utilizan compilación Just-In-Time (JIT) a código máquina, superando la lentitud de los intérpretes antiguos.
+
+\vspace{2.5mm}\hrulefill\vspace{2.5mm}
+
+Advertencia de obsolescencia
+}{Microsoft abandonó Chakra en 2020; Edge utiliza V8 desde entonces. No aceptar referencias a Chakra en material actualizado.}
