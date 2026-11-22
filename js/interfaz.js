@@ -229,7 +229,27 @@ async function cargarAsignaturas() {
   } catch (e) {
     console.warn("No se pudieron cargar las asignaturas:", e);
   }
-  asignaturas = asignaturasCargadas;
+
+  // Cargar asignaturas locales guardadas por el usuario (útil si el backend está offline o en GitHub Pages)
+  let locales = [];
+  try {
+    locales = JSON.parse(localStorage.getItem("generador.asignaturas_locales") || "[]");
+  } catch {}
+
+  // Combinar backend + locales sin duplicar por nombre
+  const mapa = new Map();
+  for (const a of asignaturasCargadas) {
+    if (a?.nombre) mapa.set(a.nombre.toLowerCase(), a);
+  }
+  for (const loc of locales) {
+    if (loc?.nombre && !mapa.has(loc.nombre.toLowerCase())) {
+      mapa.set(loc.nombre.toLowerCase(), {
+        nombre: loc.nombre,
+        temas: Array.isArray(loc.temas) ? loc.temas : [],
+      });
+    }
+  }
+  asignaturas = Array.from(mapa.values());
 
   let trabajosActivos = [];
   try {
@@ -1125,21 +1145,38 @@ function actualizarCamposApartado() {
 async function crearCarpetaNuevaAsignatura() {
   const nombre = asignaturaNueva.value.trim();
   if (!nombre) throw new Error("Escribe primero el nombre de la asignatura.");
-  const respuesta = await fetch("/api/subjects", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ nombre }),
-  });
-  const resultado = await respuesta.json();
-  if (!respuesta.ok)
-    throw new Error(resultado.detail || "No se pudo crear la carpeta de la asignatura.");
-  localStorage.setItem("generador.asignatura", resultado.nombre);
+
+  let resultadoNombre = nombre;
+  try {
+    const respuesta = await fetch("/api/subjects", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ nombre }),
+    });
+    const resultado = await parseJsonSeguro(respuesta);
+    if (respuesta.ok && resultado?.nombre) {
+      resultadoNombre = resultado.nombre;
+    }
+  } catch (err) {
+    console.warn("Backend no disponible para crear carpeta física, guardando localmente:", err);
+  }
+
+  // Guardar siempre en asignaturas locales para persistencia inmediata (offline / Pages)
+  try {
+    const guardadasLocales = JSON.parse(localStorage.getItem("generador.asignaturas_locales") || "[]");
+    if (!guardadasLocales.some((a) => a.nombre.toLowerCase() === resultadoNombre.toLowerCase())) {
+      guardadasLocales.push({ nombre: resultadoNombre, temas: [] });
+      localStorage.setItem("generador.asignaturas_locales", JSON.stringify(guardadasLocales));
+    }
+  } catch {}
+
+  localStorage.setItem("generador.asignatura", resultadoNombre);
   await cargarAsignaturas();
-  selectorAsignatura.value = resultado.nombre;
+  selectorAsignatura.value = resultadoNombre;
   actualizarCamposAsignatura();
   asignaturaNueva.value = "";
   guardarPreferenciaSeleccion();
-  return resultado.nombre;
+  return resultadoNombre;
 }
 
 function numeroTemaSeleccionado() {
