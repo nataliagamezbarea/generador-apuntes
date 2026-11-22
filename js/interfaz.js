@@ -3124,7 +3124,7 @@ async function ejecutarGeneracionGitHubActions({
 
     const urlDispatch = `https://api.github.com/repos/${repoDestino}/actions/workflows/generar-apuntes.yml/dispatches`;
 
-    const res = await fetch(urlDispatch, {
+    let res = await fetch(urlDispatch, {
       method: "POST",
       headers: {
         Accept: "application/vnd.github+json",
@@ -3146,18 +3146,75 @@ async function ejecutarGeneracionGitHubActions({
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
-      // Si el token es erróneo o no tiene permisos, borrarlo de caché para permitir introducir uno nuevo
+      // Si el token de Supabase no tiene permisos o es inválido, pedirlo al usuario de inmediato para reintentar
       if (res.status === 401 || res.status === 403) {
         localStorage.removeItem("cache_gh_token");
         localStorage.removeItem("gh_token");
+
+        const nuevoToken = window.prompt(
+          `El token de GitHub (${tokenVista}) no tiene permiso sobre 'generador-apuntes' (${res.status} ${errJson.message || 'Forbidden'}).\n\nIntroduce tu Personal Access Token con permiso sobre este repositorio (o marca 'All repositories' en GitHub):`,
+          ""
+        );
+
+        if (nuevoToken && nuevoToken.trim()) {
+          const tLimpio = nuevoToken.trim();
+          localStorage.setItem("cache_gh_token", tLimpio);
+
+          // Actualizar también en Supabase para que quede corregido permanentemente
+          try {
+            const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
+            const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
+            fetch(`${supabaseUrl}/rest/v1/configuracion_publica`, {
+              method: "POST",
+              headers: {
+                apikey: anonKey,
+                Authorization: `Bearer ${anonKey}`,
+                "Accept-Profile": "grados-informaticos",
+                "Content-Profile": "grados-informaticos",
+                "Content-Type": "application/json",
+                Prefer: "resolution=merge-duplicates",
+              },
+              body: JSON.stringify([
+                { clave: "gh_token_general", valor: tLimpio },
+                { clave: "gh_token", valor: tLimpio },
+              ]),
+            }).catch(() => {});
+          } catch (_) {}
+
+          // Reintentar inmediatamente el dispatch con el nuevo token
+          const reintento = await fetch(urlDispatch, {
+            method: "POST",
+            headers: {
+              Accept: "application/vnd.github+json",
+              Authorization: `Bearer ${tLimpio}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ref: "main",
+              inputs: {
+                asignatura,
+                tema: String(tema),
+                titulo: String(titulo),
+                subtema: String(subtema),
+                instrucciones: String(instrucciones || ""),
+                texto_fuente: textoFinal.slice(0, 60000),
+              },
+            }),
+          });
+
+          if (reintento.ok) {
+            token = tLimpio;
+            res = reintento;
+          } else {
+            const reintentoJson = await reintento.json().catch(() => ({}));
+            throw new Error(`El nuevo token tampoco tiene permisos (${reintento.status}): ${reintentoJson.message || 'Forbidden'}. En GitHub -> Developer Settings -> Personal access tokens, asegúrate de añadir 'nataliagamezbarea/generador-apuntes' a tu token.`);
+          }
+        } else {
+          throw new Error("Se canceló la introducción del token de GitHub.");
+        }
+      } else {
+        throw new Error(errJson.message || `HTTP ${res.status} al conectar con GitHub Actions`);
       }
-      let explicacion = errJson.message || `HTTP ${res.status}`;
-      if (explicacion.includes("Bad credentials") || res.status === 401) {
-        explicacion = `El token de GitHub (${tokenVista}) es incorrecto o ha caducado (401 Bad credentials). Se ha borrado de la memoria. Pulsa de nuevo en «Generar apuntes» para pegar tu Personal Access Token (ghp_... o github_pat_...) con permiso 'workflow'.`;
-      } else if (explicacion.includes("Resource not accessible") || res.status === 403) {
-        explicacion = `El token (${tokenVista}) no tiene permiso sobre 'nataliagamezbarea/generador-apuntes'. En GitHub añade este repositorio a tu token o marca 'All repositories' con permiso 'Actions (Read and write)'. Se ha borrado de la memoria.`;
-      }
-      throw new Error(explicacion);
     }
 
     mostrarProgresoGeneracion(
