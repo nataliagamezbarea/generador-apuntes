@@ -81,7 +81,7 @@ jobs:
         env:
           PROVEEDOR_IA: "nvidia"
           NVIDIA_API_KEY: ${{ inputs.nvidia_api_key || secrets.NVIDIA_API_KEY || vars.NVIDIA_API_KEY }}
-          NVIDIA_MODELO: ${{ inputs.nvidia_modelo || vars.NVIDIA_MODELO || 'google/gemma-3-12b-it' }}
+          NVIDIA_MODELO: ${{ inputs.nvidia_modelo || vars.NVIDIA_MODELO || 'nvidia/nemotron-3.5-lightning-30b-a3b' }}
           ASIGNATURA: ${{ inputs.asignatura }}
           TEMA: ${{ inputs.tema }}
           TITULO: ${{ inputs.titulo }}
@@ -96,12 +96,27 @@ jobs:
         run: |
           git config --global user.name "Generador Apuntes Bot"
           git config --global user.email "bot@generador-apuntes.local"
-          git add apuntes-generados/ || true
+
+          # Limpiar archivos auxiliares de LaTeX (.aux, .out, .log, etc.)
+          find apuntes-generados -type f ! -name "*.pdf" ! -name "*.tex" -delete || true
+
+          # Guardar los archivos de salida generados en una carpeta temporal segura
+          mkdir -p /tmp/apuntes_salida
+          cp -r apuntes-generados/* /tmp/apuntes_salida/ 2>/dev/null || true
+
+          # Sincronizar rama de forma limpia con el origin/main más reciente
+          git fetch origin main
+          git reset --hard origin/main
+
+          # Restaurar los apuntes generados sobre el árbol limpio
+          mkdir -p apuntes-generados
+          cp -r /tmp/apuntes_salida/* apuntes-generados/ 2>/dev/null || true
+
+          git add apuntes-generados/
           if git diff --staged --quiet; then
             echo "Sin cambios nuevos para commitear."
           else
             git commit -m "docs: apuntes generados para ${{ inputs.asignatura }} - Tema ${{ inputs.tema }}"
-            git pull --rebase origin main
             git push origin main
           fi
 

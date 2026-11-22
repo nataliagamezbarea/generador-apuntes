@@ -10,7 +10,7 @@ async function main() {
   const instrucciones = process.env.INSTRUCCIONES || "";
   const textoFuente = process.env.TEXTO_FUENTE || "";
   const apiKey = process.env.NVIDIA_API_KEY || "";
-  const modeloConfigurado = process.env.NVIDIA_MODELO || "google/gemma-3-12b-it";
+  const modeloConfigurado = process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-lightning-30b-a3b";
 
   console.log(`=== Generando apuntes en GitHub Actions ===`);
   console.log(`Asignatura: ${asignatura}`);
@@ -47,10 +47,10 @@ No incluyas explicaciones antes o después del código LaTeX; entrega solo el c�
     const modelosAIntentar = Array.from(
       new Set([
         modeloConfigurado,
-        "google/gemma-3-12b-it",
-        "mistralai/mistral-large-4-1t-a52b",
         "nvidia/nemotron-3.5-lightning-30b-a3b",
         "z-ai/glm-5.3-flash",
+        "google/gemma-3-12b-it",
+        "mistralai/mistral-large-4-1t-a52b",
       ])
     ).filter(Boolean);
 

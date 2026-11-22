@@ -13,3 +13,9 @@ bibliotecas_latex/
 temp_test.*
 test_*.mjs
 practicar*.cjs
+*.aux
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
