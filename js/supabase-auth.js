@@ -354,6 +354,7 @@ const SupabaseAuth = (() => {
         }
 
         currentUser = data.user;
+        try { localStorage.removeItem("auth_origin_app"); } catch (_) {}
         ocultarLoginGate();
         updateAuthButton();
       } catch (errSubmit) {
@@ -373,18 +374,20 @@ const SupabaseAuth = (() => {
     document.getElementById("gate-btn-google")?.addEventListener("click", async () => {
       const c = getClient();
       if (!c) return;
+      try { localStorage.setItem("auth_origin_app", window.location.href); } catch (_) {}
       await c.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.origin + window.location.pathname },
+        options: { redirectTo: window.location.href },
       });
     });
 
     document.getElementById("gate-btn-github")?.addEventListener("click", async () => {
       const c = getClient();
       if (!c) return;
+      try { localStorage.setItem("auth_origin_app", window.location.href); } catch (_) {}
       await c.auth.signInWithOAuth({
         provider: "github",
-        options: { redirectTo: window.location.origin + window.location.pathname },
+        options: { redirectTo: window.location.href },
       });
     });
 
