@@ -3012,9 +3012,9 @@ async function ejecutarGeneracionGitHubActions({
     false,
   );
 
-  // Obtener el token de GitHub desde Supabase o localStorage (SOLO Personal Access Tokens: ghp_ o github_pat_)
+  // Obtener el token de GitHub directamente desde localStorage
   let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
-  // Descartar tokens de OAuth antiguos o inválidos (los tokens de OAuth de Supabase no tienen permiso workflow)
+  // Descartar tokens que no sean Personal Access Tokens válidos
   if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_")) {
     token = "";
     localStorage.removeItem("cache_gh_token");
@@ -3023,59 +3023,11 @@ async function ejecutarGeneracionGitHubActions({
 
   const repo = localStorage.getItem("gh_repo") || "nataliagamezbarea/generador-apuntes";
 
-  // Si no hay token en localStorage, intentar leer el PAT de Supabase (configuracion_privada)
-  if (!token && window.SupabaseAuth?.getClient) {
-    try {
-      const c = window.SupabaseAuth.getClient();
-      if (c) {
-        const sRes = await c.auth.getSession();
-        const session = sRes?.data?.session;
-        const supabaseUrl = window.APP_CONFIG?.supabaseUrl || window.SUPABASE_URL || "https://lztatgnlplpduiatmlrv.supabase.co";
-        const anonKey = window.APP_CONFIG?.supabaseAnonKey || window.SUPABASE_ANON_KEY || "sb_publishable_z_T7Y3yKqPdXLnvL3ltnQA_ZAPrXImZ";
-        const accessToken = session?.access_token || anonKey;
-
-        // Intentar con supabase-js
-        try {
-          const { data } = await c.from("configuracion_privada").select("clave, valor");
-          if (Array.isArray(data)) {
-            const row = data.find((r) => (r.clave === "gh_token" || r.clave === "gh_token_general") && (r.valor?.startsWith("ghp_") || r.valor?.startsWith("github_pat_")));
-            if (row?.valor) token = row.valor.trim();
-          }
-        } catch (_) {}
-
-        // Fallback REST como en acceso-grados-informaticos
-        if (!token && supabaseUrl) {
-          try {
-            const u = `${supabaseUrl}/rest/v1/configuracion_privada?select=clave,valor&clave=in.(gh_token,gh_token_general)`;
-            const r = await fetch(u, {
-              headers: {
-                apikey: anonKey,
-                Authorization: `Bearer ${accessToken}`,
-                Accept: "application/json",
-                "Accept-Profile": "grados-informaticos",
-              },
-            });
-            if (r.ok) {
-              const filas = await r.json();
-              if (Array.isArray(filas)) {
-                const row = filas.find((x) => (x.clave === "gh_token" || x.clave === "gh_token_general") && (x.valor?.startsWith("ghp_") || x.valor?.startsWith("github_pat_")));
-                if (row?.valor) token = row.valor.trim();
-              }
-            }
-          } catch (_) {}
-        }
-
-        if (token) {
-          localStorage.setItem("cache_gh_token", token);
-        }
-      }
-    } catch (_) {}
-  }
-
-  // Si aún no hay token, solicitarlo al usuario con un prompt amigable
+  // Si no hay token guardado, solicitarlo al usuario directamente
   if (!token) {
     token = window.prompt(
-      "Para generar apuntes desde GitHub Pages sin servidor local, introduce tu GitHub Personal Access Token (ghp_... o github_pat_...) con permiso 'workflow':",
+      "Para generar apuntes desde GitHub Pages en la nube, introduce tu Personal Access Token de GitHub (ghp_... o github_pat_...) con permiso 'workflow':",
+      ""
     );
     if (token) {
       token = token.trim();
@@ -3083,7 +3035,7 @@ async function ejecutarGeneracionGitHubActions({
     } else {
       botonGenerar.disabled = false;
       progreso.hidden = false;
-      panelError.textContent = "Se requiere un token de GitHub (Personal Access Token) para activar la generación en la nube.";
+      panelError.textContent = "Se requiere un Personal Access Token de GitHub para activar la generación en la nube.";
       panelError.hidden = false;
       return;
     }
