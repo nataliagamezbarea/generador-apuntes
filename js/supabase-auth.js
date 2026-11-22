@@ -234,6 +234,7 @@ const SupabaseAuth = (() => {
   async function autenticarConGate() {
     const c = getClient();
     if (!c) {
+      console.error("[Auth] No hay cliente de Supabase");
       mostrarLoginGate("No se pudo conectar con Supabase. Revisa tu conexión.");
       return false;
     }
@@ -252,6 +253,8 @@ const SupabaseAuth = (() => {
       let { data: { session } } = await c.auth.getSession();
       const hasTokenInUrl = window.location.hash.includes("access_token") || window.location.search.includes("code=");
 
+      console.log("[Auth] Comprobando sesión inicial:", session ? session.user.email : "Sin sesión", "hasTokenInUrl:", hasTokenInUrl);
+
       if (!session && hasTokenInUrl) {
         // Con flowType:'implicit', el token viene en el hash — llamar setSession directamente
         if (window.location.hash.includes("access_token")) {
@@ -260,17 +263,22 @@ const SupabaseAuth = (() => {
             const accessToken = hp.get("access_token");
             const refreshToken = hp.get("refresh_token") || "";
             if (accessToken) {
+              console.log("[Auth] Token detectado en hash, estableciendo sesión...");
               const res = await c.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-              if (res.data?.session) session = res.data.session;
+              if (res.data?.session) {
+                session = res.data.session;
+                console.log("[Auth] Sesión establecida con éxito desde hash:", session.user.email);
+              }
             }
           } catch (eSet) {
-            console.warn("setSession desde hash falló:", eSet);
+            console.warn("[Auth] setSession desde hash falló:", eSet);
           }
         }
         if (!session && window.location.search.includes("code=")) {
           const code = urlParams.get("code");
           if (code && typeof c.auth.exchangeCodeForSession === "function") {
             try {
+              console.log("[Auth] Código detectado en URL, intercambiando...");
               const resCode = await c.auth.exchangeCodeForSession(code);
               if (resCode.data?.session) session = resCode.data.session;
             } catch (_) {}
@@ -287,6 +295,7 @@ const SupabaseAuth = (() => {
       }
 
       if (!session?.user) {
+        console.log("[Auth] No hay usuario logueado. Mostrando gate.");
         mostrarLoginGate();
         return false;
       }
@@ -295,20 +304,23 @@ const SupabaseAuth = (() => {
         try { window.history.replaceState({}, document.title, window.location.pathname); } catch (_) {}
       }
 
+      console.log("[Auth] Usuario encontrado:", session.user.email, "Verificando permisos...");
       const esAdmin = await verificarPermisoAdmin(c, session.user);
       if (!esAdmin) {
+        console.warn("[Auth] Acceso denegado: usuario no es admin:", session.user.email);
         await c.auth.signOut().catch(() => {});
         currentUser = null;
         mostrarLoginGate(`Acceso denegado: tu usuario (${session.user.email || session.user.id}) no tiene rol admin en Supabase.`);
         return false;
       }
 
+      console.log("[Auth] ¡Acceso autorizado! Bienvenido:", session.user.email);
       currentUser = session.user;
       ocultarLoginGate();
       updateAuthButton();
       return true;
     } catch (err) {
-      console.error("Error autenticando:", err);
+      console.error("[Auth] Error autenticando:", err);
       mostrarLoginGate("Error al validar la sesión.");
       return false;
     }
