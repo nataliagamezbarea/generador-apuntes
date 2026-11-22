@@ -107,39 +107,78 @@ function inicializarModelos() {
   const modeloIAGuardado = localStorage.getItem("generador.modeloIA");
   const modeloCodigoGuardado = localStorage.getItem("generador.modeloCodigo");
 
-  // Poblar selector IA
-  modeloIASeleccionado = modeloIAGuardado || "qwen2.5:14b";
-  selectorModeloIA.replaceChildren();
-  const opcionDefaultIA = document.createElement("option");
-  opcionDefaultIA.value = "qwen2.5:14b";
-  opcionDefaultIA.textContent = "qwen2.5:14b (recomendado)";
-  selectorModeloIA.append(opcionDefaultIA);
-  modelosDisponibles.ia.forEach((m) => {
-    if (m === "qwen2.5:14b") return;
-    const opcion = document.createElement("option");
-    opcion.value = m;
-    opcion.textContent = m;
-    selectorModeloIA.append(opcion);
-  });
-  selectorModeloIA.value = modeloIASeleccionado;
-  actualizarEstadoModeloIA();
+  if (esEntornoEstatico) {
+    // En la nube (GitHub Pages): listar modelos gratuitos y recomendados de NVIDIA NIM
+    const modelosNvidia = [
+      { id: "google/gemma-3-12b-it", nombre: "Google Gemma 3 (12B) · Gratis / Recomendado" },
+      { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large · Gratis / Máxima calidad" },
+      { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Gratis / Oficial" },
+      { id: "google/gemma-3-4b-it", nombre: "Google Gemma 3 (4B) · Gratis / Rápido" },
+      { id: "z-ai/glm-5.3-flash", nombre: "GLM 5.3 Flash · Gratis / Ultra rápido" },
+      { id: "moonshotai/kimi-k3.1-pro", nombre: "Kimi K3.1 Pro · Gratis / 1M Contexto" },
+    ];
 
-  // Poblar selector Código
-  modeloCodigoSeleccionado = modeloCodigoGuardado || "qwen2.5:14b";
-  selectorModeloCodigo.replaceChildren();
-  const opcionDefaultCodigo = document.createElement("option");
-  opcionDefaultCodigo.value = "qwen2.5:14b";
-  opcionDefaultCodigo.textContent = "qwen2.5:14b (recomendado)";
-  selectorModeloCodigo.append(opcionDefaultCodigo);
-  modelosDisponibles.codigo.forEach((m) => {
-    if (m === "qwen2.5:14b") return;
-    const opcion = document.createElement("option");
-    opcion.value = m;
-    opcion.textContent = m;
-    selectorModeloCodigo.append(opcion);
-  });
-  selectorModeloCodigo.value = modeloCodigoSeleccionado;
-  actualizarEstadoModeloCodigo();
+    modeloIASeleccionado = modeloIAGuardado && modelosNvidia.some((m) => m.id === modeloIAGuardado)
+      ? modeloIAGuardado
+      : "google/gemma-3-12b-it";
+
+    selectorModeloIA.replaceChildren();
+    modelosNvidia.forEach((m) => {
+      const opcion = document.createElement("option");
+      opcion.value = m.id;
+      opcion.textContent = m.nombre;
+      selectorModeloIA.append(opcion);
+    });
+    selectorModeloIA.value = modeloIASeleccionado;
+    actualizarEstadoModeloIA();
+
+    modeloCodigoSeleccionado = modeloCodigoGuardado && modelosNvidia.some((m) => m.id === modeloCodigoGuardado)
+      ? modeloCodigoGuardado
+      : "google/gemma-3-12b-it";
+
+    selectorModeloCodigo.replaceChildren();
+    modelosNvidia.forEach((m) => {
+      const opcion = document.createElement("option");
+      opcion.value = m.id;
+      opcion.textContent = m.nombre;
+      selectorModeloCodigo.append(opcion);
+    });
+    selectorModeloCodigo.value = modeloCodigoSeleccionado;
+    actualizarEstadoModeloCodigo();
+  } else {
+    // En local: listar modelos instalados en Ollama
+    modeloIASeleccionado = modeloIAGuardado || "qwen2.5:14b";
+    selectorModeloIA.replaceChildren();
+    const opcionDefaultIA = document.createElement("option");
+    opcionDefaultIA.value = "qwen2.5:14b";
+    opcionDefaultIA.textContent = "qwen2.5:14b (recomendado)";
+    selectorModeloIA.append(opcionDefaultIA);
+    modelosDisponibles.ia.forEach((m) => {
+      if (m === "qwen2.5:14b") return;
+      const opcion = document.createElement("option");
+      opcion.value = m;
+      opcion.textContent = m;
+      selectorModeloIA.append(opcion);
+    });
+    selectorModeloIA.value = modeloIASeleccionado;
+    actualizarEstadoModeloIA();
+
+    modeloCodigoSeleccionado = modeloCodigoGuardado || "qwen2.5:14b";
+    selectorModeloCodigo.replaceChildren();
+    const opcionDefaultCodigo = document.createElement("option");
+    opcionDefaultCodigo.value = "qwen2.5:14b";
+    opcionDefaultCodigo.textContent = "qwen2.5:14b (recomendado)";
+    selectorModeloCodigo.append(opcionDefaultCodigo);
+    modelosDisponibles.codigo.forEach((m) => {
+      if (m === "qwen2.5:14b") return;
+      const opcion = document.createElement("option");
+      opcion.value = m;
+      opcion.textContent = m;
+      selectorModeloCodigo.append(opcion);
+    });
+    selectorModeloCodigo.value = modeloCodigoSeleccionado;
+    actualizarEstadoModeloCodigo();
+  }
 
   // Listeners para cambios de modelo
   selectorModeloIA.addEventListener("change", () => {
@@ -192,9 +231,11 @@ let ultimaUnidadDetallada = "";
 let ultimosResultadosMostrados = 0;
 
 function actualizarEstadoModeloIA() {
-  const valor = selectorModeloIA.value || "qwen2.5:14b";
+  const valor = selectorModeloIA.value || (esEntornoEstatico ? "google/gemma-3-12b-it" : "qwen2.5:14b");
   estadoModeloSeleccionado.textContent = `Modelo IA: ${valor}`;
-  if (valor === "qwen2.5:14b") {
+  if (esEntornoEstatico) {
+    estadoModeloSeleccionado.style.color = "#c3e88d";
+  } else if (valor === "qwen2.5:14b") {
     estadoModeloSeleccionado.style.color = "#c3e88d";
   } else if (valor === "qwen2.5:7b") {
     estadoModeloSeleccionado.style.color = "#ffce54";
@@ -204,9 +245,11 @@ function actualizarEstadoModeloIA() {
 }
 
 function actualizarEstadoModeloCodigo() {
-  const valor = selectorModeloCodigo.value || "qwen2.5:14b";
+  const valor = selectorModeloCodigo.value || (esEntornoEstatico ? "google/gemma-3-12b-it" : "qwen2.5:14b");
   estadoModeloCodigo.textContent = `Modelo Código: ${valor}`;
-  if (valor === "qwen2.5:14b") {
+  if (esEntornoEstatico) {
+    estadoModeloCodigo.style.color = "#c3e88d";
+  } else if (valor === "qwen2.5:14b") {
     estadoModeloCodigo.style.color = "#c3e88d";
   } else if (valor === "qwen2.5:7b") {
     estadoModeloCodigo.style.color = "#ffce54";
@@ -3209,7 +3252,7 @@ async function ejecutarGeneracionGitHubActions({
           instrucciones: String(instrucciones || ""),
           texto_fuente: textoFinal.slice(0, 60000),
           nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
-          nvidia_modelo: cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it",
+          nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it").trim(),
         },
       }),
     });
