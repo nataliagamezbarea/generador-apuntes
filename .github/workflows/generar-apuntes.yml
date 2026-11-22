@@ -39,6 +39,10 @@ on:
         description: "Código LaTeX ya generado y aprobado desde el frontend"
         required: false
         default: ""
+      gh_token:
+        description: "Token de GitHub (gh_token_general de Supabase)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -49,6 +53,8 @@ jobs:
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
+        with:
+          token: ${{ inputs.gh_token || secrets.GH_TOKEN_GENERAL || secrets.GH_TOKEN || github.token }}
 
       - name: Validar secreto o variable NVIDIA_API_KEY
         run: |

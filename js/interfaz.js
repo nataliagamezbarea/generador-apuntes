@@ -3117,10 +3117,14 @@ async function obtenerConfiguracionSupabase() {
       const val = String(r.valor).trim();
       if (!val) continue;
 
-      if ((k === "ghtokengeneral" || k === "ghtoken") && !config.ghToken) {
+      if (k === "ghtokengeneral") {
+        config.ghToken = val;
+      } else if (k === "ghtoken" && !config.ghToken) {
         config.ghToken = val;
       }
-      if ((k === "ghrepogeneral" || k === "ghrepo") && !config.ghRepo) {
+      if (k === "ghrepogeneral") {
+        config.ghRepo = val;
+      } else if (k === "ghrepo" && !config.ghRepo) {
         config.ghRepo = val;
       }
       if ((k.includes("nvidia") && !k.includes("model")) || k.includes("nvapi") || k === "tokennvidia") {
@@ -3198,15 +3202,15 @@ async function ejecutarGeneracionGitHubActions({
   // 1. Obtener configuración exclusivamente desde Supabase
   const cfgSupabase = await obtenerConfiguracionSupabase();
 
-  let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || cfgSupabase.ghToken || "";
+  // Priorizar siempre el token fresco de Supabase (gh_token_general) sobre la caché del navegador
+  let token = cfgSupabase.ghToken || localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
   if (token && !token.startsWith("ghp_") && !token.startsWith("github_pat_") && !token.startsWith("gho_")) {
     token = "";
     localStorage.removeItem("cache_gh_token");
     localStorage.removeItem("gh_token");
   }
 
-  if (cfgSupabase.ghToken && !token) {
-    token = cfgSupabase.ghToken;
+  if (token) {
     localStorage.setItem("cache_gh_token", token);
   }
 
@@ -3279,6 +3283,7 @@ async function ejecutarGeneracionGitHubActions({
           texto_fuente: textoFinal.slice(0, 60000),
           nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
           nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it").trim(),
+          gh_token: token,
         },
       }),
     });
@@ -3309,6 +3314,7 @@ async function ejecutarGeneracionGitHubActions({
                 texto_fuente: textoFinal.slice(0, 60000),
                 nvidia_api_key: cfgSupabase.nvidiaApiKey || "",
                 nvidia_modelo: (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "google/gemma-3-12b-it").trim(),
+                gh_token: token,
               },
             }),
           });
