@@ -95,8 +95,8 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
   const modelosAIntentar = Array.from(
     new Set([
       modelo,
-      config.nvidiaModel,
       "nvidia/nemotron-3.5-bolt-e4b",
+      config.nvidiaModel,
       "nvidia/nemotron-3.5-lightning-30b-a3b",
       "minimaxai/minimax-m3.1-flash",
       "mistralai/mistral-large-4-1t-a52b",
@@ -173,6 +173,16 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
         console.warn(`⚠️ Modelo ${mod} devolvió razonamiento/pensamiento en inglés sin JSON utilizable, probando siguiente modelo...`);
         continue;
       }
+
+      if (formatoJson) {
+        try {
+          analizarJson(content, json.choices?.[0]?.finish_reason === "length" ? "length" : "");
+        } catch (errJson) {
+          console.warn(`⚠️ Modelo ${mod} devolvió respuesta truncada o JSON incompleto (${errJson.message.slice(0, 120)}), probando siguiente modelo...`);
+          continue;
+        }
+      }
+
       return {
         message: { content },
         done_reason: json.choices?.[0]?.finish_reason === "length" ? "length" : "stop",

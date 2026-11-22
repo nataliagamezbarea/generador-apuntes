@@ -36,7 +36,7 @@ on:
         required: false
         default: ""
       nvidia_modelo_codigo:
-        description: "Modelo de NVIDIA NIM para código y razonamiento (ej: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning)"
+        description: "Modelo de NVIDIA NIM para código y sintaxis (ej: nvidia/nemotron-3.5-bolt-e4b)"
         required: false
         default: ""
       contenido_latex:
@@ -84,24 +84,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-texlive-debs-
 
-      - name: Instalar compilador LaTeX
-        run: |
-          if [ -d "/tmp/texlive-debs" ] && ls /tmp/texlive-debs/*.deb >/dev/null 2>&1; then
-            echo "✓ Restaurando paquetes LaTeX desde la caché de GitHub Actions..."
-            sudo cp -n /tmp/texlive-debs/*.deb /var/cache/apt/archives/ 2>/dev/null || true
-          fi
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
-            texlive-latex-base \
-            texlive-latex-recommended \
-            texlive-latex-extra \
-            texlive-fonts-recommended \
-            texlive-xetex \
-            texlive-lang-spanish \
-            latexmk
-          mkdir -p /tmp/texlive-debs
-          sudo cp -n /var/cache/apt/archives/*.deb /tmp/texlive-debs/ 2>/dev/null || true
-
       - name: Preparar bibliotecas LaTeX
         run: |
           if [ ! -d "bibliotecas_latex/estilo" ]; then
@@ -113,12 +95,12 @@ jobs:
             fi
           fi
 
-      - name: Ejecutar generación de apuntes
+      - name: Ejecutar generación con IA e instalar LaTeX en paralelo
         env:
           PROVEEDOR_IA: "nvidia"
           NVIDIA_API_KEY: ${{ inputs.nvidia_api_key || secrets.NVIDIA_API_KEY || vars.NVIDIA_API_KEY }}
           NVIDIA_MODELO: ${{ inputs.nvidia_modelo || vars.NVIDIA_MODELO || 'nvidia/nemotron-3.5-bolt-e4b' }}
-          NVIDIA_MODELO_CODIGO: ${{ inputs.nvidia_modelo_codigo || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning' }}
+          NVIDIA_MODELO_CODIGO: ${{ inputs.nvidia_modelo_codigo || 'nvidia/nemotron-3.5-bolt-e4b' }}
           ASIGNATURA: ${{ inputs.asignatura }}
           TEMA: ${{ inputs.tema }}
           TITULO: ${{ inputs.titulo }}
@@ -127,6 +109,29 @@ jobs:
           TEXTO_FUENTE: ${{ inputs.texto_fuente }}
           CONTENIDO_LATEX: ${{ inputs.contenido_latex }}
         run: |
+          echo "⚡ Iniciando instalación de LaTeX en segundo plano..."
+          (
+            if [ -d "/tmp/texlive-debs" ] && ls /tmp/texlive-debs/*.deb >/dev/null 2>&1; then
+              echo "✓ Restaurando paquetes LaTeX desde la caché de GitHub Actions..."
+              sudo cp -n /tmp/texlive-debs/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+            fi
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends \
+              texlive-latex-base \
+              texlive-latex-recommended \
+              texlive-latex-extra \
+              texlive-fonts-recommended \
+              texlive-xetex \
+              texlive-lang-spanish \
+              latexmk
+            mkdir -p /tmp/texlive-debs
+            sudo cp -n /var/cache/apt/archives/*.deb /tmp/texlive-debs/ 2>/dev/null || true
+            touch /tmp/latex_listo
+            echo "✓ Instalación de LaTeX completada."
+          ) > /tmp/texlive_install.log 2>&1 &
+          echo $! > /tmp/texlive_pid
+
+          echo "🚀 Ejecutando generación de apuntes con IA en primer plano..."
           node scripts/generar-desde-ci.js
 
       - name: Guardar y subir apuntes a GitHub

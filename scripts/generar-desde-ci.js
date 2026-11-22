@@ -127,8 +127,26 @@ REGLAS CRÍTICAS:
       subthemeTitle: subtemaTitulo,
     });
   } catch (e) {
-    console.warn(`Aviso consultando IA para apartado ${subtema}:`, e.message);
-    return null;
+    console.warn(`Aviso consultando IA para apartado ${subtema} (${e.message}). Reintentando de inmediato con nvidia/nemotron-3.5-bolt-e4b...`);
+    try {
+      const rawBolt = await consultarModeloIA(
+        sistemaConciso,
+        prompt,
+        [],
+        null,
+        "nvidia/nemotron-3.5-bolt-e4b"
+      );
+      return normalizarResultadoIA(rawBolt, {
+        subject: asignatura,
+        theme: String(tema),
+        subtheme: String(subtema),
+        themeTitle: tituloTema,
+        subthemeTitle: subtemaTitulo,
+      });
+    } catch (errBolt) {
+      console.warn(`Error final para apartado ${subtema}:`, errBolt.message);
+      return null;
+    }
   }
 }
 
@@ -141,9 +159,9 @@ async function main() {
   let textoFuente = process.env.TEXTO_FUENTE || "";
   const apiKey = process.env.NVIDIA_API_KEY || "";
   const modeloConfigurado =
-    process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-lightning-30b-a3b";
+    process.env.NVIDIA_MODELO || "nvidia/nemotron-3.5-bolt-e4b";
   const modeloCodigoConfigurado =
-    process.env.NVIDIA_MODELO_CODIGO || "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning";
+    process.env.NVIDIA_MODELO_CODIGO || "nvidia/nemotron-3.5-bolt-e4b";
 
   console.log(`=== Generando apuntes modulares en GitHub Actions ===`);
   console.log(`Asignatura: ${asignatura}`);
@@ -342,11 +360,10 @@ REGLAS CRÍTICAS DE CALIDAD:
     const modelosAIntentar = Array.from(
       new Set([
         modeloConfigurado,
+        "nvidia/nemotron-3.5-bolt-e4b",
         "nvidia/nemotron-3.5-lightning-30b-a3b",
         "mistralai/mistral-large-4-1t-a52b",
-        "nvidia/nemotron-3.5-bolt-e4b",
         "nvidia/nemotron-3-ultra-550b-a55b",
-        "poolside/laguna-xs-2.1",
       ])
     ).filter(Boolean);
 
@@ -533,6 +550,20 @@ ${inputArchivos || "\\section{Contenido}\\nSin apartados."}
   await fs.writeFile(rutaMaestroRaiz, maestroLatex, "utf8");
 
   // 4. COMPILACIÓN A PDF
+  // Si la instalación de LaTeX se inició en segundo plano, esperar a que termine
+  if (await fs.stat("/tmp/texlive_pid").catch(() => null)) {
+    console.log("⏳ Esperando a que el compilador LaTeX termine de instalarse en segundo plano...");
+    try {
+      execSync(
+        'while [ ! -f /tmp/latex_listo ]; do if ! kill -0 $(cat /tmp/texlive_pid 2>/dev/null) 2>/dev/null; then cat /tmp/texlive_install.log 2>/dev/null; break; fi; sleep 1; done',
+        { stdio: "inherit", timeout: 300000 }
+      );
+      console.log("✓ Compilador LaTeX confirmado y listo.");
+    } catch (eWait) {
+      console.warn("Aviso esperando LaTeX:", eWait.message);
+    }
+  }
+
   console.log("Compilando apuntes a PDF...");
   let compilado = false;
 
