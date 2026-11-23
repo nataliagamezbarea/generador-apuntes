@@ -550,18 +550,19 @@ async function cargarAsignaturas() {
     (trabajo) => trabajo.estado === "procesando" || trabajo.estado === "pendiente",
   );
   const asignaturaGuardada = localStorage.getItem("generador.asignatura");
-  const asignaturaWec = asignaturas.find(
-    (asignatura) => asignatura.nombre.trim().toLocaleUpperCase("es") === "WEC",
-  );
+  const valorActual = selectorAsignatura.value && selectorAsignatura.value !== "__new__" ? selectorAsignatura.value : "";
+  const preferida = valorActual || asignaturaGuardada || "";
 
-  // Check if the stored assignment exists in the current list
-  const storedInList = asignaturas.some((a) => a.nombre === asignaturaGuardada);
+  // Buscar coincidencia sin distinguir mayúsculas ni espacios
+  const encontrada = preferida
+    ? asignaturas.find((a) => a.nombre.trim().toLowerCase() === preferida.trim().toLowerCase())
+    : null;
+
   const valorAnterior =
     !interfazInicializada && trabajoActivo?.asignatura
       ? trabajoActivo.asignatura
-      : storedInList
-        ? asignaturaGuardada
-        : asignaturaWec?.nombre ?? (asignaturas.length > 0 ? asignaturas[0].nombre : "__new__");
+      : encontrada?.nombre || asignaturaGuardada || (asignaturas.length > 0 ? asignaturas[0].nombre : "__new__");
+
   selectorAsignatura.replaceChildren();
   for (const asignatura of asignaturas) {
     const opcion = document.createElement("option");
@@ -573,13 +574,19 @@ async function cargarAsignaturas() {
   opcionAnadir.value = "__new__";
   opcionAnadir.textContent = "+ Añadir asignatura…";
   selectorAsignatura.append(opcionAnadir);
-  selectorAsignatura.value = asignaturas.some(
-    (asignatura) => asignatura.nombre === valorAnterior,
-  )
-    ? valorAnterior
-    : asignaturas.length
-      ? asignaturas[0].nombre
-      : "__new__";
+
+  // Asegurar que si la asignatura guardada o actual no estaba aún en el selector, se agregue
+  if (valorAnterior && valorAnterior !== "__new__" && !asignaturas.some((a) => a.nombre.toLowerCase() === valorAnterior.toLowerCase())) {
+    const opcionPrevia = document.createElement("option");
+    opcionPrevia.value = valorAnterior;
+    opcionPrevia.textContent = valorAnterior;
+    selectorAsignatura.insertBefore(opcionPrevia, opcionAnadir);
+  }
+
+  selectorAsignatura.value = valorAnterior;
+  if (valorAnterior && valorAnterior !== "__new__") {
+    localStorage.setItem("generador.asignatura", valorAnterior);
+  }
   await cargarBorradorFuentes();
   actualizarCamposAsignatura();
   await cargarUltimaGeneracion();
@@ -1436,11 +1443,59 @@ function actualizarCamposApartado() {
   cargarUltimaGeneracion();
 }
 
+async function crearCarpetaAsignaturaEnGitHub(nombre, token = "", repo = "nataliagamezbarea/GRADOS_INFORMATICOS") {
+  if (!token || !nombre) return false;
+  const nombreLimpio = nombre.trim();
+  if (!nombreLimpio) return false;
+
+  const rutas = [
+    `apuntes_privados/${nombreLimpio}/.gitkeep`,
+    `apuntes/${nombreLimpio}/.gitkeep`,
+  ];
+
+  for (const ruta of rutas) {
+    try {
+      const url = `https://api.github.com/repos/${repo}/contents/${ruta}`;
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+        "User-Agent": "Generador-Apuntes-App",
+      };
+
+      let sha = undefined;
+      try {
+        const getRes = await fetch(url, { headers });
+        if (getRes.ok) {
+          const info = await getRes.json();
+          sha = info.sha;
+        }
+      } catch (_) {}
+
+      const body = {
+        message: `docs(asignatura): crear carpeta ${nombreLimpio}`,
+        content: btoa("\n"),
+      };
+      if (sha) body.sha = sha;
+
+      await fetch(url, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      console.warn(`Aviso creando ${ruta} en GitHub:`, e.message || e);
+    }
+  }
+  return true;
+}
+
 async function crearCarpetaNuevaAsignatura() {
   const nombre = asignaturaNueva.value.trim();
   if (!nombre) throw new Error("Escribe primero el nombre de la asignatura.");
 
   let resultadoNombre = nombre;
+  // 1. Intentar crear en el backend local si está en ejecución
   try {
     const respuesta = await fetch("/api/subjects", {
       method: "POST",
@@ -1452,10 +1507,26 @@ async function crearCarpetaNuevaAsignatura() {
       resultadoNombre = resultado.nombre;
     }
   } catch (err) {
-    console.warn("Backend no disponible para crear carpeta física, guardando localmente:", err);
+    console.warn("Backend no disponible para crear carpeta física:", err);
   }
 
-  // Guardar siempre en asignaturas locales para persistencia inmediata (offline / Pages)
+  // 2. Crear las carpetas físicamente en GitHub (GRADOS_INFORMATICOS: apuntes_privados y apuntes)
+  try {
+    let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
+    let repo = localStorage.getItem("cache_gh_repo") || "nataliagamezbarea/GRADOS_INFORMATICOS";
+    if (!token && typeof obtenerConfiguracionSupabase === "function") {
+      const cfg = await obtenerConfiguracionSupabase();
+      if (cfg?.ghToken) token = cfg.ghToken;
+      if (cfg?.ghRepo) repo = cfg.ghRepo;
+    }
+    if (token) {
+      await crearCarpetaAsignaturaEnGitHub(resultadoNombre, token, repo);
+    }
+  } catch (errGh) {
+    console.warn("Aviso al crear carpeta en repositorio GitHub:", errGh);
+  }
+
+  // 3. Guardar siempre en asignaturas locales para persistencia inmediata (offline / Pages)
   try {
     const guardadasLocales = JSON.parse(localStorage.getItem("generador.asignaturas_locales") || "[]");
     if (!guardadasLocales.some((a) => a.nombre.toLowerCase() === resultadoNombre.toLowerCase())) {
@@ -1464,12 +1535,19 @@ async function crearCarpetaNuevaAsignatura() {
     }
   } catch {}
 
+  // 4. Guardar preferencia de selección
   localStorage.setItem("generador.asignatura", resultadoNombre);
   await cargarAsignaturas();
   selectorAsignatura.value = resultadoNombre;
   actualizarCamposAsignatura();
   asignaturaNueva.value = "";
   guardarPreferenciaSeleccion();
+
+  // 5. Si ya había archivos o texto adjunto antes de crear la asignatura, guardarlos de inmediato
+  if (archivosElegidos.length > 0 || textoFuente.value) {
+    await guardarBorradorFuentes();
+  }
+
   return resultadoNombre;
 }
 
@@ -1540,20 +1618,35 @@ function mostrarAsignaturasDetectadas(archivos) {
     opcion.dataset.detectada = "true";
     selectorAsignatura.insertBefore(opcion, selectorAsignatura.lastElementChild);
   }
-  if (nombres.length && !existentes.has(selectorAsignatura.value)) {
+  // No sobrescribir la asignatura si el usuario ya tiene una seleccionada
+  if (nombres.length && (!selectorAsignatura.value || selectorAsignatura.value === "__new__") && !existentes.has(selectorAsignatura.value)) {
     selectorAsignatura.value = nombres[0];
+    localStorage.setItem("generador.asignatura", nombres[0]);
     actualizarCamposAsignatura();
   }
 }
 
 function guardarBorradorFuentes() {
-  return guardarArchivosPersistidos(claveBorradorFuentes(), archivosElegidos, {
+  const asig = selectorAsignatura.value === "__new__"
+    ? (asignaturaNueva.value.trim() || localStorage.getItem("generador.asignatura") || "")
+    : (selectorAsignatura.value || localStorage.getItem("generador.asignatura") || "");
+  const clave = claveBorradorFuentes(asig);
+
+  // Guardar siempre una copia global de respaldo para nunca perder archivos al cambiar de asignatura o recargar
+  guardarArchivosPersistidos("generacion:ultimo_borrador", archivosElegidos, {
     texto: textoFuente.value,
+    asignatura: asig,
+  }).catch(() => {});
+
+  return guardarArchivosPersistidos(clave, archivosElegidos, {
+    texto: textoFuente.value,
+    asignatura: asig,
   });
 }
 
 function claveBorradorFuentes(asignatura = selectorAsignatura.value) {
-  return `generacion:${asignatura || "__sin-asignatura__"}`;
+  const actual = (asignatura && asignatura !== "__new__" ? asignatura : localStorage.getItem("generador.asignatura")) || "";
+  return `generacion:${actual.trim().toLowerCase() || "__sin-asignatura__"}`;
 }
 
 function mostrarErrorBorrador(error) {
@@ -1575,13 +1668,28 @@ async function restaurarBorradorFuentes() {
 
 async function cargarBorradorFuentes() {
   try {
-    const asignatura = selectorAsignatura.value;
-    if (!asignatura || asignatura === "__new__") return;
-    if (asignaturaBorradorActiva === asignatura) return;
+    const asignatura = selectorAsignatura.value === "__new__"
+      ? (asignaturaNueva.value.trim() || localStorage.getItem("generador.asignatura") || "")
+      : (selectorAsignatura.value || localStorage.getItem("generador.asignatura") || "");
+    if (!asignatura) return;
+    if (asignaturaBorradorActiva === asignatura && archivosElegidos.length > 0) return;
     asignaturaBorradorActiva = asignatura;
-    const borrador = await cargarArchivosPersistidos(claveBorradorFuentes(asignatura));
-    archivosElegidos = borrador.archivos;
-    textoFuente.value = borrador.valores.texto ?? "";
+
+    let borrador = await cargarArchivosPersistidos(claveBorradorFuentes(asignatura));
+    // Si no hay borrador específico para esta asignatura pero hay archivos en memoria o un último borrador global
+    if ((!borrador || !borrador.archivos || borrador.archivos.length === 0) && archivosElegidos.length === 0) {
+      const ultimo = await cargarArchivosPersistidos("generacion:ultimo_borrador");
+      if (ultimo?.archivos?.length) {
+        borrador = ultimo;
+      }
+    }
+
+    if (borrador?.archivos?.length) {
+      archivosElegidos = borrador.archivos;
+    }
+    if (borrador?.valores?.texto && !textoFuente.value) {
+      textoFuente.value = borrador.valores.texto;
+    }
     actualizarResumenFuentes();
   } catch (error) {
     mostrarErrorBorrador(error);
@@ -2470,10 +2578,16 @@ selectorAsignatura.addEventListener("change", () => {
       }
     } catch {}
     actualizarCamposAsignatura();
-    archivosElegidos = [];
-    textoFuente.value = "";
+    const archivosEnMemoria = [...archivosElegidos];
+    const textoEnMemoria = textoFuente.value;
     asignaturaBorradorActiva = "";
     await cargarBorradorFuentes();
+    // Si la nueva asignatura no tenía borrador guardado pero el usuario ya tenía archivos cargados, conservarlos
+    if (archivosElegidos.length === 0 && archivosEnMemoria.length > 0) {
+      archivosElegidos = archivosEnMemoria;
+      if (!textoFuente.value && textoEnMemoria) textoFuente.value = textoEnMemoria;
+      await guardarBorradorFuentes();
+    }
     actualizarResumenFuentes();
     await cargarUltimaGeneracion();
     await cargarTrabajosPendientes();
