@@ -226,16 +226,14 @@ let modelosDisponibles = {
 // A nivel de módulo para que actualizarEstadoModeloIA() pueda consultar su estado.
 const modelosNvidia = [
   { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Ultrarrápido y en español (Recomendado)", disponible: true },
-  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Razonamiento profundo", disponible: true },
   { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large (128k) · Calidad docente en español", disponible: true },
   { id: "minimaxai/minimax-m3.1-flash", nombre: "MiniMax M3.1 Flash · Rápido en español", disponible: true },
 ];
 
 const modelosCodigoNvidia = [
   { id: "nvidia/nemotron-3.5-bolt-e4b", nombre: "NVIDIA Nemotron 3.5 Bolt · Sintaxis y código rápido (Recomendado)", disponible: true },
-  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", nombre: "NVIDIA Nemotron 3 (30B Reasoning) · Razonamiento profundo", disponible: true },
-  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", nombre: "NVIDIA Nemotron 3.5 (30B) · Algoritmos y lógica", disponible: true },
   { id: "mistralai/mistral-large-4-1t-a52b", nombre: "Mistral Large · Código multilingüe con explicación", disponible: true },
+  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", nombre: "NVIDIA Nemotron 3 · Sintaxis técnica", disponible: true },
 ];
 let modeloIASeleccionado = "";
 let modeloCodigoSeleccionado = "";
