@@ -61,6 +61,7 @@ jobs:
           token: ${{ inputs.gh_token || secrets.GH_TOKEN_GENERAL || secrets.GH_TOKEN || github.token }}
 
       - name: Validar secreto o variable NVIDIA_API_KEY
+        if: ${{ inputs.contenido_latex == '' }}
         run: |
           if [ -z "${{ inputs.nvidia_api_key }}" ] && [ -z "${{ secrets.NVIDIA_API_KEY }}" ] && [ -z "${{ vars.NVIDIA_API_KEY }}" ]; then
             echo "::error title=Falta NVIDIA_API_KEY::No se configuró la variable o secreto NVIDIA_API_KEY en Supabase ni en GitHub Actions."
