@@ -4,7 +4,6 @@ import { execSync } from "node:child_process";
 import { config } from "../js/modulos/configuracion.js";
 import {
   traducirTextoGoogle,
-  traducirLatexAEspanolConGoogle,
   consultarModeloIA,
   analizarJson,
 } from "../js/modulos/modelo.js";
@@ -27,6 +26,10 @@ import {
   asegurarEstructuraTema,
   asegurarDocumentoTema,
 } from "../js/modulos/apuntes/persistencia.js";
+import {
+  aplicarEstilosLatex,
+  convertirMarkdownALatexWec,
+} from "../js/modulos/apuntes/estilos-latex.js";
 
 async function traducirTextoLargoSiEsCatalan(texto) {
   if (!texto || typeof texto !== "string" || !texto.trim()) return texto;
