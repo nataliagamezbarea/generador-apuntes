@@ -134,64 +134,42 @@ jobs:
           echo "🚀 Ejecutando generación de apuntes con IA en primer plano..."
           node scripts/generar-desde-ci.js
 
-      - name: Guardar y subir apuntes a GitHub
-        run: |
-          git config --global user.name "Generador Apuntes Bot"
-          git config --global user.email "bot@generador-apuntes.local"
-
-          # Limpiar archivos auxiliares de LaTeX (.aux, .out, .log, etc.)
-          find apuntes-generados -type f ! -name "*.pdf" ! -name "*.tex" -delete || true
-
-          # Guardar los archivos de salida generados en una carpeta temporal segura
-          mkdir -p /tmp/apuntes_salida
-          cp -r apuntes-generados/* /tmp/apuntes_salida/ 2>/dev/null || true
-
-          # Sincronizar rama de forma limpia con el origin/main más reciente
-          git fetch origin main
-          git reset --hard origin/main
-
-          # Restaurar los apuntes generados sobre el árbol limpio
-          mkdir -p apuntes-generados
-          cp -r /tmp/apuntes_salida/* apuntes-generados/ 2>/dev/null || true
-
-          git add apuntes-generados/
-          if git diff --staged --quiet; then
-            echo "Sin cambios nuevos para commitear."
-          else
-            git commit -m "docs: apuntes generados para ${{ inputs.asignatura }} - Tema ${{ inputs.tema }}"
-            git push origin main
-          fi
-
-      - name: Sincronizar copia en GRADOS_INFORMATICOS
+      - name: Publicar apuntes EXCLUSIVAMENTE en GRADOS_INFORMATICOS
         if: success()
         env:
           GH_TOKEN: ${{ inputs.gh_token || secrets.GH_TOKEN_GENERAL || secrets.GH_TOKEN }}
         run: |
-          if [ -n "$GH_TOKEN" ]; then
-            echo "Clonando repositorio privado GRADOS_INFORMATICOS..."
-            git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/nataliagamezbarea/GRADOS_INFORMATICOS.git" /tmp/grados_repo
-            cd /tmp/grados_repo
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error title=Falta GH_TOKEN::No se proporcionó token de GitHub para publicar en GRADOS_INFORMATICOS."
+            exit 1
+          fi
 
-            # Seleccionar rama de trabajo o master
-            git checkout Segundo_grado_superior 2>/dev/null || true
+          # Limpiar archivos auxiliares de LaTeX (.aux, .out, .log, etc.)
+          find apuntes-generados -type f ! -name "*.pdf" ! -name "*.tex" -delete || true
 
-            mkdir -p "apuntes_privados/${{ inputs.asignatura }}"
-            mkdir -p "apuntes/${{ inputs.asignatura }}"
+          echo "Clonando repositorio privado GRADOS_INFORMATICOS..."
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/nataliagamezbarea/GRADOS_INFORMATICOS.git" /tmp/grados_repo
+          cd /tmp/grados_repo
 
-            cp -r $GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}/* "apuntes_privados/${{ inputs.asignatura }}/" 2>/dev/null || true
-            find "$GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}" -type f -name "*.pdf" -exec cp {} "apuntes/${{ inputs.asignatura }}/" \;
+          # Usar rama Segundo_grado_superior si existe, o master
+          git checkout Segundo_grado_superior 2>/dev/null || git checkout master 2>/dev/null || true
 
-            git config user.name "Generador Apuntes Bot"
-            git config user.email "bot@generador-apuntes.local"
-            git add apuntes_privados/ apuntes/
+          mkdir -p "apuntes_privados/${{ inputs.asignatura }}"
+          mkdir -p "apuntes/${{ inputs.asignatura }}"
 
-            if ! git diff --staged --quiet; then
-              git commit -m "docs(apuntes): sincronizar apuntes generados para ${{ inputs.asignatura }} - Tema ${{ inputs.tema }}"
-              git push origin HEAD
-              echo "✓ Sincronizado con éxito en GRADOS_INFORMATICOS"
-            else
-              echo "Sin cambios para subir en GRADOS_INFORMATICOS."
-            fi
+          cp -r $GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}/* "apuntes_privados/${{ inputs.asignatura }}/" 2>/dev/null || true
+          find "$GITHUB_WORKSPACE/apuntes-generados/${{ inputs.asignatura }}" -type f -name "*.pdf" -exec cp {} "apuntes/${{ inputs.asignatura }}/" \;
+
+          git config user.name "Generador Apuntes Bot"
+          git config user.email "bot@generador-apuntes.local"
+          git add apuntes_privados/ apuntes/
+
+          if ! git diff --staged --quiet; then
+            git commit -m "docs(apuntes): apuntes generados para ${{ inputs.asignatura }} - Tema ${{ inputs.tema }}"
+            git push origin HEAD
+            echo "✓ Apuntes publicados con éxito EXCLUSIVAMENTE en GRADOS_INFORMATICOS."
+          else
+            echo "Sin cambios nuevos para publicar en GRADOS_INFORMATICOS."
           fi
 
       - name: Subir PDF como artefacto

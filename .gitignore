@@ -4,6 +4,7 @@ npm-debug.log*
 *.log
 informes-generacion/
 apuntes-privados/
+apuntes-generados/
 bibliotecas_latex/
 *.bak
 *.bak*

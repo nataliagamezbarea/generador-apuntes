@@ -483,20 +483,10 @@ REGLAS CRÍTICAS DE CALIDAD:
     };
   }
 
-  // 2. VERIFICACIÓN Y TRADUCCIÓN FINAL DE CADA FRAGMENTO LATEX
+  // 2. APLICAR ESTILOS LATEX WEC A CADA FRAGMENTO
   for (const block of resultadoIA.archivos) {
-    if (detectarCatalan(block.latex)) {
-      console.log(`🌐 Traduciendo residuo catalán en fragmento: ${block.nombre || block.titulo}...`);
-      try {
-        block.latex = await traducirLatexAEspanolConGoogle(block.latex);
-      } catch (errTrad) {
-        console.warn("Aviso al traducir fragmento LaTeX:", errTrad.message);
-      }
-    }
-    if (detectarCatalan(block.titulo)) {
-      try {
-        block.titulo = await traducirTextoGoogle(block.titulo);
-      } catch (_) {}
+    if (block.latex) {
+      block.latex = aplicarEstilosLatex(convertirMarkdownALatexWec(block.latex), asignatura);
     }
   }
 

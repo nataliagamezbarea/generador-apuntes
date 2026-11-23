@@ -37,12 +37,22 @@ export function desglosarBloquesPorSubtitulos(archivos = []) {
     const matches = [];
     let m;
     while ((m = regexSubtitulo.exec(latex)) !== null) {
-      matches.push({
-        index: m.index,
-        fullMatch: m[0],
-        titulo: m[1].trim(),
-        length: m[0].length,
-      });
+      // Verificar que el subtítulo esté en nivel superior (profundidad 0) para no cortar dentro de \lista{...}
+      let depth = 0;
+      for (let pos = 0; pos < m.index; pos++) {
+        const char = latex[pos];
+        if (char === "\\") { pos++; continue; }
+        if (char === "{") depth++;
+        else if (char === "}") depth = Math.max(0, depth - 1);
+      }
+      if (depth === 0) {
+        matches.push({
+          index: m.index,
+          fullMatch: m[0],
+          titulo: m[1].trim(),
+          length: m[0].length,
+        });
+      }
     }
 
     if (matches.length <= 1) {
@@ -55,6 +65,24 @@ export function desglosarBloquesPorSubtitulos(archivos = []) {
       const startPos = i === 0 ? 0 : matchActual.index;
       const endPos = i + 1 < matches.length ? matches[i + 1].index : latex.length;
       let trozoLatex = latex.slice(startPos, endPos).trim();
+
+      // Equilibrar llaves en el fragmento para que nunca quede LaTeX corrupto
+      let openBraces = 0;
+      for (let p = 0; p < trozoLatex.length; p++) {
+        const c = trozoLatex[p];
+        if (c === "\\") { p++; continue; }
+        if (c === "{") openBraces++;
+        else if (c === "}") {
+          if (openBraces > 0) openBraces--;
+          else {
+            trozoLatex = trozoLatex.slice(0, p) + " " + trozoLatex.slice(p + 1);
+          }
+        }
+      }
+      while (openBraces > 0) {
+        trozoLatex += "}";
+        openBraces--;
+      }
 
       if (i > 0) {
         trozoLatex = trozoLatex

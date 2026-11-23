@@ -619,38 +619,28 @@ export function aplicarEstilosLatex(value, subject = "") {
     (_m, items, resto) => `\\lista{\n  ${items.trim()} |\n  ${resto.trim()}\n}`
   );
 
-  while (/\\lista\{[\s\S]*?\\lista\{/.test(resultado)) {
-    resultado = resultado.replace(/\\lista\{([\s\S]*?)\\lista\{([\s\S]*?)\}([\s\S]*?)\}/g, (_m, antes, dentro, despues) => {
-      const parteAntes = antes.trim();
-      const parteDentro = dentro.trim();
-      const parteDespues = despues.trim();
-      return `\\lista{\n  ${parteAntes ? parteAntes + " |\n  " : ""}${parteDentro}${parteDespues ? " |\n  " + parteDespues : ""}\n}`;
-    });
-  }
-
-  resultado = resultado.replace(/\\lista\{([^{}]*)\}/gs, (_m, contenidoLista) => {
-    const subtitulos = [];
-    let limpio = contenidoLista.replace(/\\(subtitulo[AB]?|seccion(?:grande)?)\{([^{}]*)\}/g, (_sm, smacro, stit) => {
-      subtitulos.push(`\\${smacro}{${stit}}`);
-      return "";
-    });
-
-    let items = limpio
-      .split(/\s*\|\s*|\n{2,}/)
-      .map((it) => it.trim())
-      .filter((it) => it.length > 0 && !/^[-*•·.\s]+$/.test(it));
-
-    items = items.map((it) => {
-      let s = it.replace(/^[.\-•*·]\s*/, "");
-      if (/^[A-Za-zÁÉÍÓÚáéíóúñÑ][^:]{1,40}:/.test(s) && !s.startsWith("**") && !s.startsWith("\\textbf")) {
-        s = s.replace(/^([^:]+):/, "**$1:**");
-      }
-      return s;
-    });
-
-    const listaStr = items.length ? `\\lista{\n  ${items.join(" |\n  ")}\n}` : "";
-    return (subtitulos.length ? subtitulos.join("\n\n") + "\n\n" : "") + listaStr;
+  // Reparar listas con pipes sueltos (| Concepto: | Explicación o | \textbf{...: | ... })
+  resultado = resultado.replace(/(?:^|\n)\s*\|\s*(?:\r?\n\s*)?(\\textbf\{[^{}]*:\s*\|[\s\S]+?)(?=\\nota|\\subtitulo|\\seccion|$)/g, (_m, cuerpo) => {
+    let limpio = cuerpo.replace(/\}\s*$/, "");
+    limpio = limpio.replace(/\\textbf\{([^:}\n]+):\s*\|?/g, "**$1:** ");
+    limpio = limpio.replace(/\\textbf\{([^}]+)\}/g, "**$1**");
+    limpio = limpio.replace(/\|\s*/g, "");
+    const regex = /\*\*([^*:\n]+:?)\*\*\s*([\s\S]+?)(?=(?:\s*\*\*[^*:\n]+:?\*\*)|$)/g;
+    const items = [];
+    let m;
+    while ((m = regex.exec(limpio)) !== null) {
+      let k = m[1].replace(/:+$/, "").trim();
+      let v = m[2].trim().replace(/\s+/g, " ");
+      items.push(`\\textbf{${k}:} ${v}`);
+    }
+    if (items.length > 0) {
+      return `\n\n\\lista{\n  ${items.join(" |\n  ")}\n}\n\n`;
+    }
+    return _m;
   });
+
+  // Limpiar pipes sueltos iniciales
+  resultado = resultado.replace(/(?:^|\n)\s*\|\s*(?=\\textbf|\*\*|[A-Za-zÁÉÍÓÚáéíóúñÑ])/g, "\n");
 
   // Eliminar viñetas huérfanas y corregir items con punto inicial (. Licencias:)
   resultado = resultado
@@ -767,6 +757,10 @@ export function aplicarEstilosLatex(value, subject = "") {
     .replace(/(?<!\\)\btextbf\{/g, "\\textbf{")
     .replace(/(?<!\\)\btextit\{/g, "\\textit{")
     .replace(/(?<!\\)\btexttt\{/g, "\\texttt{")
+    .replace(/(?<!\$)\\(?:rightarrow|to)(?!\$)/g, "$\\rightarrow$")
+    .replace(/(?<!\$)\\(?:leftarrow|gets)(?!\$)/g, "$\\leftarrow$")
+    .replace(/(?<!\$)\\leftrightarrow(?!\$)/g, "$\\leftrightarrow$")
+    .replace(/%%VERBATIM\\_BLOCK\\_(\d+)%%/g, "%%VERBATIM_BLOCK_$1%%")
     .replace(/\\lstinline(?:\[[^\]]*\])?(?:\|([^|]*)\||\{([^}]*)\})/g, (_match, p1, p2) => `\\cmd{${p1 ?? p2 ?? ""}}`);
 
   resultado = resultado.replace(/\\resumen\{([^{}]*)\}/gs, (_match, cuerpo) => {
