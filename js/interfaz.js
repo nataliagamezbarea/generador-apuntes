@@ -3410,10 +3410,10 @@ REGLAS CRÍTICAS:
 
   const modelosAIntentar = Array.from(
     new Set([
-      modelo,
       "nvidia/nemotron-3.5-bolt-e4b",
-      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      modelo,
       "mistralai/mistral-large-4-1t-a52b",
+      "meta/llama-3.1-70b-instruct",
     ])
   ).filter(Boolean);
 

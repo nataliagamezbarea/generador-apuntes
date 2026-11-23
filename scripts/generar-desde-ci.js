@@ -6,6 +6,7 @@ import {
   traducirTextoGoogle,
   traducirLatexAEspanolConGoogle,
   consultarModeloIA,
+  analizarJson,
 } from "../js/modulos/modelo.js";
 import {
   detectarCatalan,
@@ -368,10 +369,10 @@ REGLAS CRÍTICAS DE CALIDAD:
 
     const modelosAIntentar = Array.from(
       new Set([
-        modeloConfigurado,
         "nvidia/nemotron-3.5-bolt-e4b",
-        "nvidia/nemotron-3.5-lightning-30b-a3b",
+        modeloConfigurado,
         "mistralai/mistral-large-4-1t-a52b",
+        "meta/llama-3.1-70b-instruct",
         "nvidia/nemotron-3-ultra-550b-a55b",
       ])
     ).filter(Boolean);
@@ -419,7 +420,7 @@ REGLAS CRÍTICAS DE CALIDAD:
         const jsonCandidato = matchJson ? matchJson[1].trim() : rawContent;
 
         try {
-          const parsed = JSON.parse(jsonCandidato);
+          const parsed = analizarJson(jsonCandidato);
           if (parsed && (parsed.archivos || parsed.latex)) {
             resultadoIA = normalizarResultadoIA(parsed, {
               subject: asignatura,
