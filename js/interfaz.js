@@ -356,12 +356,35 @@ function compararApuntesHabilitado() {
 
 async function cargarAsignaturas() {
   let asignaturasCargadas = [];
+
+  // 1. Cargar siempre data/asignaturas.json (catálogo oficial del grado)
+  try {
+    const resBase = await fetch("./data/asignaturas.json").catch(() => fetch("/data/asignaturas.json"));
+    if (resBase && resBase.ok) {
+      const dataBase = await resBase.json();
+      if (Array.isArray(dataBase?.asignaturas)) {
+        for (const aj of dataBase.asignaturas) {
+          if (aj && aj.nombre) {
+            asignaturasCargadas.push({
+              nombre: aj.nombre,
+              temas: Array.isArray(aj.temas) && aj.temas.length ? aj.temas : [{ numero: 1, nombre: "Tema 1", apartados: [] }]
+            });
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
   if (!esEntornoEstatico) {
     try {
       const respuesta = await fetch("/api/subjects");
       const datos = await parseJsonSeguro(respuesta);
       if (datos && Array.isArray(datos.asignaturas) && datos.asignaturas.length > 0) {
-        asignaturasCargadas = datos.asignaturas;
+        for (const da of datos.asignaturas) {
+          if (!asignaturasCargadas.some(a => (a.nombre || "").trim().toLowerCase() === (da.nombre || "").trim().toLowerCase())) {
+            asignaturasCargadas.push(da);
+          }
+        }
       }
     } catch (e) {
       console.warn("No se pudieron cargar las asignaturas locales:", e);

@@ -137,26 +137,24 @@ export async function cargarAsignaturasDesdeGitHub(token = "", repo = "nataliaga
     console.warn("Fallo al obtener el catálogo de asignaturas desde GitHub tree:", err);
   }
 
-  // 3. Si por red no se cargó nada, intentar leer ./data/asignaturas.json relativo
-  if (asignaturasMap.size === 0) {
-    try {
-      const resLocal = await fetch("./data/asignaturas.json");
-      if (resLocal.ok) {
-        const datosLocal = await resLocal.json();
-        if (datosLocal?.asignaturas && Array.isArray(datosLocal.asignaturas)) {
-          for (const asig of datosLocal.asignaturas) {
-            const clave = (asig.nombre || asig.id || "").trim().toLowerCase();
-            if (clave && !asignaturasMap.has(clave)) {
-              asignaturasMap.set(clave, {
-                nombre: asig.nombre || asig.id.toUpperCase(),
-                temas: Array.isArray(asig.temas) ? asig.temas : [{ numero: 1, nombre: "Tema 1", apartados: [] }],
-              });
-            }
+  // 3. Enriquecer siempre con ./data/asignaturas.json
+  try {
+    const resLocal = await fetch("./data/asignaturas.json").catch(() => fetch("/data/asignaturas.json"));
+    if (resLocal && resLocal.ok) {
+      const datosLocal = await resLocal.json();
+      if (datosLocal?.asignaturas && Array.isArray(datosLocal.asignaturas)) {
+        for (const asig of datosLocal.asignaturas) {
+          const clave = (asig.nombre || asig.id || "").trim().toLowerCase();
+          if (clave && !asignaturasMap.has(clave)) {
+            asignaturasMap.set(clave, {
+              nombre: asig.nombre || asig.id.toUpperCase(),
+              temas: Array.isArray(asig.temas) && asig.temas.length ? asig.temas : [{ numero: 1, nombre: "Tema 1", apartados: [] }],
+            });
           }
         }
       }
-    } catch (_) {}
-  }
+    }
+  } catch (_) {}
 
   return Array.from(asignaturasMap.values());
 }
