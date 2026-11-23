@@ -334,17 +334,160 @@ function compararApuntesHabilitado() {
   return document.querySelector("#sustituir-existentes")?.checked === true;
 }
 
+// CARGAR ASIGNATURAS DIRECTAMENTE DESDE EL REPOSITORIO GITHUB (GRADOS_INFORMATICOS)
+// ===============================================================================
+async function cargarAsignaturasDesdeGitHub(token = "", repo = "nataliagamezbarea/GRADOS_INFORMATICOS") {
+  try {
+    const headers = {
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "Generador-Apuntes-App",
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Consultar el árbol recursivo del repositorio (HEAD apunta a la rama por defecto del repo)
+    let res = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers });
+    if (!res.ok) {
+      res = await fetch(`https://api.github.com/repos/${repo}/git/trees/master?recursive=1`, { headers });
+    }
+    if (!res.ok) {
+      console.warn(`Respuesta GitHub API tree (${repo}): HTTP ${res.status}`);
+      return [];
+    }
+
+    const data = await res.json();
+    if (!data || !Array.isArray(data.tree)) return [];
+
+    const asignaturasMap = new Map();
+
+    for (const item of data.tree) {
+      if (!item || !item.path) continue;
+      const partes = item.path.split("/");
+      if (partes.length < 2) continue;
+      const raiz = partes[0].toLowerCase();
+      // Leer exclusivamente de las carpetas donde se guardan los apuntes en el repo
+      if (raiz !== "apuntes_privados" && raiz !== "apuntes") continue;
+
+      const nombreAsignatura = partes[1].trim();
+      // Ignorar archivos sueltos en la raíz de apuntes (PDFs, zips, imágenes, etc.)
+      if (!nombreAsignatura || /\.(pdf|zip|png|jpe?g|tex|txt|md|log)$/i.test(nombreAsignatura)) {
+        continue;
+      }
+
+      const claveAsig = nombreAsignatura.toLowerCase();
+      if (!asignaturasMap.has(claveAsig)) {
+        asignaturasMap.set(claveAsig, {
+          nombre: nombreAsignatura,
+          temasMap: new Map(),
+        });
+      }
+
+      const asigObj = asignaturasMap.get(claveAsig);
+
+      if (partes.length >= 3) {
+        const segTema = partes[2].trim();
+        const mTema = segTema.match(/^(?:tema\s*|_|-)?(\d+)/i);
+        if (mTema) {
+          const numTema = parseInt(mTema[1], 10);
+          if (!asigObj.temasMap.has(numTema)) {
+            asigObj.temasMap.set(numTema, {
+              numero: numTema,
+              nombre: `Tema ${numTema}`,
+              apartadosSet: new Set(),
+            });
+          }
+          if (partes.length >= 4) {
+            const segAp = partes[3].trim();
+            const mAp = segAp.match(/(?:tema\s*\d+[._-]|^\d+[._-]|apartado\s*)(\d+)/i);
+            if (mAp) {
+              const numAp = parseInt(mAp[1], 10);
+              asigObj.temasMap.get(numTema).apartadosSet.add(numAp);
+            }
+          }
+        }
+      }
+    }
+
+    const resultado = [];
+    for (const asig of asignaturasMap.values()) {
+      const temas = [];
+      const sortedTemas = Array.from(asig.temasMap.values()).sort((a, b) => a.numero - b.numero);
+      if (sortedTemas.length === 0) {
+        temas.push({ numero: 1, nombre: "Tema 1", apartados: [] });
+      } else {
+        for (const t of sortedTemas) {
+          const apartados = Array.from(t.apartadosSet).sort((a, b) => a - b).map((num) => ({
+            numero: num,
+            titulo: `${t.numero}.${num}`,
+            nombre: `Apartado ${t.numero}.${num}`,
+          }));
+          temas.push({
+            numero: t.numero,
+            nombre: t.nombre,
+            apartados,
+          });
+        }
+      }
+      resultado.push({
+        nombre: asig.nombre,
+        temas,
+      });
+    }
+
+    return resultado;
+  } catch (err) {
+    console.warn("Fallo al obtener el catálogo de asignaturas desde GitHub:", err);
+    return [];
+  }
+}
+
 async function cargarAsignaturas() {
   let asignaturasCargadas = [];
   if (!esEntornoEstatico) {
     try {
       const respuesta = await fetch("/api/subjects");
       const datos = await parseJsonSeguro(respuesta);
-      if (datos && Array.isArray(datos.asignaturas)) {
+      if (datos && Array.isArray(datos.asignaturas) && datos.asignaturas.length > 0) {
         asignaturasCargadas = datos.asignaturas;
       }
     } catch (e) {
-      console.warn("No se pudieron cargar las asignaturas:", e);
+      console.warn("No se pudieron cargar las asignaturas locales:", e);
+    }
+  }
+
+  // En entorno estático (producción en GitHub Pages) o si no hay backend local,
+  // consultar el catálogo de asignaturas directamente desde el repositorio GitHub (GRADOS_INFORMATICOS)
+  if (esEntornoEstatico || asignaturasCargadas.length === 0) {
+    try {
+      let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
+      let repo = localStorage.getItem("cache_gh_repo") || "nataliagamezbarea/GRADOS_INFORMATICOS";
+
+      if (!token && typeof obtenerConfiguracionSupabase === "function") {
+        const cfgSupabase = await obtenerConfiguracionSupabase();
+        if (cfgSupabase?.ghToken) token = cfgSupabase.ghToken;
+        if (cfgSupabase?.ghRepo) repo = cfgSupabase.ghRepo;
+      }
+
+      if (token) {
+        const asignaturasGH = await cargarAsignaturasDesdeGitHub(token, repo);
+        if (Array.isArray(asignaturasGH) && asignaturasGH.length > 0) {
+          if (esEntornoEstatico || asignaturasCargadas.length === 0) {
+            asignaturasCargadas = asignaturasGH;
+          } else {
+            for (const ga of asignaturasGH) {
+              if (!asignaturasCargadas.some((a) => a.nombre.toLowerCase() === ga.nombre.toLowerCase())) {
+                asignaturasCargadas.push(ga);
+              }
+            }
+          }
+          try {
+            localStorage.setItem("generador.asignaturas_locales", JSON.stringify(asignaturasCargadas));
+          } catch (_) {}
+        }
+      }
+    } catch (errGh) {
+      console.warn("No se pudieron sincronizar las asignaturas desde GitHub:", errGh);
     }
   }
 
@@ -354,7 +497,7 @@ async function cargarAsignaturas() {
     locales = JSON.parse(localStorage.getItem("generador.asignaturas_locales") || "[]");
   } catch {}
 
-  // Combinar backend + locales sin duplicar por nombre
+  // Combinar backend/GitHub + locales sin duplicar por nombre
   const mapa = new Map();
   for (const a of asignaturasCargadas) {
     if (a?.nombre) mapa.set(a.nombre.toLowerCase(), a);
@@ -368,7 +511,7 @@ async function cargarAsignaturas() {
     }
   }
 
-  // Si no hay ninguna asignatura cargada (ni en backend ni en localStorage), añadir WEC y SOR por defecto
+  // Si no hay ninguna asignatura cargada (ni en backend ni en GitHub ni en localStorage), añadir WEC y SOR por defecto
   if (mapa.size === 0) {
     mapa.set("wec", {
       nombre: "WEC",
@@ -449,6 +592,10 @@ async function cargarAsignaturas() {
   interfazInicializada = true;
   if (iniciarTrabajoActivo)
     await reanudarTrabajoEtapas(trabajoActivo.id);
+}
+
+if (typeof window !== "undefined") {
+  window.cargarAsignaturas = cargarAsignaturas;
 }
 
 async function cargarTrabajosPendientes() {
@@ -3236,7 +3383,41 @@ async function obtenerConfiguracionSupabase() {
     }
   }
 
+  // 4. Si aún no tenemos ghToken pero hay sesión activa, consultar REST directa con Accept-Profile
+  if (!config.ghToken && accessToken) {
+    try {
+      const respPriv = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/rest/v1/configuracion_privada?select=*`, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${accessToken}`,
+          "Accept-Profile": "grados-informaticos",
+        },
+      });
+      if (respPriv.ok) {
+        const dataPriv = await respPriv.json();
+        procesarFilas(dataPriv);
+      }
+    } catch (_) {}
+  }
+
   // 5. Respaldo en localStorage si se introdujo previamente
+  if (!config.ghToken) {
+    config.ghToken = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
+  }
+  if (!config.ghRepo) {
+    config.ghRepo = localStorage.getItem("cache_gh_repo") || "nataliagamezbarea/GRADOS_INFORMATICOS";
+  }
+  if (config.ghToken) {
+    try {
+      localStorage.setItem("cache_gh_token", config.ghToken);
+    } catch (_) {}
+  }
+  if (config.ghRepo) {
+    try {
+      localStorage.setItem("cache_gh_repo", config.ghRepo);
+    } catch (_) {}
+  }
+
   if (!config.nvidiaApiKey) {
     config.nvidiaApiKey = localStorage.getItem("nvidia_api_key") || localStorage.getItem("NVIDIA_API_KEY") || "";
   }

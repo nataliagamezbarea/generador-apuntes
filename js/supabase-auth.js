@@ -73,6 +73,11 @@ const SupabaseAuth = (() => {
       appEl.style.filter = "";
       appEl.style.pointerEvents = "";
     }
+    try {
+      if (typeof window !== "undefined" && typeof window.cargarAsignaturas === "function") {
+        window.cargarAsignaturas().catch((e) => console.warn("Error refrescando asignaturas tras login:", e));
+      }
+    } catch (_) {}
   }
 
   function updateAuthButton() {

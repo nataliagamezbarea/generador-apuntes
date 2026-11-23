@@ -31,8 +31,19 @@ async function solicitarDatos(direccion, opciones) {
 }
 
 async function cargarAsignaturas() {
-  const datos = await solicitarDatos("/api/subjects");
-  asignaturas = datos.asignaturas;
+  try {
+    const datos = await solicitarDatos("/api/subjects");
+    if (datos && Array.isArray(datos.asignaturas) && datos.asignaturas.length > 0) {
+      asignaturas = datos.asignaturas;
+    }
+  } catch (e) {
+    console.warn("No se pudieron cargar asignaturas del backend:", e);
+  }
+  if (!asignaturas || !asignaturas.length) {
+    try {
+      asignaturas = JSON.parse(localStorage.getItem("generador.asignaturas_locales") || "[]");
+    } catch (_) {}
+  }
   selectorAsignatura.replaceChildren();
   for (const asignatura of asignaturas) {
     const opcion = document.createElement("option");
