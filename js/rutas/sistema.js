@@ -58,8 +58,8 @@ router.get("/api/health", async (request, respuesta) => {
     error = issue.message;
   }
   respuesta.json({
-    provider: "ollama local",
-    model: modeloSolicitado,
+    provider: model.provider || (config.proveedorIA === "nvidia" ? "nvidia" : "ollama local"),
+    model: model.model || modeloSolicitado,
     ...model,
     ...(error ? { error } : {}),
   });

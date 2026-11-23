@@ -41,6 +41,17 @@ const agenteOllama = new Agent({
 });
 
 export async function comprobarModelo(modeloObjetivo = config.model) {
+  if (config.proveedorIA === "nvidia" || (!config.ollamaUrl && config.nvidiaApiKey)) {
+    return {
+      connected: Boolean(config.nvidiaApiKey),
+      modelAvailable: Boolean(config.nvidiaApiKey),
+      model: config.nvidiaModel || "nvidia/nemotron-3.5-bolt-e4b",
+      models: [config.nvidiaModel || "nvidia/nemotron-3.5-bolt-e4b", "meta/llama-3.1-8b-instruct"],
+      modelDisabled: false,
+      provider: "nvidia",
+    };
+  }
+
   try {
     const response = await fetch(`${config.ollamaUrl}/api/tags`, {
       signal: AbortSignal.timeout(4000),

@@ -86,14 +86,14 @@ const esEntornoEstatico =
     window.location.hostname.endsWith("pages.dev"));
 
 // Configurar enlace "Ir a los tests" dinámicamente según entorno o config
+const esLocalHost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
+
 document.querySelectorAll(".nav-tests").forEach((el) => {
-  if (window.APP_CONFIG?.urlTests) {
-    el.href = window.APP_CONFIG.urlTests;
-  } else if (esEntornoEstatico) {
-    el.href = "https://nataliagamezbarea.github.io/PREPARAR-ASIGNATURAS/";
-  }
-  if (!esEntornoEstatico) {
-    // Si estamos en local, consultar /api/configuracion para usar URL_TESTS del .env
+  if (esLocalHost) {
+    el.href = "http://localhost:3000";
     fetch("/api/configuracion")
       .then((r) => r.json())
       .then((cfg) => {
@@ -101,6 +101,11 @@ document.querySelectorAll(".nav-tests").forEach((el) => {
       })
       .catch(() => {});
   } else {
+    el.href =
+      window.APP_CONFIG?.urlTests ||
+      "https://nataliagamezbarea.github.io/PREPARAR-ASIGNATURAS/";
+  }
+  if (esEntornoEstatico) {
     setTimeout(() => {
       const txtConsola = document.querySelector("#texto-consola");
       if (txtConsola && txtConsola.textContent.includes("Conectando con la actividad de la IA")) {
@@ -2381,7 +2386,8 @@ async function comprobarEstadoModelo(modeloAComprobar = null) {
     if (!estaConectado) {
       spanTexto.textContent = "IA local sin conexión";
     } else if (estaDisponible) {
-      spanTexto.textContent = `IA local lista · ${modelo}`;
+      const etiquetaProveedor = estadoSalud.provider === "nvidia" ? "IA lista (NVIDIA Cloud)" : "IA local lista";
+      spanTexto.textContent = `${etiquetaProveedor} · ${estadoSalud.model || modelo}`;
     } else {
       spanTexto.textContent = `${modelo} (se descargará al iniciar)`;
     }
