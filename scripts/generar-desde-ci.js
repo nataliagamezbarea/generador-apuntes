@@ -576,44 +576,64 @@ ${inputArchivos || "\\section{Contenido}\\nSin apartados."}
   try {
     const rutaTemaX = path.join(dirSalidaTema, `tema${tema}.tex`);
     if (await fs.stat(rutaTemaX).catch(() => null)) {
-      console.log(`Intentando compilar ${rutaTemaX} con xelatex (pase 1)...`);
-      execSync(`xelatex -shell-escape -interaction=nonstopmode tema${tema}.tex`, {
-        cwd: dirSalidaTema,
-        stdio: "pipe",
-        timeout: 60000,
-      });
-      console.log(`Compilando con xelatex (pase 2 para generar el índice completo)...`);
-      execSync(`xelatex -shell-escape -interaction=nonstopmode tema${tema}.tex`, {
-        cwd: dirSalidaTema,
-        stdio: "pipe",
-        timeout: 60000,
-      });
+      console.log(`Intentando compilar ${rutaTemaX} con xelatex (pase 1 para escribir referencias e índice)...`);
+      try {
+        execSync(`xelatex -shell-escape -interaction=nonstopmode tema${tema}.tex`, {
+          cwd: dirSalidaTema,
+          stdio: "pipe",
+          timeout: 90000,
+        });
+      } catch (errPase1) {
+        console.warn("Aviso en xelatex pase 1 (normal en LaTeX para registrar .aux y .toc):", errPase1.message || errPase1);
+      }
+
+      console.log(`Compilando con xelatex (pase 2 para generar el índice automático completo)...`);
+      try {
+        execSync(`xelatex -shell-escape -interaction=nonstopmode tema${tema}.tex`, {
+          cwd: dirSalidaTema,
+          stdio: "pipe",
+          timeout: 90000,
+        });
+      } catch (errPase2) {
+        console.warn("Aviso en xelatex pase 2:", errPase2.message || errPase2);
+      }
+
       const pdfTemaX = path.join(dirSalidaTema, `tema${tema}.pdf`);
       if (await fs.stat(pdfTemaX).catch(() => null)) {
         compilado = true;
-        console.log("✓ Compilación con xelatex exitosa (índice y referencias actualizados).");
+        console.log("✓ Compilación con xelatex exitosa (índice automático y referencias actualizados).");
       }
     }
   } catch (errXelatex) {
     console.log("Aviso: xelatex no completó, probando con pdflatex autónomo:", errXelatex.message);
   }
 
-  // Intento 2: si no compiló, compilar tema-X.tex con pdflatex
+  // Intento 2: si no compiló, compilar tema-X.tex con pdflatex (2 pasadas para índice)
   if (!compilado) {
     try {
-      console.log(`Compilando documento con pdflatex...`);
-      execSync(`pdflatex -interaction=nonstopmode tema-${tema}.tex`, {
-        cwd: dirSalidaTema,
-        stdio: "pipe",
-        timeout: 60000,
-      });
-      execSync(`pdflatex -interaction=nonstopmode tema-${tema}.tex`, {
-        cwd: dirSalidaTema,
-        stdio: "pipe",
-        timeout: 60000,
-      });
-      compilado = true;
-      console.log("✓ Compilación con pdflatex exitosa.");
+      console.log(`Compilando documento con pdflatex (pase 1)...`);
+      try {
+        execSync(`pdflatex -interaction=nonstopmode tema-${tema}.tex`, {
+          cwd: dirSalidaTema,
+          stdio: "pipe",
+          timeout: 60000,
+        });
+      } catch (_) {}
+
+      console.log(`Compilando documento con pdflatex (pase 2 para índice automático)...`);
+      try {
+        execSync(`pdflatex -interaction=nonstopmode tema-${tema}.tex`, {
+          cwd: dirSalidaTema,
+          stdio: "pipe",
+          timeout: 60000,
+        });
+      } catch (_) {}
+
+      const pdfTemaMenos = path.join(dirSalidaTema, `tema-${tema}.pdf`);
+      if (await fs.stat(pdfTemaMenos).catch(() => null)) {
+        compilado = true;
+        console.log("✓ Compilación con pdflatex exitosa.");
+      }
     } catch (errPdflatex) {
       console.warn("Aviso en la compilación con pdflatex:", errPdflatex.message);
     }

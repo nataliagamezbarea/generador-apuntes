@@ -7,8 +7,8 @@ import { esTextoDeRazonamiento } from "../apuntes/utilidades-nombres.js";
 export function preRepararJsonLatex(jsonStr) {
   if (!jsonStr || typeof jsonStr !== "string") return jsonStr;
   return jsonStr
-    .replace(
-      /(?<!\\)\\(begin|textbf|textit|texttt|textcolor|tabla|tablacab|resumen|seccion|secciongrande|subtitulo|subtituloA|subtituloB|definicion|definicionpar|rectangulos|lista|pasos|nota|alertas|cmd|textless|textgreater)(?=[^a-zA-Z]|$)/g,
+    .replace(/\$\s*\\lt\s*;?\s*([a-zA-Z0-9_\-\.]+)\s*\\gt\s*;?\s*\$/g, "<$1>")
+    .replace(/(?<!\\)\\(begin|textbf|textit|texttt|textcolor|tabla|tablacab|resumen|seccion|secciongrande|subtitulo|subtituloA|subtituloB|definicion|definicionpar|rectangulos|lista|pasos|nota|alertas|cmd|textless|textgreater)(?=[^a-zA-Z]|$)/g,
       "\\\\$1",
     )
     .replace(/(?<!\\)\\([a-zA-Z]+)(?=[^a-zA-Z"\\\/bfnrtu]|$)/g, "\\\\$1")

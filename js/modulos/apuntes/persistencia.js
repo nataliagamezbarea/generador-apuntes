@@ -500,6 +500,8 @@ export async function asegurarEstilosGenerador(themeDir) {
 \providecommand{\phantomsection}{}
 \providecommand{\subnota}[2]{\nota{#1}{#2}}
 \providecommand{\subnotasin}[2]{\nota{#1}{#2}}
+\providecommand{\lt}{<}
+\providecommand{\gt}{>}
 \AtBeginDocument{\ifcsname spanishdeactivate\endcsname\spanishdeactivate{<>}\fi}
 \providecommand{\subt}[1]{\par\Needspace{4\baselineskip}\vspace{2mm}\noindent{\bfseries\color{primary}#1}\par\vspace{1mm}}
 \providecolor{codeForeground}{HTML}{243247}
@@ -555,7 +557,12 @@ export async function asegurarEstilosGenerador(themeDir) {
 \fi
 
 \ifcsname seccion\endcsname
-  \AddToHook{cmd/seccion/before}{\phantomsection}
+  \let\origseccion\seccion
+  \renewcommand{\seccion}[2][]{%
+    \phantomsection%
+    \addcontentsline{toc}{section}{#2}%
+    \origseccion[#1]{#2}%
+  }
 \else
   \DeclareDocumentCommand{\seccion}{o m}{%
     \par\Needspace{6\baselineskip}%
@@ -662,6 +669,7 @@ export async function asegurarEstilosGenerador(themeDir) {
       anterior.includes("DeclareDocumentCommand{\\secciongrande}") &&
       anterior.includes("DeclareDocumentCommand{\\seccion}") &&
       anterior.includes("\\addcontentsline{toc}{section}{#2}") &&
+      anterior.includes("\\providecommand{\\lt}{<}") &&
       anterior.includes("\\providecommand{\\pickcolor}") &&
       anterior.includes("DeclareDocumentCommand{\\lista}");
     if (estiloWecActualConIndice) return;

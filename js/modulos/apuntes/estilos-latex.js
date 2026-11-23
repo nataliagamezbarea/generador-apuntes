@@ -603,6 +603,11 @@ export function aplicarEstilosLatex(value, subject = "") {
   resultado = resultado
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/\$\s*\\lt\s*;?\s*([a-zA-Z0-9_\-\.]+)\s*\\gt\s*;?\s*\$/g, "<$1>")
+    .replace(/\$\s*\\lt\s*;?\s*\$/g, "<")
+    .replace(/\$\s*\\gt\s*;?\s*\$/g, ">")
+    .replace(/\\lt\b;?/g, "<")
+    .replace(/\\gt\b;?/g, ">")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
