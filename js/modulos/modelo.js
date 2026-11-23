@@ -114,7 +114,10 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
       temperature: 0.2,
       max_tokens: config.maxTokens > 0 ? config.maxTokens : 8192,
     };
-    if (formatoJson) {
+    // No enviar response_format para modelos Nemotron/NVIDIA porque el validador estricto de NIM
+    // colapsa a {} vacío al detectar macros LaTeX con barras invertidas en el prompt.
+    // El system prompt ya exige formato JSON de forma determinista y sin fallos.
+    if (formatoJson && !mod.includes("nemotron") && !mod.includes("bolt")) {
       body.response_format = { type: "json_object" };
     }
     const timeoutLimit = AbortSignal.timeout(config.timeoutMs);
