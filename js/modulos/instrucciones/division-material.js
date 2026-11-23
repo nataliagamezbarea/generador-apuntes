@@ -132,37 +132,98 @@ export function normalizarTituloApartado(titulo = "") {
 }
 
 export function detectarApartadosEnTexto(texto = "") {
-  const regex = /(?:^|\n)\s*(?:[A-Za-z0-9_]+\s*:\s*)?(?:#+\s*)?(?:Apartado\s+)?([0-9]+)\.([0-9]+)\s*[·\-\–\—\.\:]\s*([^\n\r]+)/gi;
+  if (!texto || typeof texto !== "string") return [];
+  // 1. Detectar encabezados numerados tipo 1.1, Tema 1.1, Apartado 1.1 con o sin puntuación (admite espacio simple)
+  const regexNumerado = /(?:^|\n)\s*(?:[A-Za-z0-9_]+\s*:\s*)?(?:#+\s*)?(?:Apartado\s+|Tema\s+)?([0-9]+)\.([0-9]+)\s*(?:[·\-\–\—\.\:]\s*|\s+)([^\n\r]+)/gi;
   let match;
   const apartadosMap = new Map();
-  while ((match = regex.exec(texto)) !== null) {
+  while ((match = regexNumerado.exec(texto)) !== null) {
     const clave = `${match[1]}.${match[2]}`;
     if (!apartadosMap.has(clave)) {
       const rawTitulo = normalizarTituloApartado(match[3]);
-      apartadosMap.set(clave, {
-        tema: Number(match[1]),
-        subtema: Number(match[2]),
-        titulo: rawTitulo,
-        inicio: match.index,
-      });
+      if (rawTitulo && rawTitulo.length > 2) {
+        apartadosMap.set(clave, {
+          tema: Number(match[1]),
+          subtema: Number(match[2]),
+          titulo: rawTitulo,
+          inicio: match.index,
+        });
+      }
     }
   }
+
+  // 2. Si se encontraron al menos 2 apartados numerados, devolverlos ordenados
+  if (apartadosMap.size >= 2) {
+    return Array.from(apartadosMap.values()).sort((a, b) => a.inicio - b.inicio);
+  }
+
+  // 3. Fallback inteligente: si no tienen numeración formal tipo X.Y, detectar títulos destacados por líneas en mayúsculas o bullets mayores
+  const regexSecciones = /(?:^|\n)\s*(?:#+\s*|(?:\d+\s*[.)-]\s*))?([A-ZÁÉÍÓÚÀÈÒÑÇ][A-Za-z0-9ÁÉÍÓÚÀÈÒÑÇ\s\-_,]{4,70})(?=\n|$)/g;
+  const secciones = [];
+  while ((match = regexSecciones.exec(texto)) !== null) {
+    const tit = normalizarTituloApartado(match[1]);
+    if (tit && !tit.toLowerCase().startsWith("tema") && !tit.toLowerCase().startsWith("colegio") && tit.length >= 5 && tit.length <= 70) {
+      if (!secciones.some((s) => s.titulo.toLowerCase() === tit.toLowerCase())) {
+        secciones.push({
+          titulo: tit,
+          inicio: match.index,
+        });
+      }
+    }
+  }
+
+  if (secciones.length >= 2) {
+    return secciones.map((sec, idx) => ({
+      tema: 1,
+      subtema: idx + 1,
+      titulo: sec.titulo,
+      inicio: sec.inicio,
+    }));
+  }
+
+  // 4. Si el texto es largo (> 4000 caracteres) y no hay títulos obvios, dividir por bloques estructurados
+  if (texto.length > 4000) {
+    const tamano = 3500;
+    const numPartes = Math.min(8, Math.ceil(texto.length / tamano));
+    const partes = [];
+    const step = Math.floor(texto.length / numPartes);
+    for (let i = 0; i < numPartes; i++) {
+      partes.push({
+        tema: 1,
+        subtema: i + 1,
+        titulo: `Apartado 1.${i + 1}`,
+        inicio: i * step,
+      });
+    }
+    return partes;
+  }
+
   return Array.from(apartadosMap.values()).sort((a, b) => a.inicio - b.inicio);
 }
 
 export function dividirTextoPorApartados(
   texto = "",
-  visuales = [],
+  visualesOApartados = [],
   apartadosDetectados = [],
 ) {
-  if (!apartadosDetectados || apartadosDetectados.length < 2) {
+  let visuales = [];
+  let apartados = apartadosDetectados;
+
+  if (Array.isArray(visualesOApartados) && visualesOApartados.length > 0 && visualesOApartados[0].subtema !== undefined) {
+    apartados = visualesOApartados;
+    visuales = [];
+  } else if (Array.isArray(visualesOApartados)) {
+    visuales = visualesOApartados;
+  }
+
+  if (!apartados || apartados.length < 2) {
     return [{ texto: limpiarTextoDiapositivas(texto), imagenes: visuales.slice(0, 2) }];
   }
   const bloques = [];
 
-  for (let i = 0; i < apartadosDetectados.length; i += 1) {
-    const act = apartadosDetectados[i];
-    const sig = apartadosDetectados[i + 1];
+  for (let i = 0; i < apartados.length; i += 1) {
+    const act = apartados[i];
+    const sig = apartados[i + 1];
     const inicio = i === 0 ? 0 : act.inicio;
     const fin = sig ? sig.inicio : texto.length;
     const textoApartado = limpiarTextoDiapositivas(texto.slice(inicio, fin));
