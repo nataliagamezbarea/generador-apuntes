@@ -127,7 +127,8 @@ REGLAS CRÍTICAS:
       subthemeTitle: subtemaTitulo,
     });
   } catch (e) {
-    console.warn(`Aviso consultando IA para apartado ${subtema} (${e.message}). Reintentando de inmediato con nvidia/nemotron-3.5-bolt-e4b...`);
+    console.warn(`Aviso consultando IA para apartado ${subtema} (${e.message}). Reintentando tras breve pausa con nvidia/nemotron-3.5-bolt-e4b...`);
+    await new Promise((r) => setTimeout(r, 1800));
     try {
       const rawBolt = await consultarModeloIA(
         sistemaConciso,
@@ -294,6 +295,9 @@ async function main() {
         const modeloAEjecutar = esApartadoCodigo ? modeloCodigoConfigurado : modeloConfigurado;
         console.log(`🤖 Redactando Apartado ${tema}.${subtemaId}: "${subtemaTitulo}" (usando ${modeloAEjecutar})...`);
 
+        if (idx > 0) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
         const resApartado = await consultarIAApartado({
           asignatura,
           tema,

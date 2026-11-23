@@ -97,10 +97,8 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
       modelo,
       "nvidia/nemotron-3.5-bolt-e4b",
       config.nvidiaModel,
-      "nvidia/nemotron-3.5-lightning-30b-a3b",
-      "minimaxai/minimax-m3.1-flash",
       "mistralai/mistral-large-4-1t-a52b",
-      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "meta/llama-3.1-70b-instruct",
       "nvidia/nemotron-3-ultra-550b-a55b",
     ])
   ).filter(Boolean);
@@ -178,11 +176,13 @@ async function consultarNvidia({ system, user, signal, formatoJson = true, model
         try {
           const parsed = analizarJson(content, json.choices?.[0]?.finish_reason === "length" ? "length" : "");
           if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length === 0) {
-            console.warn(`⚠️ Modelo ${mod} devolvió un objeto JSON vacío {}, probando siguiente modelo...`);
+            console.warn(`⚠️ Modelo ${mod} devolvió un objeto JSON vacío {}, reintentando tras pausa...`);
+            await new Promise((r) => setTimeout(r, 1500));
             continue;
           }
         } catch (errJson) {
           console.warn(`⚠️ Modelo ${mod} devolvió respuesta truncada o JSON incompleto (${errJson.message.slice(0, 120)}), probando siguiente modelo...`);
+          await new Promise((r) => setTimeout(r, 1200));
           continue;
         }
       }
