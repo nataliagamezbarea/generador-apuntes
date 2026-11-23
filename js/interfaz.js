@@ -3898,92 +3898,98 @@ async function ejecutarGeneracionGitHubActions({
   }
   titulo = normalizarMayusculasTitulo(titulo);
 
-  // FASE 3: REDACCIÓN MODULAR CON IA Y MAQUETACIÓN WEC EN EL NAVEGADOR
+  // FASE 3: REDACCIÓN MODULAR CON IA Y MAQUETACIÓN WEC EN EL NAVEGADOR (FRONTEND)
   const modelo = (selectorModeloIA?.value || cfgSupabase.nvidiaModelo || "nvidia/nemotron-3.5-bolt-e4b").trim();
   const modeloCodigo = (selectorModeloCodigo?.value || "nvidia/nemotron-3.5-bolt-e4b").trim();
+  const apiKeyNvidia = (
+    cfgSupabase.nvidiaApiKey ||
+    localStorage.getItem("nvidia_api_key") ||
+    localStorage.getItem("NVIDIA_API_KEY") ||
+    "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"
+  ).trim();
 
   let contenidoLatexFinal = "";
-  if (cfgSupabase.nvidiaApiKey) {
-    registrarEventoConsola("🤖 [Fase 3/4] Redactando y maquetando apuntes con IA en tu navegador...");
-    mostrarProgresoGeneracion(
-      {
-        fase: "ia",
-        mensaje: "Redactando apuntes con IA en tu navegador...",
-        detalle: "Analizando estructura de apartados...",
-        actual: 3,
-        total: 4,
-      },
-      false,
-    );
+  registrarEventoConsola("🤖 [Fase 3/4] Redactando y maquetando apartados con IA directamente en tu navegador...");
+  mostrarProgresoGeneracion(
+    {
+      fase: "ia",
+      mensaje: "Redactando apartados con IA en tu navegador...",
+      detalle: "Analizando estructura modular de apartados...",
+      actual: 3,
+      total: 4,
+    },
+    false,
+  );
 
-    const apartadosDetectados = detectarApartadosEnTexto(textoFinal);
-    const bloquesApartados = dividirTextoPorApartados(textoFinal, apartadosDetectados);
-    registrarEventoConsola(`Detectados ${bloquesApartados.length} apartados estructurados en el material.`);
+  const apartadosDetectados = detectarApartadosEnTexto(textoFinal);
+  const bloquesApartados = dividirTextoPorApartados(textoFinal, apartadosDetectados);
+  registrarEventoConsola(`Detectados ${bloquesApartados.length} apartados estructurados en el material.`);
 
-    const todosLosArchivos = [];
-    const tamLote = 2;
-    for (let i = 0; i < bloquesApartados.length; i += tamLote) {
-      const lote = bloquesApartados.slice(i, i + tamLote);
-      const promesasLote = lote.map(async (blq, idxRel) => {
-        const idx = i + idxRel;
-        const apInfo = apartadosDetectados[idx] || { subtema: idx + 1, titulo: `Apartado ${idx + 1}` };
-        const subtemaId = String(apInfo.subtema || idx + 1);
-        const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
+  const todosLosArchivos = [];
+  const tamLote = 2;
+  for (let i = 0; i < bloquesApartados.length; i += tamLote) {
+    const lote = bloquesApartados.slice(i, i + tamLote);
+    const promesasLote = lote.map(async (blq, idxRel) => {
+      const idx = i + idxRel;
+      const apInfo = apartadosDetectados[idx] || { subtema: idx + 1, titulo: `Apartado ${idx + 1}` };
+      const subtemaId = String(apInfo.subtema || idx + 1);
+      const subtemaTitulo = apInfo.titulo || `Apartado ${subtemaId}`;
 
-        const esCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
-          `${subtemaTitulo} ${blq.texto}`
-        );
-        const modeloApartado = esCodigo ? modeloCodigo : modelo;
+      const esCodigo = /\b(?:script|html|css|javascript|código|codigo|sintaxis|etiqueta|lenguaje|programación|programacion|editor|compilador|api|xml|json)\b/i.test(
+        `${subtemaTitulo} ${blq.texto}`
+      );
+      const modeloApartado = esCodigo ? modeloCodigo : modelo;
 
-        registrarEventoConsola(`🤖 Redactando en paralelo Apartado ${tema}.${subtemaId}: "${subtemaTitulo}"...`);
-        mostrarProgresoGeneracion(
-          {
-            fase: "ia",
-            mensaje: `Redactando Apartado ${subtemaId} de ${bloquesApartados.length} con IA...`,
-            detalle: subtemaTitulo,
-            actual: idx + 1,
-            total: bloquesApartados.length,
-          },
-          false,
-        );
+      registrarEventoConsola(`🤖 Redactando en paralelo Apartado ${tema}.${subtemaId}: "${subtemaTitulo}" con IA en el navegador...`);
+      mostrarProgresoGeneracion(
+        {
+          fase: "ia",
+          mensaje: `Redactando Apartado ${subtemaId} de ${bloquesApartados.length} en el navegador...`,
+          detalle: subtemaTitulo,
+          actual: idx + 1,
+          total: bloquesApartados.length,
+        },
+        false,
+      );
 
-        try {
-          const resApartado = await consultarNvidiaNIMApartadoBrowser({
-            apiKey: cfgSupabase.nvidiaApiKey,
-            modelo: modeloApartado,
-            asignatura,
-            tema,
-            tituloTema: titulo,
-            subtema: subtemaId,
-            subtemaTitulo,
-            instrucciones,
-            textoFuente: blq.texto,
-          });
+      try {
+        const resApartado = await consultarNvidiaNIMApartadoBrowser({
+          apiKey: apiKeyNvidia,
+          modelo: modeloApartado,
+          asignatura,
+          tema,
+          tituloTema: titulo,
+          subtema: subtemaId,
+          subtemaTitulo,
+          instrucciones,
+          textoFuente: blq.texto,
+        });
 
-          if (resApartado?.archivos?.length) {
-            for (const arch of resApartado.archivos) {
-              arch.subtema = subtemaId;
-              todosLosArchivos.push(arch);
-              registrarEventoConsola(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
-            }
+        if (resApartado?.archivos?.length) {
+          for (const arch of resApartado.archivos) {
+            arch.subtema = subtemaId;
+            todosLosArchivos.push(arch);
+            registrarEventoConsola(`  ✓ Generado fragmento: Tema ${tema}.${subtemaId}/${arch.nombre || "seccion"}.tex — ${arch.titulo}`);
           }
-        } catch (errAp) {
-          console.warn(`Aviso en apartado ${subtemaId} en navegador:`, errAp);
         }
-      });
+      } catch (errAp) {
+        console.warn(`Aviso en apartado ${subtemaId} en navegador:`, errAp);
+      }
+    });
 
-      await Promise.all(promesasLote);
-    }
+    await Promise.all(promesasLote);
+  }
 
-    if (todosLosArchivos.length > 0) {
-      contenidoLatexFinal = JSON.stringify({
-        titulo_tema: titulo,
-        titulo_subtema: titulo,
-        conceptos_clave: [],
-        archivos: todosLosArchivos,
-      });
-      registrarEventoConsola(`✓ ¡${todosLosArchivos.length} archivos modulares maquetados con estilo oficial WEC!`);
-    }
+  if (todosLosArchivos.length > 0) {
+    contenidoLatexFinal = JSON.stringify({
+      titulo_tema: titulo,
+      titulo_subtema: titulo,
+      conceptos_clave: [],
+      archivos: todosLosArchivos,
+    });
+    registrarEventoConsola(`✓ ¡${todosLosArchivos.length} archivos modulares generados y maquetados con IA en tu navegador!`);
+  } else {
+    throw new Error("No se pudo completar la redacción de apartados con IA en el navegador.");
   }
 
   // FASE 4: COMPILACIÓN CON XELATEX EN GITHUB ACTIONS
@@ -3998,7 +4004,7 @@ async function ejecutarGeneracionGitHubActions({
       },
       false,
     );
-    registrarEventoConsola(`🚀 [Fase 4/4] Enviando a GitHub Actions para compilación instantánea de PDF con XeLaTeX...`);
+    registrarEventoConsola(`🚀 [Fase 4/4] Enviando LaTeX terminado a GitHub Actions para compilación XeLaTeX y publicación...`);
 
     let ultimoRunIdAntesDeLanzar = 0;
     try {

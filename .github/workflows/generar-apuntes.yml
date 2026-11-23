@@ -96,7 +96,7 @@ jobs:
             fi
           fi
 
-      - name: Ejecutar generación con IA e instalar LaTeX en paralelo
+      - name: Compilar apuntes LaTeX e instalar XeLaTeX en paralelo
         env:
           PROVEEDOR_IA: "nvidia"
           NVIDIA_API_KEY: ${{ inputs.nvidia_api_key || secrets.NVIDIA_API_KEY || vars.NVIDIA_API_KEY }}
@@ -132,7 +132,7 @@ jobs:
           ) > /tmp/texlive_install.log 2>&1 &
           echo $! > /tmp/texlive_pid
 
-          echo "🚀 Ejecutando generación de apuntes con IA en primer plano..."
+          echo "🚀 Estructurando archivos modulares y compilando con XeLaTeX..."
           node scripts/generar-desde-ci.js
 
       - name: Publicar apuntes EXCLUSIVAMENTE en GRADOS_INFORMATICOS
