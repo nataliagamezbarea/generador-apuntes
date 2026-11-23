@@ -1,0 +1,36 @@
+\def\apuntesrutalib{../../../bibliotecas_latex}
+\IfFileExists{\apuntesrutalib/cabecera.tex}{%
+  \def\bibliotecasDir{\apuntesrutalib}%
+  \input{\apuntesrutalib/cabecera}%
+}{%
+  \IfFileExists{../../../bibliotecas_latex/cabecera.tex}{%
+    \def\bibliotecasDir{../../../bibliotecas_latex}%
+    \input{../../../bibliotecas_latex/cabecera}%
+  }{%
+    \IfFileExists{../../bibliotecas_latex/cabecera.tex}{%
+      \def\bibliotecasDir{../../bibliotecas_latex}%
+      \input{../../bibliotecas_latex/cabecera}%
+    }{%
+      \IfFileExists{./bibliotecas_latex/cabecera.tex}{%
+        \def\bibliotecasDir{./bibliotecas_latex}%
+        \input{./bibliotecas_latex/cabecera}%
+      }{%
+        \IfFileExists{/data/bibliotecas_latex/cabecera.tex}{%
+          \def\bibliotecasDir{/data/bibliotecas_latex}%
+          \input{/data/bibliotecas_latex/cabecera}%
+        }{%
+          \usepackage[spanish]{babel}
+          \usepackage{xcolor}
+          \usepackage{tikz}
+          \usepackage{needspace}
+          \usepackage{amsmath,amssymb}
+          \usepackage{listings}
+          \usepackage{array}
+          \usepackage[most]{tcolorbox}
+          \tcbuselibrary{listings,skins,breakable}
+          \typeout{Aviso: bibliotecas_latex no encontrada, usando macros autonomas WEC}%
+        }%
+      }%
+    }%
+  }%
+}

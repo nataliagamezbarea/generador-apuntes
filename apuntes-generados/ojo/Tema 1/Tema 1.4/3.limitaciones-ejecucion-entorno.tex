@@ -1,0 +1,14 @@
+\subtituloA{Limitaciones de ejecución: El entorno sandbox}
+
+|
+  \textbf{Restricción de archivos: |
+  JavaScript no puede leer ni escribir archivos locales del disco duro del usuario. \textbf{Seguridad del navegador:
+} Todo JS se ejecuta en una caja de arena (sandbox), impidiendo lanzar programas o tocar la configuración del navegador.
+
+\textbf{Política del mismo origen (SOP):} Un script de un dominio no puede acceder a recursos de otro dominio (ej. com). El origen se define por protocolo + dominio + puerto. \textbf{CORS:} El error CORS al acceder a APIs ajenas no es un fallo del código cliente, sino la aplicación de la política SOP; el servidor debe autorizar mediante cabeceras.
+
+\textbf{Vulnerabilidad XSS:} El riesgo existe si se inserta texto no limpiado de un usuario (ej. %%VERBATIM\_BLOCK\_0%%), permitiendo la ejecución de scripts maliciosos. La protección recae en la sanitización de datos por parte del desarrollador.
+
+}
+\nota{Para el examen}{
+Es falso que HTML gestione la dinámica completa; la dinámica requiere lenguajes de script en el servidor y JavaScript en el cliente para la usabilidad. La protección del navegador no cubre la mala calidad de los datos introducidos por el usuario (XSS).}

@@ -1,0 +1,59 @@
+\documentclass[11pt,a4paper]{extarticle}
+\IfFileExists{../../bibliotecas_latex/estilo.tex}{%
+  \providecommand{\bibliotecasDir}{../../bibliotecas_latex}%
+  \input{\bibliotecasDir/estilo}%
+}{%
+  \IfFileExists{../../../bibliotecas_latex/estilo.tex}{%
+    \providecommand{\bibliotecasDir}{../../../bibliotecas_latex}%
+    \input{\bibliotecasDir/estilo}%
+  }{%
+    \IfFileExists{./bibliotecas_latex/estilo.tex}{%
+      \providecommand{\bibliotecasDir}{./bibliotecas_latex}%
+      \input{\bibliotecasDir/estilo}%
+    }{%
+      \usepackage[spanish,es-tabla]{babel}
+      \usepackage[table]{xcolor}
+      \usepackage{needspace}
+      \usepackage{amsmath,amssymb}
+      \usepackage{array,booktabs}
+      \usepackage{tikz}
+      \usepackage[most]{tcolorbox}
+      \tcbuselibrary{listings,skins,breakable}
+      \usepackage{listings}
+    }%
+  }%
+}
+\usepackage[hidelinks]{hyperref}
+\input{generador-estilos.tex}
+\begin{document}
+\paletaAzul
+\titulo{TEMA 1}{Selección de arquitecturas y herramientas de programación}
+\usarfondo
+\renewcommand{\contentsname}{Índice}
+\setcounter{tocdepth}{2}
+\pdfbookmark[0]{Índice}{ojo-tema1}
+{\color{black}\tableofcontents}
+\clearpage
+\input{Tema 1.1/1.origen-alcance-web.tex}
+\input{Tema 1.1/2.cuatro-campos-diseno.tex}
+\input{Tema 1.1/3.modelo-cliente-servidor.tex}
+\input{Tema 1.2/1.diferenciacion-eleccion-lenguajes.tex}
+\input{Tema 1.2/2.complementariedad-cliente-servidor.tex}
+\input{Tema 1.2/3.tecnologias-recomendadas-cliente.tex}
+\input{Tema 1.2/4.capas-desarrollo-web.tex}
+\input{Tema 1.3/1.introduccion-a-la-arquitectura-del-navegador.tex}
+\input{Tema 1.3/2.componentes-de-la-arquitectura-de-referencia.tex}
+\input{Tema 1.3/3.motores-de-javascript-y-optimizacion.tex}
+\input{Tema 1.4/1.razones-usar-javascript.tex}
+\input{Tema 1.4/2.soluciones-especificas-ofrece.tex}
+\input{Tema 1.4/3.limitaciones-ejecucion-entorno.tex}
+\input{Tema 1.5/1.ubicacion-documento-html.tex}
+\input{Tema 1.5/2.sintaxis-atributos.tex}
+\input{Tema 1.5/3.ejecucion.tex}
+\input{Tema 1.5/4.terminacion-script.tex}
+\input{Tema 1.6/1.integracion-script-html.tex}
+\input{Tema 1.7/1.herramientas-programacion-cliente.tex}
+\input{Tema 1.7/2.navegadores-validacion.tex}
+\input{Tema 1.7/3.seguridad-cliente-servidor.tex}
+\input{Tema 1.7/4.resumen-flujo-trabajo.tex}
+\end{document}
