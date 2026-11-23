@@ -524,7 +524,7 @@ export async function asegurarEstilosGenerador(themeDir) {
 
 % --- CORRECCIÓN DE TÍTULOS MULTILÍNEA EN BARRAS OFICIALES WEC ---
 \ifcsname sectionheader\endcsname
-  \newlength{\bartitleboxlen}
+  \ifcsname bartitleboxlen\endcsname\else\newlength{\bartitleboxlen}\fi
   \renewcommand{\sectionheader}[4][primary]{%
     \edef\sectionheadercolor{#1}%
     \setlength{\barleftlen}{#2}%
@@ -533,9 +533,10 @@ export async function asegurarEstilosGenerador(themeDir) {
     \ifdim\barrightlen>0.7cm
       \noindent\barrule[\sectionheadercolor]{\barleftlen}\hspace{4mm}{\headingfontxb#4\color{\sectionheadercolor} #3}\hspace{4mm}\barrule[\sectionheadercolor]{\barrightlen}\par
     \else
-      \setlength{\bartitleboxlen}{\dimexpr\linewidth - \barleftlen - 6mm\relax}%
+      \setlength{\bartitleboxlen}{\dimexpr\linewidth - 2\barleftlen - 8mm\relax}%
       \noindent\parbox[c]{\barleftlen}{\barrule[\sectionheadercolor]{\barleftlen}}\hspace{4mm}%
-      \parbox[c]{\bartitleboxlen}{\raggedright\headingfontxb#4\color{\sectionheadercolor} #3}\par
+      \parbox[c]{\bartitleboxlen}{\centering\headingfontxb#4\color{\sectionheadercolor} #3}\hspace{4mm}%
+      \parbox[c]{\barleftlen}{\barrule[\sectionheadercolor]{\barleftlen}}\par
     \fi
   }
 \fi
