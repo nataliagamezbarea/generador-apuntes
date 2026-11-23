@@ -1386,38 +1386,88 @@ footer {
   margin: 0;
 }
 
+@media (max-width: 850px) {
+  .topbar {
+    min-height: auto;
+    height: auto;
+    padding: 12px 0;
+    gap: 12px;
+  }
+
+  .topbar-nav {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 620px) {
   .layout {
-    width: min(100% - 24px, 900px);
+    width: min(100% - 20px, 900px);
   }
 
   .topbar {
-    height: 72px;
+    min-height: auto;
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 0;
+  }
+
+  .brand {
+    font-size: 16px;
+    justify-content: flex-start;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+
+  .topbar-nav {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .nav-button {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center;
+    padding: 8px 8px;
+    font-size: 11px;
+    text-align: center;
   }
 
   .model-status {
-    max-width: 145px;
+    width: 100%;
+    max-width: 100%;
     font-size: 10px;
+    justify-content: center;
+    margin-top: 4px;
+    order: 10;
   }
 
   .intro {
-    padding: 39px 0 26px;
+    padding: 28px 0 20px;
   }
 
   .panel {
-    padding: 18px;
+    padding: 16px;
   }
 
   .field-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .field-grid .field:first-child {
-    grid-column: 1/-1;
+    grid-column: auto;
   }
 
   .upload-card {
-    min-height: 140px;
+    min-height: 120px;
     padding: 12px;
   }
 
@@ -1431,11 +1481,29 @@ footer {
   }
 
   h1 {
-    letter-spacing: -1.6px;
+    font-size: 1.6rem;
+    letter-spacing: -1px;
   }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 420px) {
+  .topbar-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .nav-button {
+    flex: none;
+    width: 100%;
+    padding: 7px 6px;
+    font-size: 10.5px;
+  }
+
+  .model-status {
+    grid-column: 1 / -1;
+  }
+
   .editor-fields {
     grid-template-columns: 1fr;
   }
@@ -1445,11 +1513,7 @@ footer {
   }
 
   .latex-editor {
-    min-height: 280px;
-  }
-
-  .topbar {
-    gap: 9px;
+    min-height: 240px;
   }
 
   .page-link {

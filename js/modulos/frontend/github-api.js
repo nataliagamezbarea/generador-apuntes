@@ -3,6 +3,42 @@
 // ============================================================
 
 export async function cargarAsignaturasDesdeGitHub(token = "", repo = "nataliagamezbarea/GRADOS_INFORMATICOS") {
+  const asignaturasMap = new Map();
+
+  // 1. Intentar primero leer test/asignaturas.json o data/asignaturas.json vía raw GitHub (rápido y sin límites de API)
+  const ramas = ["Segundo_grado_superior", "master", "main"];
+  const rutasJson = ["test/asignaturas.json", "data/asignaturas.json"];
+
+  for (const rama of ramas) {
+    for (const ruta of rutasJson) {
+      try {
+        const urlRaw = `https://raw.githubusercontent.com/${repo}/${rama}/${ruta}`;
+        const resRaw = await fetch(urlRaw);
+        if (resRaw.ok) {
+          const datos = await resRaw.json();
+          if (datos && Array.isArray(datos.asignaturas) && datos.asignaturas.length > 0) {
+            for (const asig of datos.asignaturas) {
+              const clave = (asig.nombre || asig.id || "").trim().toLowerCase();
+              if (!clave) continue;
+              if (!asignaturasMap.has(clave)) {
+                asignaturasMap.set(clave, {
+                  nombre: asig.nombre || asig.id.toUpperCase(),
+                  temas: Array.isArray(asig.temas) ? asig.temas : [{ numero: 1, nombre: "Tema 1", apartados: [] }],
+                });
+              }
+            }
+            if (asignaturasMap.size > 0) {
+              // Catálogo cargado con éxito desde el repositorio
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    if (asignaturasMap.size > 0) break;
+  }
+
+  // 2. Si raw no encontró catálogo o para enriquecer con carpetas y PDFs de apuntes, consultar árbol de GitHub
   try {
     const headers = {
       Accept: "application/vnd.github.v3+json",
@@ -12,100 +48,117 @@ export async function cargarAsignaturasDesdeGitHub(token = "", repo = "nataliaga
       headers.Authorization = `Bearer ${token}`;
     }
 
-    // Consultar el árbol recursivo del repositorio (HEAD apunta a la rama por defecto del repo)
     let res = await fetch(`https://api.github.com/repos/${repo}/git/trees/HEAD?recursive=1`, { headers });
+    if (!res.ok) {
+      res = await fetch(`https://api.github.com/repos/${repo}/git/trees/Segundo_grado_superior?recursive=1`, { headers });
+    }
     if (!res.ok) {
       res = await fetch(`https://api.github.com/repos/${repo}/git/trees/master?recursive=1`, { headers });
     }
-    if (!res.ok) {
-      console.warn(`Respuesta GitHub API tree (${repo}): HTTP ${res.status}`);
-      return [];
-    }
 
-    const data = await res.json();
-    if (!data || !Array.isArray(data.tree)) return [];
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.tree)) {
+        for (const item of data.tree) {
+          if (!item || !item.path) continue;
+          const partes = item.path.split("/");
+          if (partes.length < 2) continue;
+          const raiz = partes[0].toLowerCase();
+          if (raiz !== "apuntes_privados" && raiz !== "apuntes") continue;
 
-    const asignaturasMap = new Map();
+          let nombreAsignatura = partes[1].trim();
 
-    for (const item of data.tree) {
-      if (!item || !item.path) continue;
-      const partes = item.path.split("/");
-      if (partes.length < 2) continue;
-      const raiz = partes[0].toLowerCase();
-      // Leer exclusivamente de las carpetas donde se guardan los apuntes en el repo
-      if (raiz !== "apuntes_privados" && raiz !== "apuntes") continue;
+          // Si es un archivo suelto en apuntes (p. ej. AAD_2_SQL.pdf, Presentación - SGE.pdf), clasificar por prefijo
+          if (/\.(pdf|zip|png|jpe?g|tex|txt|md|log)$/i.test(nombreAsignatura)) {
+            const nombreArchivo = nombreAsignatura;
+            if (/^AAD|^Acceso/i.test(nombreArchivo)) {
+              nombreAsignatura = "AAD";
+            } else if (/PMDM|M[oó]vil/i.test(nombreArchivo)) {
+              nombreAsignatura = "PMDM";
+            } else if (/SGE|Odoo|ERP/i.test(nombreArchivo)) {
+              nombreAsignatura = "SGE";
+            } else if (/Unity/i.test(nombreArchivo)) {
+              nombreAsignatura = "Unity";
+            } else if (/English|DAM/i.test(nombreArchivo)) {
+              nombreAsignatura = "Inglés DAM";
+            } else if (/Projecte|Intermodular/i.test(nombreArchivo)) {
+              nombreAsignatura = "Proyecto Intermodular";
+            } else {
+              continue;
+            }
+          }
 
-      const nombreAsignatura = partes[1].trim();
-      // Ignorar archivos sueltos en la raíz de apuntes (PDFs, zips, imágenes, etc.)
-      if (!nombreAsignatura || /\.(pdf|zip|png|jpe?g|tex|txt|md|log)$/i.test(nombreAsignatura)) {
-        continue;
-      }
-
-      const claveAsig = nombreAsignatura.toLowerCase();
-      if (!asignaturasMap.has(claveAsig)) {
-        asignaturasMap.set(claveAsig, {
-          nombre: nombreAsignatura,
-          temasMap: new Map(),
-        });
-      }
-
-      const asigObj = asignaturasMap.get(claveAsig);
-
-      if (partes.length >= 3) {
-        const segTema = partes[2].trim();
-        const mTema = segTema.match(/^(?:tema\s*|_|-)?(\d+)/i);
-        if (mTema) {
-          const numTema = parseInt(mTema[1], 10);
-          if (!asigObj.temasMap.has(numTema)) {
-            asigObj.temasMap.set(numTema, {
-              numero: numTema,
-              nombre: `Tema ${numTema}`,
-              apartadosSet: new Set(),
+          if (!nombreAsignatura) continue;
+          const claveAsig = nombreAsignatura.toLowerCase();
+          if (!asignaturasMap.has(claveAsig)) {
+            asignaturasMap.set(claveAsig, {
+              nombre: nombreAsignatura,
+              temas: [{ numero: 1, nombre: "Tema 1", apartados: [] }],
             });
           }
-          if (partes.length >= 4) {
-            const segAp = partes[3].trim();
-            const mAp = segAp.match(/(?:tema\s*\d+[._-]|^\d+[._-]|apartado\s*)(\d+)/i);
-            if (mAp) {
-              const numAp = parseInt(mAp[1], 10);
-              asigObj.temasMap.get(numTema).apartadosSet.add(numAp);
+
+          if (partes.length >= 3) {
+            const asigObj = asignaturasMap.get(claveAsig);
+            const segTema = partes[2].trim();
+            const mTema = segTema.match(/^(?:tema\s*|_|-)?(\d+)/i);
+            if (mTema) {
+              const numTema = parseInt(mTema[1], 10);
+              let temaExistente = asigObj.temas.find((t) => t.numero === numTema);
+              if (!temaExistente) {
+                temaExistente = {
+                  numero: numTema,
+                  nombre: `Tema ${numTema}`,
+                  apartados: [],
+                };
+                asigObj.temas.push(temaExistente);
+                asigObj.temas.sort((a, b) => a.numero - b.numero);
+              }
+              if (partes.length >= 4) {
+                const segAp = partes[3].trim();
+                const mAp = segAp.match(/(?:tema\s*\d+[._-]|^\d+[._-]|apartado\s*)(\d+)/i);
+                if (mAp) {
+                  const numAp = parseInt(mAp[1], 10);
+                  if (!temaExistente.apartados.some((ap) => ap.numero === numAp)) {
+                    temaExistente.apartados.push({
+                      numero: numAp,
+                      titulo: `${numTema}.${numAp}`,
+                      nombre: `Apartado ${numTema}.${numAp}`,
+                    });
+                    temaExistente.apartados.sort((a, b) => a.numero - b.numero);
+                  }
+                }
+              }
             }
           }
         }
       }
     }
+  } catch (err) {
+    console.warn("Fallo al obtener el catálogo de asignaturas desde GitHub tree:", err);
+  }
 
-    const resultado = [];
-    for (const asig of asignaturasMap.values()) {
-      const temas = [];
-      const sortedTemas = Array.from(asig.temasMap.values()).sort((a, b) => a.numero - b.numero);
-      if (sortedTemas.length === 0) {
-        temas.push({ numero: 1, nombre: "Tema 1", apartados: [] });
-      } else {
-        for (const t of sortedTemas) {
-          const apartados = Array.from(t.apartadosSet).sort((a, b) => a - b).map((num) => ({
-            numero: num,
-            titulo: `${t.numero}.${num}`,
-            nombre: `Apartado ${t.numero}.${num}`,
-          }));
-          temas.push({
-            numero: t.numero,
-            nombre: t.nombre,
-            apartados,
-          });
+  // 3. Si por red no se cargó nada, intentar leer ./data/asignaturas.json relativo
+  if (asignaturasMap.size === 0) {
+    try {
+      const resLocal = await fetch("./data/asignaturas.json");
+      if (resLocal.ok) {
+        const datosLocal = await resLocal.json();
+        if (datosLocal?.asignaturas && Array.isArray(datosLocal.asignaturas)) {
+          for (const asig of datosLocal.asignaturas) {
+            const clave = (asig.nombre || asig.id || "").trim().toLowerCase();
+            if (clave && !asignaturasMap.has(clave)) {
+              asignaturasMap.set(clave, {
+                nombre: asig.nombre || asig.id.toUpperCase(),
+                temas: Array.isArray(asig.temas) ? asig.temas : [{ numero: 1, nombre: "Tema 1", apartados: [] }],
+              });
+            }
+          }
         }
       }
-      resultado.push({
-        nombre: asig.nombre,
-        temas,
-      });
-    }
-
-    return resultado;
-  } catch (err) {
-    console.warn("Fallo al obtener el catálogo de asignaturas desde GitHub:", err);
-    return [];
+    } catch (_) {}
   }
+
+  return Array.from(asignaturasMap.values());
 }
 
 export async function crearCarpetaAsignaturaEnGitHub(nombre, token = "", repo = "nataliagamezbarea/GRADOS_INFORMATICOS") {

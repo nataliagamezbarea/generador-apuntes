@@ -368,42 +368,31 @@ async function cargarAsignaturas() {
     }
   }
 
-  // En entorno estático (producción en GitHub Pages) o si no hay backend local,
-  // consultar el catálogo de asignaturas directamente desde el repositorio GitHub (GRADOS_INFORMATICOS)
-  if (esEntornoEstatico || asignaturasCargadas.length === 0) {
-    try {
-      let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
-      let repo = localStorage.getItem("cache_gh_repo") || "nataliagamezbarea/GRADOS_INFORMATICOS";
+  // Consultar SIEMPRE el catálogo del repositorio (GitHub / data/asignaturas.json)
+  // para enriquecer las asignaturas disponibles tanto en local como en GitHub Pages
+  try {
+    let token = localStorage.getItem("cache_gh_token") || localStorage.getItem("gh_token") || "";
+    let repo = localStorage.getItem("cache_gh_repo") || "nataliagamezbarea/GRADOS_INFORMATICOS";
 
-      if (!token && typeof obtenerConfiguracionSupabase === "function") {
-        const cfgSupabase = await obtenerConfiguracionSupabase();
-        if (cfgSupabase?.ghToken) token = cfgSupabase.ghToken;
-        if (cfgSupabase?.ghRepo) repo = cfgSupabase.ghRepo;
-      }
+    if (!token && typeof obtenerConfiguracionSupabase === "function") {
+      const cfgSupabase = await obtenerConfiguracionSupabase();
+      if (cfgSupabase?.ghToken) token = cfgSupabase.ghToken;
+      if (cfgSupabase?.ghRepo) repo = cfgSupabase.ghRepo;
+    }
 
-      if (token) {
-        const asignaturasGH = await cargarAsignaturasDesdeGitHub(token, repo);
-        if (Array.isArray(asignaturasGH) && asignaturasGH.length > 0) {
-          if (esEntornoEstatico || asignaturasCargadas.length === 0) {
-            asignaturasCargadas = asignaturasGH;
-          } else {
-            for (const ga of asignaturasGH) {
-              if (!asignaturasCargadas.some((a) => a.nombre.toLowerCase() === ga.nombre.toLowerCase())) {
-                asignaturasCargadas.push(ga);
-              }
-            }
-          }
-          try {
-            localStorage.setItem("generador.asignaturas_locales", JSON.stringify(asignaturasCargadas));
-          } catch (_) {}
+    const asignaturasGH = await cargarAsignaturasDesdeGitHub(token, repo);
+    if (Array.isArray(asignaturasGH) && asignaturasGH.length > 0) {
+      for (const ga of asignaturasGH) {
+        if (!asignaturasCargadas.some((a) => (a.nombre || "").trim().toLowerCase() === (ga.nombre || "").trim().toLowerCase())) {
+          asignaturasCargadas.push(ga);
         }
       }
-    } catch (errGh) {
-      console.warn("No se pudieron sincronizar las asignaturas desde GitHub:", errGh);
     }
+  } catch (errGh) {
+    console.warn("Aviso al consultar catálogo del repositorio:", errGh);
   }
 
-  // Cargar asignaturas locales guardadas por el usuario (útil si el backend está offline o en GitHub Pages)
+  // Cargar asignaturas locales guardadas por el usuario (persistencia local)
   let locales = [];
   try {
     locales = JSON.parse(localStorage.getItem("generador.asignaturas_locales") || "[]");
@@ -412,38 +401,107 @@ async function cargarAsignaturas() {
   // Combinar backend/GitHub + locales sin duplicar por nombre
   const mapa = new Map();
   for (const a of asignaturasCargadas) {
-    if (a?.nombre) mapa.set(a.nombre.toLowerCase(), a);
-  }
-  for (const loc of locales) {
-    if (loc?.nombre && !mapa.has(loc.nombre.toLowerCase())) {
-      mapa.set(loc.nombre.toLowerCase(), {
-        nombre: loc.nombre,
-        temas: Array.isArray(loc.temas) ? loc.temas : [],
+    if (a?.nombre) {
+      const clave = a.nombre.trim().toLowerCase();
+      mapa.set(clave, {
+        nombre: a.nombre.trim(),
+        temas: Array.isArray(a.temas) && a.temas.length > 0 ? a.temas : [{ numero: 1, nombre: "Tema 1", apartados: [] }],
       });
     }
   }
+  for (const loc of locales) {
+    if (loc?.nombre) {
+      const clave = loc.nombre.trim().toLowerCase();
+      if (!mapa.has(clave)) {
+        mapa.set(clave, {
+          nombre: loc.nombre.trim(),
+          temas: Array.isArray(loc.temas) && loc.temas.length > 0 ? loc.temas : [{ numero: 1, nombre: "Tema 1", apartados: [] }],
+        });
+      }
+    }
+  }
 
-  // Si no hay ninguna asignatura cargada (ni en backend ni en GitHub ni en localStorage), añadir WEC y SOR por defecto
+  // Si no hay ninguna asignatura cargada (offline total sin caché previa), catálogo base del grado
   if (mapa.size === 0) {
-    mapa.set("wec", {
-      nombre: "WEC",
-      temas: [
-        { numero: 1, nombre: "Tema 1", apartados: [] },
-        { numero: 2, nombre: "Tema 2", apartados: [] },
-        { numero: 3, nombre: "Tema 3", apartados: [] },
-        { numero: 4, nombre: "Tema 4", apartados: [] },
-      ],
-    });
-    mapa.set("sor", {
-      nombre: "SOR",
-      temas: [
-        { numero: 1, nombre: "Tema 1", apartados: [] },
-        { numero: 2, nombre: "Tema 2", apartados: [] },
-      ],
-    });
+    const catalogoBase = [
+      {
+        nombre: "WEC",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Selección de arquitecturas y de herramientas", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Aplicación y verificación de la sintaxis", apartados: [] },
+          { numero: 3, nombre: "Tema 3 · Fundamentos de JavaScript", apartados: [] },
+          { numero: 4, nombre: "Tema 4 · Programación con objetos y eventos", apartados: [] },
+        ],
+      },
+      {
+        nombre: "SOR",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Instalación de sistemas operativos en red", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Administración y servicios de red", apartados: [] },
+        ],
+      },
+      {
+        nombre: "SEG",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Seguridad pasiva", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Seguridad activa", apartados: [] },
+          { numero: 3, nombre: "Tema 3 · Criptografía y firmas digitales", apartados: [] },
+        ],
+      },
+      {
+        nombre: "SER",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Configuración y gestión de servicios de red", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Servicio de resolución de nombres (DNS)", apartados: [] },
+          { numero: 3, nombre: "Tema 3 · Servicio de asignación dinámica de direcciones (DHCP)", apartados: [] },
+        ],
+      },
+      {
+        nombre: "AW",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Servidores de aplicaciones web y entorno LAMP", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Gestores de contenidos (CMS)", apartados: [] },
+          { numero: 3, nombre: "Tema 3 · Seguridad, rendimiento y comercio electrónico", apartados: [] },
+        ],
+      },
+      {
+        nombre: "AAD",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Manejo de ficheros", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Conectores y SQL", apartados: [] },
+          { numero: 3, nombre: "Tema 3 · Mapeo objeto relacional (ORM)", apartados: [] },
+          { numero: 4, nombre: "Tema 4 · APIs y WebSockets", apartados: [] },
+          { numero: 5, nombre: "Tema 5 · Bases de datos NoSQL", apartados: [] },
+        ],
+      },
+      {
+        nombre: "PMDM",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Entornos de desarrollo móvil", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Interfaz de usuario en Android", apartados: [] },
+          { numero: 3, nombre: "Tema 3 · Desarrollo de videojuegos", apartados: [] },
+        ],
+      },
+      {
+        nombre: "SGE",
+        temas: [
+          { numero: 1, nombre: "Tema 1 · Introducción y despliegue Odoo con Docker", apartados: [] },
+          { numero: 2, nombre: "Tema 2 · Sistemas ERP-CRM-BI", apartados: [] },
+          { numero: 3, nombre: "Tema 3 · Instalación y configuración de ERP", apartados: [] },
+          { numero: 4, nombre: "Tema 4 · Implantación de ERP en la empresa", apartados: [] },
+          { numero: 5, nombre: "Tema 5 · Entorno de desarrollo y módulos Odoo", apartados: [] },
+        ],
+      },
+    ];
+    for (const item of catalogoBase) {
+      mapa.set(item.nombre.toLowerCase(), item);
+    }
   }
 
   asignaturas = Array.from(mapa.values());
+  try {
+    localStorage.setItem("generador.asignaturas_locales", JSON.stringify(asignaturas));
+  } catch (_) {}
 
   let trabajosActivos = [];
   if (!esEntornoEstatico) {
