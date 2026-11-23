@@ -241,3 +241,17 @@ test('convertirMarkdownALatexWec y aplicarEstilosLatex convierten listas con pip
   assert.ok(!out.includes("| Restricción de archivos: |"), "No debe contener los pipes literales");
 });
 
+test('analizarJson y repararJsonTruncado recuperan JSON truncado a mitad de string', async () => {
+  const { analizarJson, repararJsonTruncado } = await import("../modulos/modelo.js");
+  const truncado = `{"titulo_tema": "WEC", "archivos": [{"nombre": "1.test", "latex": "\\\\secciongrande{Test}\\n\\\\nota{Examen}{¿Dónde se ejecuta? Respuesta: En la `;
+  const recuperado = repararJsonTruncado(truncado);
+  assert.ok(recuperado, "Debe reparar el JSON truncado");
+  assert.equal(recuperado.titulo_tema, "WEC");
+  assert.equal(recuperado.archivos.length, 1);
+  assert.ok(recuperado.archivos[0].latex.includes("Respuesta: En la"));
+
+  const parseado = analizarJson(truncado);
+  assert.ok(parseado, "analizarJson debe recuperar el JSON automáticamente");
+  assert.equal(parseado.titulo_tema, "WEC");
+});
+

@@ -361,6 +361,56 @@ export function preRepararJsonLatex(jsonStr) {
     .replace(/\*\*([^*\n]+?)\*\*/g, "\\\\textbf{$1}");
 }
 
+export function repararJsonTruncado(str) {
+  if (!str || typeof str !== "string") return null;
+  let s = str.trim().replace(/^```(?:json|latex|tex)?\s*/i, "").replace(/\s*```$/, "");
+  const primerBrace = s.indexOf("{");
+  if (primerBrace < 0) return null;
+  s = preRepararJsonLatex(s.slice(primerBrace));
+
+  let enString = false;
+  let escape = false;
+  const pila = [];
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (c === "\\") {
+      escape = true;
+      continue;
+    }
+    if (c === '"') {
+      enString = !enString;
+      continue;
+    }
+    if (!enString) {
+      if (c === "{" || c === "[") pila.push(c === "{" ? "}" : "]");
+      else if (c === "}" || c === "]") {
+        if (pila.length && pila[pila.length - 1] === c) pila.pop();
+      }
+    }
+  }
+
+  let reparado = s;
+  if (enString) reparado += '"';
+  while (pila.length) {
+    reparado += pila.pop();
+  }
+
+  try {
+    const parsed = JSON.parse(reparado);
+    if (parsed && typeof parsed === "object" && (parsed.archivos || parsed.latex || parsed.titulo_tema)) {
+      return parsed;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function analizarJson(text, motivoFinal = "") {
   let cleaned = text
     .trim()
@@ -388,6 +438,12 @@ export function analizarJson(text, motivoFinal = "") {
         }
       }
     }
+
+    const recuperado = repararJsonTruncado(text);
+    if (recuperado) {
+      return recuperado;
+    }
+
     const detalleFinal =
       motivoFinal === "length"
         ? " La respuesta se truncó al alcanzar el límite máximo de tokens de salida del modelo."
