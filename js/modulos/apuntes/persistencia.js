@@ -8,6 +8,7 @@ import {
   crearNombreArchivo,
   escaparLatex,
   escaparTextoLatex,
+  limpiarNombreInstitucion,
 } from "./utilidades-nombres.js";
 
 async function existeArchivo(file) {
@@ -521,6 +522,24 @@ export async function asegurarEstilosGenerador(themeDir) {
 \AddToHook{cmd/titulo/after}{\iniciarPaletaSecciones\actualizarColoresCodigo}
 \AddToHook{cmd/secciongrande/after}{\actualizarColoresCodigo}
 
+% --- CORRECCIÓN DE TÍTULOS MULTILÍNEA EN BARRAS OFICIALES WEC ---
+\ifcsname sectionheader\endcsname
+  \newlength{\bartitleboxlen}
+  \renewcommand{\sectionheader}[4][primary]{%
+    \edef\sectionheadercolor{#1}%
+    \setlength{\barleftlen}{#2}%
+    \settowidth{\bartextlen}{\headingfontxb#4\color{\sectionheadercolor} #3}%
+    \setlength{\barrightlen}{\dimexpr\linewidth - \barleftlen - \bartextlen - 0.9cm\relax}%
+    \ifdim\barrightlen>0.7cm
+      \noindent\barrule[\sectionheadercolor]{\barleftlen}\hspace{4mm}{\headingfontxb#4\color{\sectionheadercolor} #3}\hspace{4mm}\barrule[\sectionheadercolor]{\barrightlen}\par
+    \else
+      \setlength{\bartitleboxlen}{\dimexpr\linewidth - \barleftlen - 6mm\relax}%
+      \noindent\parbox[c]{\barleftlen}{\barrule[\sectionheadercolor]{\barleftlen}}\hspace{4mm}%
+      \parbox[c]{\bartitleboxlen}{\raggedright\headingfontxb#4\color{\sectionheadercolor} #3}\par
+    \fi
+  }
+\fi
+
 % --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF (PRESERVANDO ESTILOS OFICIALES WEC) ---
 \ifcsname secciongrande\endcsname
   \AddToHook{cmd/secciongrande/before}{\phantomsection}
@@ -818,7 +837,7 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
       ...paquetesRequeridos,
       "\\begin{document}",
       "\\paletaAzul",
-      `\\titulo{TEMA ${theme}}{${escaparLatex(title)}}`,
+      `\\titulo{TEMA ${theme}}{${escaparLatex(limpiarNombreInstitucion(title))}}`,
       "\\usarfondo",
       "\\renewcommand{\\contentsname}{Índice}",
       "\\setcounter{tocdepth}{2}",
@@ -894,7 +913,7 @@ export async function asegurarDocumentoTema(themeDir, subject, theme, title) {
     if (title && !/^tema\s*\d+$/i.test(title.trim())) {
       bodySinCarpeta = bodySinCarpeta.replace(
         /\\titulo\{TEMA\s*\d+\}\{[^{}]*\}/,
-        `\\titulo{TEMA ${theme}}{${escaparLatex(title)}}`,
+        `\\titulo{TEMA ${theme}}{${escaparLatex(limpiarNombreInstitucion(title))}}`,
       );
     }
     const bodyLines = bodySinCarpeta.split("\n");

@@ -218,3 +218,26 @@ test('esTextoDeRazonamiento detecta y rechaza razonamiento interno o thinking pr
   assert.equal(esTextoDeRazonamiento(validNotes), false);
 });
 
+test('limpiarNombreInstitucion elimina nombres de colegios e instituciones de los títulos', async () => {
+  const { limpiarNombreInstitucion } = await import("../modulos/apuntes/utilidades-nombres.js");
+  assert.equal(
+    limpiarNombreInstitucion("Selección de arquitecturas y herramientas de programación Colegio Sant Josep Obrer"),
+    "Selección de arquitecturas y herramientas de programación"
+  );
+  assert.equal(
+    limpiarNombreInstitucion("Desarrollo web IES Joan Maria Thomàs"),
+    "Desarrollo web"
+  );
+});
+
+test('convertirMarkdownALatexWec y aplicarEstilosLatex convierten listas con pipes en \\lista con viñetas', async () => {
+  const { aplicarEstilosLatex, convertirMarkdownALatexWec } = await import("../modulos/apuntes/estilos-latex.js");
+  const input = `| Restricción de archivos: | No puede acceder al disco duro del usuario. Política del mismo origen (SOP): Un script de dominio A no puede acceder a recursos de dominio B. CORS: Error que ocurre al acceder a APIs ajenas.`;
+  const out = aplicarEstilosLatex(convertirMarkdownALatexWec(input));
+  assert.ok(out.includes("\\lista{"), "Debe generar una macro \\lista");
+  assert.ok(out.includes("\\textbf{Restricción de archivos:}"), "Debe tener Restricción de archivos en negrita");
+  assert.ok(out.includes("\\textbf{Política del mismo origen (SOP):}"), "Debe tener Política del mismo origen en negrita");
+  assert.ok(out.includes("\\textbf{CORS:}"), "Debe tener CORS en negrita");
+  assert.ok(!out.includes("| Restricción de archivos: |"), "No debe contener los pipes literales");
+});
+

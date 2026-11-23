@@ -1,6 +1,7 @@
 import {
   corregirCatalanAEspanol,
   esSubtituloGenerico,
+  limpiarNombreInstitucion,
   normalizarMayusculasTitulo,
   quitarAsignaturaDelTitulo,
 } from "./utilidades-nombres.js";
@@ -36,7 +37,7 @@ export function sanearTitulosTema(value, tituloApartado = "", tituloTema = "") {
     "\\secciongrande{$1}",
   );
 
-  const tituloLimpio = String(tituloApartado ?? "").trim();
+  const tituloLimpio = limpiarNombreInstitucion(String(tituloApartado ?? "").trim());
   const normalizar = (texto) =>
     String(texto ?? "")
       .normalize("NFKD")
@@ -44,16 +45,21 @@ export function sanearTitulosTema(value, tituloApartado = "", tituloTema = "") {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
-  const temaNormalizado = normalizar(tituloTema);
+  const temaNormalizado = normalizar(limpiarNombreInstitucion(tituloTema));
   latex = latex.replace(/\\secciongrande\{([^{}]*)\}/g, (match, titulo) => {
-    const esRotulo = /^\s*(?:tema|apartado|secci[oó]n)\s*\d+(?:[.\-]\d+)*\s*[:.\-–—]/i.test(titulo);
+    const titSinInst = limpiarNombreInstitucion(titulo);
+    const esRotulo = /^\s*(?:tema|apartado|secci[oó]n)\s*\d+(?:[.\-]\d+)*\s*[:.\-–—]/i.test(titSinInst);
     const esNombreTema =
-      Boolean(temaNormalizado) && normalizar(titulo) === temaNormalizado;
+      Boolean(temaNormalizado) && normalizar(titSinInst) === temaNormalizado;
     if (esRotulo || esNombreTema) {
       return tituloLimpio ? `\\secciongrande{${tituloLimpio}}` : "";
     }
-    return match;
+    return `\\secciongrande{${titSinInst}}`;
   });
+
+  latex = latex
+    .replace(/\\(subtitulo[AB]?)\{([^{}]+)\}/g, (_m, macro, tit) => `\\${macro}{${limpiarNombreInstitucion(tit)}}`)
+    .replace(/\\titulo\{([^}]+)\}\{([^{}]+)\}/g, (_m, ttema, ttit) => `\\titulo{${ttema}}{${limpiarNombreInstitucion(ttit)}}`);
 
   return latex;
 }
@@ -363,6 +369,50 @@ export function convertirMarkdownALatexWec(contenido = "") {
     return bloque;
   });
 
+  // Convertir líneas o tablas con pipes (| Term: | Desc o | Term | Desc |) a \lista WEC
+  texto = texto.replace(/(?:^|\n)([ \t]*\|[^\n]+\|[^\n]*(?:\n[ \t]*\|[^\n]+\|[^\n]*)*)/g, (_m, bloquePipes) => {
+    if (/\|[-:\s]{2,}\|/.test(bloquePipes)) return bloquePipes;
+    const lineas = bloquePipes.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const items = [];
+    for (const linea of lineas) {
+      const celdas = linea.split("|").map(c => c.trim()).filter(Boolean);
+      if (celdas.length >= 2) {
+        let term = celdas[0].replace(/^[*#_\s]+|[*#_\s:]+$/g, "").trim();
+        let desc = celdas.slice(1).join(" — ").trim();
+        if (term && desc && !/^(?:cabecera|columna|header)$/i.test(term)) {
+          items.push(`**${term}:** ${desc}`);
+        }
+      } else if (celdas.length === 1 && celdas[0]) {
+        items.push(celdas[0]);
+      }
+    }
+    if (items.length >= 1) {
+      return `\n\\lista{\n  ${items.join(" |\n  ")}\n}\n`;
+    }
+    return bloquePipes;
+  });
+
+  // Desglosar párrafos planos que contienen múltiples conceptos: "Termino 1: Desc 1. Termino 2: Desc 2."
+  texto = texto.replace(/(?:^|\n\n)\s*(?:\|\s*)?([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/]{1,45}:\s+[\s\S]+?)(?=\n\n|\\(?:seccion|subtitulo|resumen|definicion|nota|begin)|$)/g, (bloque, contenido) => {
+    if (/^\\/.test(contenido.trim())) return bloque;
+    let textoLimpio = contenido.replace(/^[|\s]+/, "").replace(/[|\s]+$/, "");
+    textoLimpio = textoLimpio.replace(/\|\s*([^:|]+):\s*\|?\s*/g, "$1: ");
+    const regex = /(?:^|(?<=[.:;]\s+))([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/]{1,45}):\s+([\s\S]+?)(?=(?:(?:\.|\;|\n)\s*[A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/]{1,45}:\s+)|\n\n|$)/g;
+    const items = [];
+    let m;
+    while ((m = regex.exec(textoLimpio)) !== null) {
+      const term = m[1].trim();
+      const desc = m[2].trim().replace(/\s*\n\s*/g, " ");
+      if (term && desc && !/^(https?|nota|definici[oó]n|ejemplo|resumen|c[oó]digo|tabla|figura)$/i.test(term)) {
+        items.push(`**${term}:** ${desc}`);
+      }
+    }
+    if (items.length >= 2) {
+      return `\n\n\\lista{\n  ${items.join(" |\n  ")}\n}\n\n`;
+    }
+    return bloque;
+  });
+
   texto = texto.replace(/`([^`\n]+)`/g, (_m, code) => `\\cmd{${code}}`);
   texto = texto.replace(/(?<!\\cmd\{)<(\/?[a-zA-Z0-9_-]+(?: [^>]*)?)>(?!\})/g, "\\cmd{<$1>}");
 
@@ -624,6 +674,53 @@ export function aplicarEstilosLatex(value, subject = "") {
     }
     if (items.length >= 2) {
       return `\n\\lista{\n  ${items.join(" |\n  ")}\n}\n`;
+    }
+    return bloque;
+  });
+
+  // Convertir líneas o tablas con pipes sueltos (| Concepto: | Explicación) a \lista
+  resultado = resultado.replace(/(?:^|\n)([ \t]*\|[^\n]+\|[^\n]*(?:\n[ \t]*\|[^\n]+\|[^\n]*)*)/g, (_m, bloquePipes) => {
+    if (/\|[-:\s]{2,}\|/.test(bloquePipes) || /\\begin\{(?:tabla|codigo|consola)/.test(bloquePipes)) return bloquePipes;
+    const lineas = bloquePipes.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const items = [];
+    for (const linea of lineas) {
+      const celdas = linea.split("|").map(c => c.trim()).filter(Boolean);
+      if (celdas.length >= 2) {
+        let term = celdas[0].replace(/^[*#_\s]+|[*#_\s:]+$/g, "").trim();
+        let desc = celdas.slice(1).join(" — ").trim();
+        if (term && desc && !/^(?:cabecera|columna|header)$/i.test(term)) {
+          items.push(`**${term}:** ${desc}`);
+        }
+      } else if (celdas.length === 1 && celdas[0]) {
+        items.push(celdas[0]);
+      }
+    }
+    if (items.length >= 1) {
+      return `\n\n\\lista{\n  ${items.join(" |\n  ")}\n}\n\n`;
+    }
+    return bloquePipes;
+  });
+
+  // Limpiar pipes sueltos tras macros WEC: \definicion{...}{...} |  o  \resumen{...} |
+  resultado = resultado.replace(/(\\(?:definicion(?:par)?\{[^{}]*\}\{[^{}]*\}|resumen\{[^{}]*\}))\s*\|\s*/g, "$1\n\n");
+
+  // Desglosar párrafos planos que contienen múltiples conceptos: "Termino 1: Desc 1. Termino 2: Desc 2."
+  resultado = resultado.replace(/(?:^|\n\n)\s*(?:\|\s*)?([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/]{1,45}:\s+[\s\S]+?)(?=\n\n|\\(?:seccion|subtitulo|resumen|definicion|nota|begin)|$)/g, (bloque, contenido) => {
+    if (/^\\/.test(contenido.trim())) return bloque;
+    let textoLimpio = contenido.replace(/^[|\s]+/, "").replace(/[|\s]+$/, "");
+    textoLimpio = textoLimpio.replace(/\|\s*([^:|]+):\s*\|?\s*/g, "$1: ");
+    const regex = /(?:^|(?<=[.:;]\s+))([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/]{1,45}):\s+([\s\S]+?)(?=(?:(?:\.|\;|\n)\s*[A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/]{1,45}:\s+)|\n\n|$)/g;
+    const items = [];
+    let m;
+    while ((m = regex.exec(textoLimpio)) !== null) {
+      const term = m[1].trim();
+      const desc = m[2].trim().replace(/\s*\n\s*/g, " ");
+      if (term && desc && !/^(https?|nota|definici[oó]n|ejemplo|resumen|c[oó]digo|tabla|figura)$/i.test(term)) {
+        items.push(`**${term}:** ${desc}`);
+      }
+    }
+    if (items.length >= 2) {
+      return `\n\n\\lista{\n  ${items.join(" |\n  ")}\n}\n\n`;
     }
     return bloque;
   });
@@ -1357,8 +1454,43 @@ export function normalizarCuerpoLista(cuerpoOriginal, tipo = "lista") {
     }
   }
 
+  const itemsCombinados = [];
+  for (let i = 0; i < items.length; i++) {
+    const cur = items[i];
+    const esSoloEtiqueta = /^(?:\*\*[^*\n]+:\*\*|\\textbf\{[^}]*:\})\s*$/.test(cur);
+    if (esSoloEtiqueta && i + 1 < items.length && !INICIO_ITEM.test(items[i + 1])) {
+      itemsCombinados.push(`${cur} ${items[i + 1]}`);
+      i++;
+    } else {
+      itemsCombinados.push(cur);
+    }
+  }
+
+  const itemsDesglosados = [];
+  for (const item of itemsCombinados) {
+    const itemPlano = item
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\\textbf\{([^}]+)\}/g, "$1")
+      .replace(/^[|\s]+/, "")
+      .replace(/\|\s*([^:|]+):\s*\|?\s*/g, "$1: ");
+    const subConceptos = [...itemPlano.matchAll(/(?:^|(?<=[.:;]\s+))(?:[1-9]\.?\s*)?([A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/\+]{1,45}):\s+([\s\S]+?)(?=(?:(?:\.|\;|\n)\s*[A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚáéíóú0-9_ \-()\/\+]{1,45}:\s+)|\n\n|$)/g)];
+    if (subConceptos.length >= 2) {
+      for (const m of subConceptos) {
+        const k = m[1].trim();
+        const v = m[2].trim().replace(/^\|\s*/, "");
+        if (!/^(https?|nota|definici[oó]n|ejemplo|resumen|c[oó]digo|tabla|figura)$/i.test(k)) {
+          itemsDesglosados.push(`**${k}:** ${v}`);
+        } else {
+          itemsDesglosados.push(`${k}: ${v}`);
+        }
+      }
+    } else {
+      itemsDesglosados.push(item);
+    }
+  }
+
   const itemsLimpios = [];
-  for (let item of items) {
+  for (let item of itemsDesglosados) {
     item = item.trim().replace(/\s+/g, " ");
     item = item.replace(/^[.•·]\s*/, "");
     item = item.replace(/\]\]>/g, "").replace(/<!\[CDATA\[/g, "");

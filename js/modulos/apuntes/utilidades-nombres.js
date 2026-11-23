@@ -208,23 +208,33 @@ function normalizarSegmentoMayusculas(seg = "") {
   return seg.charAt(0).toUpperCase() + seg.slice(1);
 }
 
+export function limpiarNombreInstitucion(texto = "") {
+  if (!texto || typeof texto !== "string") return "";
+  return texto
+    .replace(/\s*(?:Colegio|Col·legi|IES|Instituto|Universidad|Universitat|Escola|Escuela|CIFP|Centre|Centro)\s+[^·\n\r,]+/gi, "")
+    .replace(/\s*·\s*$/, "")
+    .trim();
+}
+
 export function deducirTituloRealista(texto = "", tema = "1", tituloActual = "") {
   if (tituloActual && !/^tema\s*\d+$/i.test(tituloActual.trim())) {
-    return tituloActual.trim();
+    return limpiarNombreInstitucion(tituloActual.trim());
   }
-  if (!texto || typeof texto !== "string") return tituloActual || `Tema ${tema}`;
+  if (!texto || typeof texto !== "string") return limpiarNombreInstitucion(tituloActual) || `Tema ${tema}`;
 
   const m1 = texto.match(/Tema\s*\d+\s*[:·\-–—]\s*([^\n\r]+)/i);
   if (m1 && m1[1] && m1[1].trim().length > 3) {
-    return m1[1].replace(/\s*·\s*\d+\s*$/, "").trim();
+    const tit = m1[1].replace(/\s*·\s*\d+\s*$/, "").trim();
+    return limpiarNombreInstitucion(tit);
   }
 
   const m2 = texto.match(/Tema\s*\d+\s*\r?\n+([A-Za-zÀ-ÿ][^\n\r]+(?:\r?\n[A-Za-zÀ-ÿ][^\n\r]+)?)/i);
   if (m2 && m2[1] && m2[1].trim().length > 3) {
-    return m2[1].replace(/\r?\n+/g, " ").replace(/\s*·\s*\d+\s*$/, "").trim();
+    const tit = m2[1].replace(/\r?\n+/g, " ").replace(/\s*·\s*\d+\s*$/, "").trim();
+    return limpiarNombreInstitucion(tit);
   }
 
-  return tituloActual || `Tema ${tema}`;
+  return limpiarNombreInstitucion(tituloActual) || `Tema ${tema}`;
 }
 
 export function esTextoDeRazonamiento(texto = "") {

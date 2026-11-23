@@ -48,13 +48,14 @@ Todos los campos del JSON ("titulo_tema", "titulo_subtema", "archivos[].titulo",
 Si la pista, el título o el material están en catalán o en otro idioma, TRADÚCELOS OBLIGATORIAMENTE al español estándar:
 - "titulo_tema" en español estándar (ej: "Arquitecturas y herramientas", NUNCA "Arquitectures i Eines").
 - "titulo_subtema" y "archivos[].titulo" en español estándar (ejemplos obligatorios: "Modelos de ejecución del código", "Lenguajes de programación en entorno cliente", "Mecanismos de ejecución de código en un navegador web", "Capacidades y limitaciones de ejecución", "Integración del código con las etiquetas HTML", "Herramientas de programación sobre clientes web"). PROHIBIDO DEJAR PALABRAS EN CATALÁN como "entorn", "mecanismes", "capacitats", "eines", "model", "clients", "execucio", "etiquetes", "programacio".
+- PROHIBIDO INCLUIR NOMBRES DE COLEGIOS, INSTITUTOS O CENTROS EDUCATIVOS en ningún título (ej: "Colegio Sant Josep Obrer", "IES ...", "Instituto ...", etc.). Los títulos deben ser estrictamente académicos y conceptuales.
 - En "archivos[].nombre" pon slugs cortos de 1 a 3 palabras clave conceptuales en español estándar (ej: "modelos-ejecucion", "entorno-cliente", "mecanismos-ejecucion", "capacidades-limitaciones", "herramientas-cliente"). NUNCA uses términos en catalán como "model", "entorn", "eines", "clients", "execucio".
 
 LONGITUD Y DESARROLLO DIDÁCTICO:
 - Desarrolla cada concepto con la profundidad que el material permita: qué es, para qué sirve, cómo funciona internamente, sus pasos o componentes, cuándo se aplica, condiciones y excepciones, diferencias frente a conceptos cercanos, errores frecuentes y preguntas de autoevaluación.
 - Escribiendo con naturalidad y en párrafos completos. No te limites a resumir en 2 líneas; extensos no están prohibidos, pero sí está penalizado el contenido vacío o excesivamente resumido.
 - INCLUYE DE FORMA NATURAL los cuadros de examen \\\\nota{Para el examen}{...} cuando ayuden a aprender, analizando por qué la opción correcta es válida y por qué cada una de las alternativas falsas es incorrecta.
-- Usa listas con viñetas (-) o barras verticales (|) para agrupar componentes de una misma estructura, sabiendo que estos se convertirán automáticamente al formato LaTeX WEC durante la conversión.
+- Para listas de conceptos usa SIEMPRE la macro oficial: \\lista{ **Concepto 1:** Explicación 1 | **Concepto 2:** Explicación 2 }. NUNCA dejes barras verticales (|) sueltas ni generes pseudo-tablas con pipes para listas conceptuales.
 - Distingue los datos del material de las aclaraciones añadidas; apóyate en las fuentes fiables disponibles y no presentes como hecho una ampliación dudosa. Define el vocabulario técnico la primera vez que aparezca.
 
 INVENTARIO DE TÍTULOS INTERNOS DETECTADOS EN LAS DIAPOSITIVAS (DEBES CONSERVARLOS EN ESTE ORDEN):

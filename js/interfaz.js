@@ -11,9 +11,10 @@ import {
 } from "./modulos/instrucciones/division-material.js";
 import {
   deducirTituloRealista,
+  limpiarNombreInstitucion,
   normalizarMayusculasTitulo,
   esTextoDeRazonamiento,
-} from "./modulos/apuntes/utilidades-nombres.js?v=20261122_v46";
+} from "./modulos/apuntes/utilidades-nombres.js?v=20261122_v47";
 
 const formulario = document.querySelector("#formulario-generacion");
 const selectorAsignatura = document.querySelector("#selector-asignatura");
@@ -3554,13 +3555,14 @@ async function ejecutarGeneracionGitHubActions({
   if (!titulo || /^tema\s*\d+$/i.test(titulo.trim())) {
     const deducido = deducirTituloRealista(textoFinal, tema, titulo);
     if (deducido && !/^tema\s*\d+$/i.test(deducido.trim())) {
-      titulo = deducido;
+      titulo = limpiarNombreInstitucion(deducido);
       registrarEventoConsola(`✓ Título realista deducido de la fuente: "${titulo}"`);
       if (temaNuevo && (!temaNuevo.value || /^tema\s*\d+$/i.test(temaNuevo.value.trim()))) {
         temaNuevo.value = titulo;
       }
     }
   }
+  titulo = limpiarNombreInstitucion(titulo);
 
   // FASE 2: TRADUCCIÓN PREVIA (SI ESTÁ EN CATALÁN/VALENCIANO)
   const esCatalan = detectarCatalanTexto(titulo) || detectarCatalanTexto(instrucciones) || detectarCatalanTexto(textoFinal);

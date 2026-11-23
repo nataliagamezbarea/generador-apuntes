@@ -12,6 +12,7 @@ import {
   detectarCatalan,
   crearNombreArchivo,
   deducirTituloRealista,
+  limpiarNombreInstitucion,
   normalizarMayusculasTitulo,
   esTextoDeRazonamiento,
 } from "../js/modulos/apuntes/utilidades-nombres.js";
@@ -198,10 +199,11 @@ async function main() {
   if (!titulo || /^tema\s*\d+$/i.test(titulo.trim())) {
     const deducido = deducirTituloRealista(textoFuente, tema, titulo);
     if (deducido && !/^tema\s*\d+$/i.test(deducido.trim())) {
-      titulo = deducido;
+      titulo = limpiarNombreInstitucion(deducido);
       console.log(`✓ Título realista deducido de la fuente: "${titulo}"`);
     }
   }
+  titulo = limpiarNombreInstitucion(titulo);
 
   if (detectarCatalan(titulo)) {
     console.log(`🌐 Traduciendo título "${titulo}" al español...`);

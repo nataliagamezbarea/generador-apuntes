@@ -1,12 +1,14 @@
 \subtituloA{Limitaciones y seguridad del entorno cliente}
 
-\definicion{Sandbox}{Entorno de ejecución aislado en el navegador que impide a JavaScript leer o escribir archivos locales, lanzar programas o modificar la configuración del navegador.} |
-  \textbf{Restricción de archivos: |
-  No puede acceder al disco duro del usuario.
-  \textbf{Política del mismo origen (SOP):
-} Un script de dominio A no puede acceder a recursos de dominio B. El origen se define como protocolo + dominio + puerto.
-  \textbf{CORS:} Error que ocurre al acceder a APIs ajenas debido a la aplicación de la política SOP; requiere permiso explícito del servidor mediante cabeceras.
-  \textbf{Vulnerabilidad XSS:} Riesgo si se inserta texto no limpiado de un usuario en la página, permitiendo la ejecución de scripts maliciosos.} 
+\definicion{Sandbox}{Entorno de ejecución aislado en el navegador que impide a JavaScript leer o escribir archivos locales, lanzar programas o modificar la configuración del navegador.}
+
+\lista{
+  \textbf{Restricción de archivos:} No puede acceder al disco duro del usuario. |
+  \textbf{Política del mismo origen (SOP):} Un script de dominio A no puede acceder a recursos de dominio B. El origen se define como protocolo + dominio + puerto. |
+  \textbf{CORS:} Error que ocurre al acceder a APIs ajenas debido a la aplicación de la política SOP; requiere permiso explícito del servidor mediante cabeceras. |
+  \textbf{Vulnerabilidad XSS:} Riesgo si se inserta texto no limpiado de un usuario en la página, permitiendo la ejecución de scripts maliciosos.
+}
+
 \nota{Para el examen}{
 Es falso que HTML gestione páginas dinámicas; la dinámica requiere lenguajes de script en el servidor y JavaScript en el cliente. JavaScript no puede escribir archivos en el servidor debido al modelo sandbox.
 }

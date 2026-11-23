@@ -29,6 +29,24 @@
 \AddToHook{cmd/titulo/after}{\iniciarPaletaSecciones\actualizarColoresCodigo}
 \AddToHook{cmd/secciongrande/after}{\actualizarColoresCodigo}
 
+% --- CORRECCIÓN DE TÍTULOS MULTILÍNEA EN BARRAS OFICIALES WEC ---
+\ifcsname sectionheader\endcsname
+  \newlength{\bartitleboxlen}
+  \renewcommand{\sectionheader}[4][primary]{%
+    \edef\sectionheadercolor{#1}%
+    \setlength{\barleftlen}{#2}%
+    \settowidth{\bartextlen}{\headingfontxb#4\color{\sectionheadercolor} #3}%
+    \setlength{\barrightlen}{\dimexpr\linewidth - \barleftlen - \bartextlen - 0.9cm\relax}%
+    \ifdim\barrightlen>0.7cm
+      \noindent\barrule[\sectionheadercolor]{\barleftlen}\hspace{4mm}{\headingfontxb#4\color{\sectionheadercolor} #3}\hspace{4mm}\barrule[\sectionheadercolor]{\barrightlen}\par
+    \else
+      \setlength{\bartitleboxlen}{\dimexpr\linewidth - \barleftlen - 6mm\relax}%
+      \noindent\parbox[c]{\barleftlen}{\barrule[\sectionheadercolor]{\barleftlen}}\hspace{4mm}%
+      \parbox[c]{\bartitleboxlen}{\raggedright\headingfontxb#4\color{\sectionheadercolor} #3}\par
+    \fi
+  }
+\fi
+
 % --- ÍNDICE AUTOMÁTICO CLICABLE CON HYPERREF (PRESERVANDO ESTILOS OFICIALES WEC) ---
 \ifcsname secciongrande\endcsname
   \AddToHook{cmd/secciongrande/before}{\phantomsection}
